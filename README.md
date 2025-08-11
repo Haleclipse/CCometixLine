@@ -22,8 +22,8 @@ Download from [Releases](https://github.com/Haleclipse/CCometixLine/releases):
 ```bash
 # Download and install
 wget https://github.com/Haleclipse/CCometixLine/releases/latest/download/ccline-linux-x64.tar.gz
-tar -xzf ccline-linux-x64.tar.gz
-mkdir -p ~/.claude/ccline
+mkdir -p ~/.claude/ccline && cd ~/.claude/ccline
+tar -xzf ../ccline-linux-x64.tar.gz
 cp ccline ~/.claude/ccline/
 ```
 
