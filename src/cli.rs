@@ -41,6 +41,18 @@ pub struct Cli {
     /// Show current version
     #[arg(short = 'v', long = "version")]
     pub version: bool,
+
+    /// Set block start time for today (formats: 0-23, HH:MM, ISO timestamp)
+    #[arg(long, value_name = "TIME")]
+    pub set_block_start: Option<String>,
+
+    /// Clear block start override for today
+    #[arg(long)]
+    pub clear_block_start: bool,
+
+    /// Show current block override status
+    #[arg(long)]
+    pub show_block_status: bool,
 }
 
 impl Cli {

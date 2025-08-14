@@ -11,7 +11,7 @@ A high-performance Claude Code statusline tool written in Rust with Git integrat
 
 ![CCometixLine](assets/img1.png)
 
-The statusline shows: Model | Directory | Git Branch Status | Context Window Information
+The statusline shows: Model | Directory | Git Branch Status | Usage | Cost Statistics | Burn Rate
 
 ## Features
 
@@ -19,9 +19,12 @@ The statusline shows: Model | Directory | Git Branch Status | Context Window Inf
 - **Git integration** with branch, status, and tracking info  
 - **Model display** with simplified Claude model names
 - **Usage tracking** based on transcript analysis
+- **Cost tracking** with session, daily, and billing block statistics
+- **Burn rate monitoring** for real-time consumption patterns
 - **Directory display** showing current workspace
 - **Minimal design** using Nerd Font icons
 - **Simple configuration** via command line options
+- **Environment variable control** for feature customization
 
 ## Installation
 
@@ -169,17 +172,36 @@ ccline --print-config
 
 # TUI configuration mode (planned)
 ccline --configure
+
+# Billing block management
+ccline --set-block-start <time>    # Set billing block start time for today
+ccline --clear-block-start          # Clear block start time override
+ccline --show-block-status          # Show current block status
+```
+
+### Billing Block Synchronization
+
+Solve the problem of billing blocks not syncing when switching between devices with the same account:
+
+```bash
+# Set block start time to 10am on device A
+ccline --set-block-start 10
+
+# Supported time formats:
+ccline --set-block-start 10        # 10:00 (24-hour format)
+ccline --set-block-start 10:30     # 10:30
+ccline --set-block-start "10:30"   # With quotes works too
+
+# View current settings
+ccline --show-block-status
+
+# Clear settings, restore automatic calculation
+ccline --clear-block-start
 ```
 
 ## Default Segments
 
-Displays: `Directory | Git Branch Status | Model | Context Window`
-
-### Git Status Indicators
-
-- Branch name with Nerd Font icon
-- Status: `✓` Clean, `●` Dirty, `⚠` Conflicts  
-- Remote tracking: `↑n` Ahead, `↓n` Behind
+Displays: `Model | Directory | Git Branch Status | Usage | Cost Statistics | Burn Rate`
 
 ### Model Display
 
@@ -187,9 +209,53 @@ Shows simplified Claude model names:
 - `claude-3-5-sonnet` → `Sonnet 3.5`
 - `claude-4-sonnet` → `Sonnet 4`
 
-### Context Window Display
+### Directory Display
+
+Shows current workspace directory with folder icon.
+
+### Git Status Indicators
+
+- Branch name with Nerd Font icon
+- Status: `✓` Clean, `●` Dirty, `⚠` Conflicts  
+- Remote tracking: `↑n` Ahead, `↓n` Behind
+
+### Usage Display
 
 Token usage percentage based on transcript analysis with context limit tracking.
+
+### Cost Statistics
+
+Real-time cost tracking with session, daily, and billing block information:
+- **Session cost**: Cost for current Claude Code session
+- **Daily total**: Total cost for today across all sessions
+- **Billing blocks**: 5-hour billing periods with remaining time (supports manual sync)
+
+#### Dynamic Billing Block Algorithm
+
+Uses the same dual-condition triggering algorithm as ccusage:
+- Automatically detects activity start time to create 5-hour billing blocks
+- Starts new block when activity gap exceeds 5 hours
+- Supports manual start time setting for multi-device synchronization
+
+### Burn Rate Monitoring
+
+Real-time token consumption rate with visual indicators:
+- 🔥 High burn rate (>5000 tokens/min)
+- ⚡ Medium burn rate (2000-5000 tokens/min)
+- 📊 Normal burn rate (<2000 tokens/min)
+- Shows cost per hour projection
+
+## Environment Variables
+
+### Cost Feature Control
+
+- `CCLINE_DISABLE_COST=1` - Disable both cost statistics and burn rate monitoring
+  - When set: Shows only core segments (Model | Directory | Git | Usage)
+  - When unset: Shows all segments including cost tracking
+
+### Performance Tuning
+
+- `CCLINE_SHOW_TIMING=1` - Display performance timing information for debugging
 
 ## Configuration
 
@@ -229,6 +295,12 @@ cargo build --release
 - [ ] Custom themes
 - [ ] Plugin system
 - [ ] Cross-platform binaries
+
+## Acknowledgments
+
+### ccusage Integration
+
+Cost tracking features are built upon the statistical methods and pricing data from the [ccusage](https://github.com/ryoppippi/ccusage) project.
 
 ## Contributing
 

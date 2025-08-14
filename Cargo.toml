@@ -17,9 +17,13 @@ clap = { version = "4.0", features = ["derive"] }
 toml = "0.8"
 ureq = { version = "2.10", features = ["json"], optional = true }
 semver = { version = "1.0", optional = true }
-chrono = { version = "0.4", features = ["serde"], optional = true }
+chrono = { version = "0.4", features = ["serde"] }
 dirs = { version = "5.0", optional = true }
+tokio = { version = "1.41", features = ["rt", "rt-multi-thread", "macros"] }
+reqwest = { version = "0.12", features = ["json"] }
+once_cell = "1.20"
+glob = "0.3"
 
 [features]
 default = ["self-update"]
-self-update = ["ureq", "semver", "chrono", "dirs"]
+self-update = ["ureq", "semver", "dirs"]

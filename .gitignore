@@ -5,3 +5,13 @@ claude-powerline-features.md
 CLAUDE.md
 PRD.md
 .claude/
+
+# Archive directory
+archive/
+
+# Temporary test files
+test_pricing.rs
+test_pricing.sh
+
+# Development tools
+.vibedev/

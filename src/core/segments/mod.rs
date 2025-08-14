@@ -1,3 +1,5 @@
+pub mod burn_rate;
+pub mod cost;
 pub mod directory;
 pub mod git;
 pub mod model;
@@ -12,6 +14,8 @@ pub trait Segment {
 }
 
 // Re-export all segment types
+pub use burn_rate::BurnRateSegment;
+pub use cost::CostSegment;
 pub use directory::DirectorySegment;
 pub use git::GitSegment;
 pub use model::ModelSegment;
