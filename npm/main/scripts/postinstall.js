@@ -70,10 +70,45 @@ try {
   }
 
   const binaryName = platform === 'win32' ? 'ccline.exe' : 'ccline';
-  const sourcePath = path.join(__dirname, '..', 'node_modules', packageName, binaryName);
   const targetPath = path.join(claudeDir, binaryName);
 
-  if (!fs.existsSync(sourcePath)) {
+  // Multiple path search strategies for different package managers
+  function findBinaryPath() {
+    const possiblePaths = [
+      // npm/yarn: nested in node_modules
+      path.join(__dirname, '..', 'node_modules', packageName, binaryName),
+      // pnpm: try require.resolve first
+      (() => {
+        try {
+          const packagePath = require.resolve(packageName + '/package.json');
+          return path.join(path.dirname(packagePath), binaryName);
+        } catch {
+          return null;
+        }
+      })(),
+      // pnpm: flat structure fallback
+      (() => {
+        const currentPath = __dirname;
+        const pnpmMatch = currentPath.match(/(.+\.pnpm)[\\/]([^\\//]+)[\\/]/);
+        if (pnpmMatch) {
+          const pnpmRoot = pnpmMatch[1];
+          const packageNameEncoded = packageName.replace('/', '+');
+          return path.join(pnpmRoot, `${packageNameEncoded}@1.0.0`, 'node_modules', packageName, binaryName);
+        }
+        return null;
+      })()
+    ].filter(p => p !== null);
+
+    for (const testPath of possiblePaths) {
+      if (fs.existsSync(testPath)) {
+        return testPath;
+      }
+    }
+    return null;
+  }
+
+  const sourcePath = findBinaryPath();
+  if (!sourcePath) {
     if (!silent) {
       console.log('Binary package not installed, skipping Claude Code setup');
       console.log('The global ccline command will still work via npm');
