@@ -27,6 +27,10 @@ pub struct Cli {
     /// Check for updates
     #[arg(short = 'u', long = "update")]
     pub update: bool,
+
+    /// Run intro application
+    #[arg(short = 'i', long = "intro")]
+    pub intro: bool,
 }
 
 impl Cli {

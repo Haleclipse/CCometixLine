@@ -29,9 +29,10 @@ ansi-to-tui = { version = "7.0", optional = true }
 ureq = { version = "2.10", features = ["json"], optional = true }
 semver = { version = "1.0", optional = true }
 chrono = { version = "0.4", features = ["serde"], optional = true }
-dirs = { version = "5.0", optional = true }
+dirs = "5.0"
+atty = "0.2.14"
 
 [features]
 default = ["tui", "self-update"]
 tui = ["ratatui", "crossterm", "ansi_term", "ansi-to-tui", "chrono"]
-self-update = ["ureq", "semver", "chrono", "dirs"]
+self-update = ["ureq", "semver", "chrono"]

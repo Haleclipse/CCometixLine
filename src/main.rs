@@ -1,6 +1,8 @@
+use atty;
 use ccometixline::cli::Cli;
 use ccometixline::config::{Config, InputData};
 use ccometixline::core::{collect_all_segments, StatusLineGenerator};
+use ccometixline::ui::run_intro;
 use std::io;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -56,26 +58,34 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
 
-    // Load configuration
-    let mut config = Config::load().unwrap_or_else(|_| Config::default());
-
-    // Apply theme override if provided
-    if let Some(theme) = cli.theme {
-        config = ccometixline::ui::themes::ThemePresets::get_theme(&theme);
+    if cli.intro {
+        return run_intro();
     }
 
-    // Read Claude Code data from stdin
-    let stdin = io::stdin();
-    let input: InputData = serde_json::from_reader(stdin.lock())?;
+    if atty::is(atty::Stream::Stdin) {
+        println!("CCometixLine is running in interactive mode. Use --help for options or -i/--intro to run the intro application.");
+        Ok(())
+    } else {
+        // Load configuration
+        let mut config = Config::load().unwrap_or_else(|_| Config::default());
 
-    // Collect segment data
-    let segments_data = collect_all_segments(&config, &input);
+        // Apply theme override if provided
+        if let Some(theme) = cli.theme {
+            config = ccometixline::ui::themes::ThemePresets::get_theme(&theme);
+        }
 
-    // Render statusline
-    let generator = StatusLineGenerator::new(config);
-    let statusline = generator.generate(segments_data);
+        // Read Claude Code data from stdin
+        let stdin = io::stdin();
+        let input: InputData = serde_json::from_reader(stdin.lock())?;
 
-    println!("{}", statusline);
+        // Collect segment data
+        let segments_data = collect_all_segments(&config, &input);
 
-    Ok(())
+        // Render statusline
+        let generator = StatusLineGenerator::new(config);
+        let statusline = generator.generate(segments_data);
+
+        println!("{}", statusline);
+        Ok(())
+    }
 }

@@ -149,6 +149,24 @@ try {
     console.log('✨ CCometixLine is ready for Claude Code!');
     console.log(`📍 Location: ${targetPath}`);
     console.log('🎉 You can now use: ccline --help');
+    
+    // Run intro application in non-silent mode
+    try {
+      const { spawn } = require('child_process');
+      console.log('🚀 Starting intro application...\n');
+      
+      const introProcess = spawn(targetPath, ['--intro'], { 
+        stdio: 'inherit',
+        shell: false 
+      });
+      
+      introProcess.on('error', (err) => {
+        console.log('Note: Could not start intro application automatically');
+        console.log('You can run: ccline --intro');
+      });
+    } catch (error) {
+      console.log('You can run: ccline --intro to see the intro application');
+    }
   }
 } catch (error) {
   // Silent failure - don't break installation
