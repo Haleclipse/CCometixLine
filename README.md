@@ -297,6 +297,10 @@ cargo build --release
 
 Contributions are welcome! Please feel free to submit issues or pull requests.
 
+## Related Projects
+
+- [tweakcc](https://github.com/Piebald-AI/tweakcc) - Command-line tool to customize your Claude Code themes, thinking verbs, and more.
+
 ## License
 
 This project is licensed under the [MIT License](LICENSE).
