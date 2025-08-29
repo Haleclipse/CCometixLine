@@ -1,6 +1,6 @@
 {
   "name": "@cometix/ccline-linux-x64-musl",
-  "version": "0.0.0",
+  "version": "1.0.4",
   "description": "Linux x64 static binary for CCometixLine (musl libc)",
   "files": ["ccline"],
   "os": ["linux"],

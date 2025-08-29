@@ -1,6 +1,6 @@
 {
   "name": "@cometix/ccline",
-  "version": "0.0.0",
+  "version": "1.0.4",
   "description": "CCometixLine - High-performance Claude Code StatusLine tool",
   "bin": {
     "ccline": "./bin/ccline.js"
@@ -9,11 +9,11 @@
     "postinstall": "node scripts/postinstall.js"
   },
   "optionalDependencies": {
-    "@cometix/ccline-darwin-x64": "0.0.0",
-    "@cometix/ccline-darwin-arm64": "0.0.0",
-    "@cometix/ccline-linux-x64": "0.0.0",
-    "@cometix/ccline-linux-x64-musl": "0.0.0",
-    "@cometix/ccline-win32-x64": "0.0.0"
+    "@cometix/ccline-darwin-x64": "1.0.4",
+    "@cometix/ccline-darwin-arm64": "1.0.4",
+    "@cometix/ccline-linux-x64": "1.0.4",
+    "@cometix/ccline-linux-x64-musl": "1.0.4",
+    "@cometix/ccline-win32-x64": "1.0.4"
   },
   "repository": {
     "type": "git",

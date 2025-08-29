@@ -1,6 +1,6 @@
 {
   "name": "@cometix/ccline-win32-x64",
-  "version": "0.0.0",
+  "version": "1.0.4",
   "description": "Windows x64 binary for CCometixLine",
   "files": ["ccline.exe"],
   "os": ["win32"],

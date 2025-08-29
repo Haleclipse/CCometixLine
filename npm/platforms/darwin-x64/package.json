@@ -1,6 +1,6 @@
 {
   "name": "@cometix/ccline-darwin-x64",
-  "version": "0.0.0",
+  "version": "1.0.4",
   "description": "macOS x64 binary for CCometixLine",
   "files": ["ccline"],
   "os": ["darwin"],
