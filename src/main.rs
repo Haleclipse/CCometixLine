@@ -1,6 +1,8 @@
 use ccometixline::cli::Cli;
 use ccometixline::config::{Config, InputData};
 use ccometixline::core::{collect_all_segments, StatusLineGenerator};
+use ccometixline::ui::run_intro;
+
 use std::io::{self, IsTerminal};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -54,6 +56,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("Update check not available (self-update feature disabled)");
         }
         return Ok(());
+    }
+
+    if cli.intro {
+        return run_intro();
     }
 
     // Handle Claude Code patcher
@@ -134,19 +140,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         return Ok(());
     }
-
+  
     // Read Claude Code data from stdin
     let stdin = io::stdin();
     let input: InputData = serde_json::from_reader(stdin.lock())?;
-
+  
     // Collect segment data
     let segments_data = collect_all_segments(&config, &input);
 
-    // Render statusline
+        // Render statusline
     let generator = StatusLineGenerator::new(config);
     let statusline = generator.generate(segments_data);
 
     println!("{}", statusline);
-
     Ok(())
 }

@@ -1,3 +1,4 @@
+pub mod claude_config;
 pub mod cli;
 pub mod config;
 pub mod core;

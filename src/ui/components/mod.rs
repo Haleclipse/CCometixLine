@@ -2,6 +2,8 @@ pub mod color_picker;
 pub mod editor;
 pub mod help;
 pub mod icon_selector;
+pub mod intro_app;
+pub mod intro_content;
 pub mod name_input;
 pub mod preview;
 pub mod segment_list;
