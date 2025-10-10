@@ -81,6 +81,40 @@ impl PreviewComponent {
         &self.preview_cache
     }
 
+    /// Get threshold-based color override for usage segments
+    fn get_threshold_color(&self, segment_config: &crate::config::SegmentConfig, utilization: f64) -> Option<String> {
+        // Get threshold values from options
+        let warning_threshold = segment_config
+            .options
+            .get("warning_threshold")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(60) as f64;
+
+        let critical_threshold = segment_config
+            .options
+            .get("critical_threshold")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(80) as f64;
+
+        // Determine which color to use based on utilization
+        if utilization >= critical_threshold {
+            // Critical threshold exceeded - use critical color
+            segment_config
+                .options
+                .get("critical_color")
+                .map(|v| v.to_string())
+        } else if utilization >= warning_threshold {
+            // Warning threshold exceeded - use warning color
+            segment_config
+                .options
+                .get("warning_color")
+                .map(|v| v.to_string())
+        } else {
+            // Below warning threshold - no override
+            None
+        }
+    }
+
     /// Generate mock segments data for preview display
     /// This creates perfect preview data without depending on real environment
     fn generate_mock_segments_data(
@@ -140,6 +174,42 @@ impl PreviewComponent {
                     primary: "24%".to_string(),
                     secondary: "· 10-7-2".to_string(),
                     metadata: HashMap::new(),
+                },
+                SegmentId::Usage5Hour => {
+                    // Use mock utilization that demonstrates warning threshold (65% > default 60%)
+                    let utilization = 65.0;
+                    let mut metadata = HashMap::new();
+                    metadata.insert("dynamic_icon".to_string(), "\u{f0aa3}".to_string()); // circle_slice_6
+                    metadata.insert("five_hour_utilization".to_string(), utilization.to_string());
+
+                    // Apply threshold-based color override
+                    if let Some(color_override) = self.get_threshold_color(segment_config, utilization) {
+                        metadata.insert("text_color_override".to_string(), color_override);
+                    }
+
+                    SegmentData {
+                        primary: "65%".to_string(),
+                        secondary: "→ 11am".to_string(),
+                        metadata,
+                    }
+                },
+                SegmentId::Usage7Day => {
+                    // Use mock utilization that demonstrates critical threshold (85% > default 80%)
+                    let utilization = 85.0;
+                    let mut metadata = HashMap::new();
+                    metadata.insert("dynamic_icon".to_string(), "\u{f0aa4}".to_string()); // circle_slice_7
+                    metadata.insert("seven_day_utilization".to_string(), utilization.to_string());
+
+                    // Apply threshold-based color override
+                    if let Some(color_override) = self.get_threshold_color(segment_config, utilization) {
+                        metadata.insert("text_color_override".to_string(), color_override);
+                    }
+
+                    SegmentData {
+                        primary: "85%".to_string(),
+                        secondary: "→ Oct 9:5am".to_string(),
+                        metadata,
+                    }
                 },
                 SegmentId::Cost => SegmentData {
                     primary: "$0.02".to_string(),

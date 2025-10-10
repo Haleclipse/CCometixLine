@@ -182,6 +182,43 @@ New-Item -ItemType Directory -Force -Path "$env:USERPROFILE\.claude\ccline"
 copy target\release\ccometixline.exe "$env:USERPROFILE\.claude\ccline\ccline.exe"
 ```
 
+### Running a Forked Version
+
+If you're running a forked version with the latest changes, you'll need to rebuild and reinstall after pulling updates:
+
+```bash
+# Navigate to your forked repository
+cd /path/to/your/CCometixLine
+
+# Pull latest changes
+git pull
+
+# Rebuild the binary
+cargo build --release
+
+# Install to local directory (recommended for testing)
+# Linux/macOS
+cp target/release/ccometixline ~/.claude/ccline/ccline
+
+# Or install to system location (if using Homebrew path)
+# macOS
+cp target/release/ccometixline /opt/homebrew/bin/ccline
+
+# Or install to system location
+# Linux
+sudo cp target/release/ccometixline /usr/local/bin/ccline
+
+# Verify version
+ccline --version
+```
+
+**After updating the binary**, if you've added new segments or themes:
+1. Remove old theme cache: `rm -rf ~/.claude/ccline/themes`
+2. Reinitialize if needed: `ccline --init`
+3. Use TUI configurator to enable new segments: `ccline -c`
+
+**Note**: The binary name in the repository is `ccometixline`, but it's renamed to `ccline` for convenience.
+
 ## Usage
 
 ### Configuration Management
@@ -244,6 +281,32 @@ Shows simplified Claude model names:
 
 Token usage percentage based on transcript analysis with context limit tracking.
 
+### Usage Segments
+
+Three usage tracking segments are available for monitoring Claude API usage:
+
+**Usage (Original)** - Shows combined usage info:
+- Displays 5-hour usage percentage
+- Shows 7-day reset date in compact format
+- Format: `24% · 10-7-2` (24% used, resets Oct 7 at 2am)
+
+**Usage (5-hour)** - Focused 5-hour window:
+- Shows 5-hour usage percentage with reset time
+- Format: `24% → 11am`
+- Ideal for monitoring short-term API limits
+
+**Usage (7-day)** - Weekly usage tracking:
+- Shows 7-day usage percentage with full reset datetime
+- Format: `12% → Oct 9:5am`
+- Perfect for tracking weekly quota
+
+All usage segments:
+- Share the same API call and cache (efficient)
+- Use dynamic circle icons that change with utilization level
+- Are disabled by default (enable via config or TUI)
+- Auto-convert reset times from UTC to local timezone
+- **Support threshold-based warning colors** (see below)
+
 ## Configuration
 
 CCometixLine supports full configuration via TOML files and interactive TUI:
@@ -261,7 +324,45 @@ All segments are configurable with:
 - Color customization
 - Format options
 
-Supported segments: Directory, Git, Model, Usage, Time, Cost, OutputStyle
+Supported segments: Directory, Git, Model, ContextWindow, Usage, Usage5Hour, Usage7Day, Cost, Session, OutputStyle, Update
+
+### Threshold-Based Warning Colors
+
+Usage segments (Usage5Hour and Usage7Day) support dynamic color changes based on utilization thresholds. This allows you to get visual warnings when your API usage approaches limits.
+
+**Configuration example:**
+
+```toml
+[[segments]]
+id = "usage_5hour"
+enabled = true
+
+[segments.colors]
+# Default colors (used when under warning threshold)
+icon.c16 = 14  # Cyan
+text.c16 = 14
+
+[segments.options]
+warning_threshold = 60    # Turn yellow at 60% usage
+critical_threshold = 80   # Turn red at 80% usage
+warning_color.c16 = 11    # Yellow (16-color palette)
+critical_color.c16 = 9    # Red (16-color palette)
+```
+
+**How it works:**
+- **< 60%**: Uses default segment colors (cyan)
+- **≥ 60%**: Text changes to warning color (yellow)
+- **≥ 80%**: Text changes to critical color (red)
+
+You can customize thresholds and colors for each usage segment independently. The colors can be specified using:
+- `c16`: 16-color ANSI palette (0-15)
+- `c256`: 256-color palette (0-255)
+- RGB values (e.g., `{r = 255, g = 165, b = 0}`)
+
+**Common color codes:**
+- Yellow: `c256 = 226` or `c16 = 11`
+- Red: `c256 = 196` or `c16 = 9`
+- Orange: `c256 = 208` or `c256 = 214`
 
 
 ## Requirements

@@ -1,6 +1,6 @@
 [package]
 name = "ccometixline"
-version = "1.0.8"
+version = "1.0.9"
 edition = "2021"
 description = "CCometixLine (ccline) - High-performance Claude Code StatusLine tool written in Rust"
 authors = ["Haleclipse"]
