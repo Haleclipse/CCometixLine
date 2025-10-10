@@ -1,4 +1,4 @@
-use super::{Segment, SegmentData};
+use super::{color_utils, threshold_utils, Segment, SegmentData};
 use crate::config::{InputData, ModelConfig, SegmentId, TranscriptEntry};
 use std::collections::HashMap;
 use std::fs;
@@ -62,6 +62,18 @@ impl Segment for ContextWindowSegment {
                 let context_used_rate = (context_used_token as f64 / context_limit as f64) * 100.0;
                 metadata.insert("tokens".to_string(), context_used_token.to_string());
                 metadata.insert("percentage".to_string(), context_used_rate.to_string());
+
+                // Check if we need to apply threshold-based color override
+                if let Some(color) = threshold_utils::get_color_for_utilization(SegmentId::ContextWindow, context_used_rate) {
+                    // Serialize the color to JSON for metadata using shared helper
+                    let color_json = color_utils::serialize_ansi_color_to_json(&color);
+                    metadata.insert("text_color_override".to_string(), color_json);
+                }
+
+                // Check if we need to apply threshold-based bold override
+                if let Some(should_bold) = threshold_utils::should_be_bold(SegmentId::ContextWindow, context_used_rate) {
+                    metadata.insert("text_bold_override".to_string(), should_bold.to_string());
+                }
             }
             None => {
                 metadata.insert("tokens".to_string(), "-".to_string());
