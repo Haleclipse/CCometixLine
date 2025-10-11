@@ -1,5 +1,6 @@
 use super::segment_list::{FieldSelection, Panel};
 use crate::config::{Config, SegmentId, StyleMode};
+use crate::core::segments::color_utils;
 use ratatui::{
     layout::Rect,
     style::{Color, Style},
@@ -32,6 +33,8 @@ impl SettingsComponent {
                 SegmentId::Git => "Git",
                 SegmentId::ContextWindow => "Context Window",
                 SegmentId::Usage => "Usage",
+                SegmentId::Usage5Hour => "Usage (5-hour)",
+                SegmentId::Usage7Day => "Usage (7-day)",
                 SegmentId::Cost => "Cost",
                 SegmentId::Session => "Session",
                 SegmentId::OutputStyle => "Output Style",
@@ -41,55 +44,15 @@ impl SettingsComponent {
                 StyleMode::Plain => &segment.icon.plain,
                 StyleMode::NerdFont | StyleMode::Powerline => &segment.icon.nerd_font,
             };
-            // Convert AnsiColor to ratatui Color
-            let icon_ratatui_color = match &segment.colors.icon {
-                Some(crate::config::AnsiColor::Color16 { c16 }) => match c16 {
-                    0 => Color::Black,
-                    1 => Color::Red,
-                    2 => Color::Green,
-                    3 => Color::Yellow,
-                    4 => Color::Blue,
-                    5 => Color::Magenta,
-                    6 => Color::Cyan,
-                    7 => Color::White,
-                    8 => Color::DarkGray,
-                    9 => Color::LightRed,
-                    10 => Color::LightGreen,
-                    11 => Color::LightYellow,
-                    12 => Color::LightBlue,
-                    13 => Color::LightMagenta,
-                    14 => Color::LightCyan,
-                    15 => Color::Gray,
-                    _ => Color::White,
-                },
-                Some(crate::config::AnsiColor::Color256 { c256 }) => Color::Indexed(*c256),
-                Some(crate::config::AnsiColor::Rgb { r, g, b }) => Color::Rgb(*r, *g, *b),
-                None => Color::White,
-            };
-            let text_ratatui_color = match &segment.colors.text {
-                Some(crate::config::AnsiColor::Color16 { c16 }) => match c16 {
-                    0 => Color::Black,
-                    1 => Color::Red,
-                    2 => Color::Green,
-                    3 => Color::Yellow,
-                    4 => Color::Blue,
-                    5 => Color::Magenta,
-                    6 => Color::Cyan,
-                    7 => Color::White,
-                    8 => Color::DarkGray,
-                    9 => Color::LightRed,
-                    10 => Color::LightGreen,
-                    11 => Color::LightYellow,
-                    12 => Color::LightBlue,
-                    13 => Color::LightMagenta,
-                    14 => Color::LightCyan,
-                    15 => Color::Gray,
-                    _ => Color::White,
-                },
-                Some(crate::config::AnsiColor::Color256 { c256 }) => Color::Indexed(*c256),
-                Some(crate::config::AnsiColor::Rgb { r, g, b }) => Color::Rgb(*r, *g, *b),
-                None => Color::White,
-            };
+            // Convert AnsiColor to ratatui Color using shared helper
+            let icon_ratatui_color = segment.colors.icon
+                .as_ref()
+                .map(|c| color_utils::ansi_color_to_ratatui(c))
+                .unwrap_or(Color::White);
+            let text_ratatui_color = segment.colors.text
+                .as_ref()
+                .map(|c| color_utils::ansi_color_to_ratatui(c))
+                .unwrap_or(Color::White);
             let icon_color_desc = match &segment.colors.icon {
                 Some(crate::config::AnsiColor::Color16 { c16 }) => match c16 {
                     0 => "Black".to_string(),
@@ -142,30 +105,10 @@ impl SettingsComponent {
                 }
                 None => "Default".to_string(),
             };
-            let background_ratatui_color = match &segment.colors.background {
-                Some(crate::config::AnsiColor::Color16 { c16 }) => match c16 {
-                    0 => Color::Black,
-                    1 => Color::Red,
-                    2 => Color::Green,
-                    3 => Color::Yellow,
-                    4 => Color::Blue,
-                    5 => Color::Magenta,
-                    6 => Color::Cyan,
-                    7 => Color::White,
-                    8 => Color::DarkGray,
-                    9 => Color::LightRed,
-                    10 => Color::LightGreen,
-                    11 => Color::LightYellow,
-                    12 => Color::LightBlue,
-                    13 => Color::LightMagenta,
-                    14 => Color::LightCyan,
-                    15 => Color::Gray,
-                    _ => Color::White,
-                },
-                Some(crate::config::AnsiColor::Color256 { c256 }) => Color::Indexed(*c256),
-                Some(crate::config::AnsiColor::Rgb { r, g, b }) => Color::Rgb(*r, *g, *b),
-                None => Color::White,
-            };
+            let background_ratatui_color = segment.colors.background
+                .as_ref()
+                .map(|c| color_utils::ansi_color_to_ratatui(c))
+                .unwrap_or(Color::White);
             let background_color_desc = match &segment.colors.background {
                 Some(crate::config::AnsiColor::Color16 { c16 }) => match c16 {
                     0 => "Black".to_string(),
@@ -208,7 +151,17 @@ impl SettingsComponent {
                 spans.extend(content);
                 Line::from(spans)
             };
-            let lines = vec![
+
+            // Check if this is a usage segment to show threshold fields
+            let is_usage_segment = matches!(
+                segment.id,
+                SegmentId::Usage5Hour | SegmentId::Usage7Day | SegmentId::ContextWindow
+            );
+
+            // Check if this is a Git segment to show Git-specific options
+            let is_git_segment = matches!(segment.id, SegmentId::Git);
+
+            let mut lines = vec![
                 Line::from(format!("{} Segment", segment_name)),
                 create_field_line(
                     FieldSelection::Enabled,
@@ -266,14 +219,150 @@ impl SettingsComponent {
                         }
                     ))],
                 ),
-                create_field_line(
-                    FieldSelection::Options,
-                    vec![Span::raw(format!(
-                        "└─ Options: {} items",
-                        segment.options.len()
-                    ))],
-                ),
             ];
+
+            // Add Git-specific options
+            if is_git_segment {
+                let show_sha = segment
+                    .options
+                    .get("show_sha")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false);
+                let show_dirty_count = segment
+                    .options
+                    .get("show_dirty_count")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false);
+
+                lines.extend(vec![
+                    create_field_line(
+                        FieldSelection::ShowSha,
+                        vec![Span::raw(format!(
+                            "├─ Show SHA: {}",
+                            if show_sha { "[✓]" } else { "[ ]" }
+                        ))],
+                    ),
+                    create_field_line(
+                        FieldSelection::ShowDirtyCount,
+                        vec![Span::raw(format!(
+                            "├─ Show Dirty Count: {}",
+                            if show_dirty_count { "[✓]" } else { "[ ]" }
+                        ))],
+                    ),
+                ]);
+            }
+
+            // Add threshold fields for usage segments
+            if is_usage_segment {
+                let warning_threshold = segment
+                    .options
+                    .get("warning_threshold")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(60);
+                let critical_threshold = segment
+                    .options
+                    .get("critical_threshold")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(80);
+
+                // Get warning color description and ratatui color using shared helper
+                let (warning_color_desc, warning_ratatui_color) = if let Some(color_val) = segment.options.get("warning_color") {
+                    if let Some(c256) = color_val.get("c256").and_then(|v| v.as_u64()) {
+                        (format!("256:{}", c256), Some(Color::Indexed(c256 as u8)))
+                    } else if let Some(c16) = color_val.get("c16").and_then(|v| v.as_u64()) {
+                        let color = color_utils::c16_to_ratatui_color(c16 as u8);
+                        (format!("16:{}", c16), Some(color))
+                    } else {
+                        ("Not set".to_string(), None)
+                    }
+                } else {
+                    ("Not set".to_string(), None)
+                };
+
+                // Get critical color description and ratatui color using shared helper
+                let (critical_color_desc, critical_ratatui_color) = if let Some(color_val) = segment.options.get("critical_color") {
+                    if let Some(c256) = color_val.get("c256").and_then(|v| v.as_u64()) {
+                        (format!("256:{}", c256), Some(Color::Indexed(c256 as u8)))
+                    } else if let Some(c16) = color_val.get("c16").and_then(|v| v.as_u64()) {
+                        let color = color_utils::c16_to_ratatui_color(c16 as u8);
+                        (format!("16:{}", c16), Some(color))
+                    } else {
+                        ("Not set".to_string(), None)
+                    }
+                } else {
+                    ("Not set".to_string(), None)
+                };
+
+                // Get bold settings
+                let warning_bold = segment
+                    .options
+                    .get("warning_bold")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false);
+                let critical_bold = segment
+                    .options
+                    .get("critical_bold")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(true);
+
+                lines.extend(vec![
+                    create_field_line(
+                        FieldSelection::WarningThreshold,
+                        vec![Span::raw(format!("├─ Warning Threshold: {}%", warning_threshold))],
+                    ),
+                    create_field_line(
+                        FieldSelection::CriticalThreshold,
+                        vec![Span::raw(format!("├─ Critical Threshold: {}%", critical_threshold))],
+                    ),
+                    create_field_line(
+                        FieldSelection::WarningColor,
+                        {
+                            let mut spans = vec![Span::raw(format!("├─ Warning Color: {} ", warning_color_desc))];
+                            if let Some(color) = warning_ratatui_color {
+                                spans.push(Span::styled("██".to_string(), Style::default().fg(color)));
+                            } else {
+                                spans.push(Span::styled("--".to_string(), Style::default().fg(Color::DarkGray)));
+                            }
+                            spans
+                        },
+                    ),
+                    create_field_line(
+                        FieldSelection::CriticalColor,
+                        {
+                            let mut spans = vec![Span::raw(format!("├─ Critical Color: {} ", critical_color_desc))];
+                            if let Some(color) = critical_ratatui_color {
+                                spans.push(Span::styled("██".to_string(), Style::default().fg(color)));
+                            } else {
+                                spans.push(Span::styled("--".to_string(), Style::default().fg(Color::DarkGray)));
+                            }
+                            spans
+                        },
+                    ),
+                    create_field_line(
+                        FieldSelection::WarningBold,
+                        vec![Span::raw(format!(
+                            "├─ Warning Bold: {}",
+                            if warning_bold { "[✓]" } else { "[ ]" }
+                        ))],
+                    ),
+                    create_field_line(
+                        FieldSelection::CriticalBold,
+                        vec![Span::raw(format!(
+                            "├─ Critical Bold: {}",
+                            if critical_bold { "[✓]" } else { "[ ]" }
+                        ))],
+                    ),
+                ]);
+            }
+
+            // Add Options field (always last)
+            lines.push(create_field_line(
+                FieldSelection::Options,
+                vec![Span::raw(format!(
+                    "└─ Options: {} items",
+                    segment.options.len()
+                ))],
+            ));
             let text = Text::from(lines);
             let settings_block = Block::default()
                 .borders(Borders::ALL)
