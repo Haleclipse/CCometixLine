@@ -10,6 +10,7 @@ pub struct GitInfo {
     pub ahead: u32,
     pub behind: u32,
     pub sha: Option<String>,
+    pub dirty_count: u32,
 }
 
 #[derive(Debug, PartialEq)]
@@ -21,6 +22,7 @@ pub enum GitStatus {
 
 pub struct GitSegment {
     show_sha: bool,
+    show_dirty_count: bool,
 }
 
 impl Default for GitSegment {
@@ -31,11 +33,19 @@ impl Default for GitSegment {
 
 impl GitSegment {
     pub fn new() -> Self {
-        Self { show_sha: false }
+        Self {
+            show_sha: false,
+            show_dirty_count: false,
+        }
     }
 
     pub fn with_sha(mut self, show_sha: bool) -> Self {
         self.show_sha = show_sha;
+        self
+    }
+
+    pub fn with_dirty_count(mut self, show_dirty_count: bool) -> Self {
+        self.show_dirty_count = show_dirty_count;
         self
     }
 
@@ -47,7 +57,7 @@ impl GitSegment {
         let branch = self
             .get_branch(working_dir)
             .unwrap_or_else(|| "detached".to_string());
-        let status = self.get_status(working_dir);
+        let (status, dirty_count) = self.get_status(working_dir);
         let (ahead, behind) = self.get_ahead_behind(working_dir);
         let sha = if self.show_sha {
             self.get_sha(working_dir)
@@ -61,12 +71,13 @@ impl GitSegment {
             ahead,
             behind,
             sha,
+            dirty_count,
         })
     }
 
     fn is_git_repository(&self, working_dir: &str) -> bool {
         Command::new("git")
-            .args(["rev-parse", "--git-dir"])
+            .args(["--no-optional-locks", "rev-parse", "--git-dir"])
             .current_dir(working_dir)
             .output()
             .map(|output| output.status.success())
@@ -75,7 +86,7 @@ impl GitSegment {
 
     fn get_branch(&self, working_dir: &str) -> Option<String> {
         if let Ok(output) = Command::new("git")
-            .args(["branch", "--show-current"])
+            .args(["--no-optional-locks", "branch", "--show-current"])
             .current_dir(working_dir)
             .output()
         {
@@ -88,7 +99,7 @@ impl GitSegment {
         }
 
         if let Ok(output) = Command::new("git")
-            .args(["symbolic-ref", "--short", "HEAD"])
+            .args(["--no-optional-locks", "symbolic-ref", "--short", "HEAD"])
             .current_dir(working_dir)
             .output()
         {
@@ -103,9 +114,9 @@ impl GitSegment {
         None
     }
 
-    fn get_status(&self, working_dir: &str) -> GitStatus {
+    fn get_status(&self, working_dir: &str) -> (GitStatus, u32) {
         let output = Command::new("git")
-            .args(["status", "--porcelain"])
+            .args(["--no-optional-locks", "status", "--porcelain"])
             .current_dir(working_dir)
             .output();
 
@@ -113,20 +124,28 @@ impl GitSegment {
             Ok(output) if output.status.success() => {
                 let status_text = String::from_utf8(output.stdout).unwrap_or_default();
 
-                if status_text.trim().is_empty() {
-                    return GitStatus::Clean;
+                // Count non-empty lines (each line = 1 file)
+                let lines: Vec<&str> = status_text
+                    .lines()
+                    .filter(|line| !line.trim().is_empty())
+                    .collect();
+                let count = lines.len() as u32;
+
+                if count == 0 {
+                    return (GitStatus::Clean, 0);
                 }
 
+                // Check for conflicts
                 if status_text.contains("UU")
                     || status_text.contains("AA")
                     || status_text.contains("DD")
                 {
-                    GitStatus::Conflicts
+                    (GitStatus::Conflicts, count)
                 } else {
-                    GitStatus::Dirty
+                    (GitStatus::Dirty, count)
                 }
             }
-            _ => GitStatus::Clean,
+            _ => (GitStatus::Clean, 0),
         }
     }
 
@@ -138,7 +157,7 @@ impl GitSegment {
 
     fn get_commit_count(&self, working_dir: &str, range: &str) -> u32 {
         let output = Command::new("git")
-            .args(["rev-list", "--count", range])
+            .args(["--no-optional-locks", "rev-list", "--count", range])
             .current_dir(working_dir)
             .output();
 
@@ -153,7 +172,7 @@ impl GitSegment {
 
     fn get_sha(&self, working_dir: &str) -> Option<String> {
         let output = Command::new("git")
-            .args(["rev-parse", "--short=7", "HEAD"])
+            .args(["--no-optional-locks", "rev-parse", "--short=7", "HEAD"])
             .current_dir(working_dir)
             .output()
             .ok()?;
@@ -180,6 +199,7 @@ impl Segment for GitSegment {
         metadata.insert("status".to_string(), format!("{:?}", git_info.status));
         metadata.insert("ahead".to_string(), git_info.ahead.to_string());
         metadata.insert("behind".to_string(), git_info.behind.to_string());
+        metadata.insert("dirty_count".to_string(), git_info.dirty_count.to_string());
 
         if let Some(ref sha) = git_info.sha {
             metadata.insert("sha".to_string(), sha.clone());
@@ -190,8 +210,20 @@ impl Segment for GitSegment {
 
         match git_info.status {
             GitStatus::Clean => status_parts.push("✓".to_string()),
-            GitStatus::Dirty => status_parts.push("●".to_string()),
-            GitStatus::Conflicts => status_parts.push("⚠".to_string()),
+            GitStatus::Dirty => {
+                if self.show_dirty_count && git_info.dirty_count > 0 {
+                    status_parts.push(format!("●{}", git_info.dirty_count));
+                } else {
+                    status_parts.push("●".to_string());
+                }
+            }
+            GitStatus::Conflicts => {
+                if self.show_dirty_count && git_info.dirty_count > 0 {
+                    status_parts.push(format!("⚠{}", git_info.dirty_count));
+                } else {
+                    status_parts.push("⚠".to_string());
+                }
+            }
         }
 
         if git_info.ahead > 0 {
