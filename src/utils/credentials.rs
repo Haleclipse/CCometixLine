@@ -62,7 +62,37 @@ fn get_oauth_token_macos() -> Option<String> {
 }
 
 fn get_oauth_token_file() -> Option<String> {
-    let credentials_path = get_credentials_path()?;
+    // Try CLAUDE_CONFIG_DIR first if set (respects explicit user configuration)
+    if std::env::var("CLAUDE_CONFIG_DIR").is_ok() {
+        if let Some(token) = get_oauth_token_from_config_dir() {
+            return Some(token);
+        }
+    }
+
+    // Fall back to default ~/.claude/.credentials.json
+    if let Some(credentials_path) = get_credentials_path() {
+        if credentials_path.exists() {
+            if let Ok(content) = std::fs::read_to_string(&credentials_path) {
+                if let Ok(creds_file) = serde_json::from_str::<CredentialsFile>(&content) {
+                    if let Some(token) = creds_file.claude_ai_oauth.map(|oauth| oauth.access_token) {
+                        return Some(token);
+                    }
+                }
+            }
+        }
+    }
+
+    None
+}
+
+fn get_credentials_path() -> Option<PathBuf> {
+    let home = dirs::home_dir()?;
+    Some(home.join(".claude").join(".credentials.json"))
+}
+
+fn get_oauth_token_from_config_dir() -> Option<String> {
+    let config_dir = std::env::var("CLAUDE_CONFIG_DIR").ok()?;
+    let credentials_path = PathBuf::from(config_dir).join(".credentials.json");
 
     if !credentials_path.exists() {
         return None;
@@ -72,9 +102,4 @@ fn get_oauth_token_file() -> Option<String> {
     let creds_file: CredentialsFile = serde_json::from_str(&content).ok()?;
 
     creds_file.claude_ai_oauth.map(|oauth| oauth.access_token)
-}
-
-fn get_credentials_path() -> Option<PathBuf> {
-    let home = dirs::home_dir()?;
-    Some(home.join(".claude").join(".credentials.json"))
 }
