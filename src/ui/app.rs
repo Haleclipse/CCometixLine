@@ -161,16 +161,20 @@ impl App {
                         KeyCode::Up => app.icon_selector.move_selection(-1),
                         KeyCode::Down => app.icon_selector.move_selection(1),
                         KeyCode::Tab => app.icon_selector.toggle_style(),
-                        KeyCode::Char('c') => app.icon_selector.start_custom_input(),
+                        KeyCode::Char('c') if !app.icon_selector.editing_custom => {
+                            app.icon_selector.start_custom_input()
+                        }
                         KeyCode::Enter => {
                             if app.icon_selector.editing_custom {
                                 app.icon_selector.finish_custom_input();
-                            } else {
-                                if let Some(icon) = app.icon_selector.get_selected_icon() {
-                                    app.apply_selected_icon(icon);
+                                if app.icon_selector.custom_input.is_empty() {
+                                    continue;
                                 }
-                                app.icon_selector.close();
                             }
+                            if let Some(icon) = app.icon_selector.get_selected_icon() {
+                                app.apply_selected_icon(icon);
+                            }
+                            app.icon_selector.close();
                         }
                         KeyCode::Char(c) if app.icon_selector.editing_custom => {
                             app.icon_selector.input_char(c);
