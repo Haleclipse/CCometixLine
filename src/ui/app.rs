@@ -165,11 +165,10 @@ impl App {
                             app.icon_selector.start_custom_input()
                         }
                         KeyCode::Enter => {
-                            if app.icon_selector.editing_custom {
-                                app.icon_selector.finish_custom_input();
-                                if app.icon_selector.custom_input.is_empty() {
-                                    continue;
-                                }
+                            if app.icon_selector.editing_custom
+                                && !app.icon_selector.finish_custom_input()
+                            {
+                                continue;
                             }
                             if let Some(icon) = app.icon_selector.get_selected_icon() {
                                 app.apply_selected_icon(icon);
