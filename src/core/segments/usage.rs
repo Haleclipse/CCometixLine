@@ -18,11 +18,12 @@ struct UsagePeriod {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-struct ApiUsageCache {
-    five_hour_utilization: f64,
-    seven_day_utilization: f64,
-    resets_at: Option<String>,
-    cached_at: String,
+pub struct ApiUsageCache {
+    pub five_hour_utilization: f64,
+    pub seven_day_utilization: f64,
+    pub five_hour_resets_at: Option<String>,
+    pub seven_day_resets_at: Option<String>,
+    pub cached_at: String,
 }
 
 #[derive(Default)]
@@ -33,7 +34,7 @@ impl UsageSegment {
         Self
     }
 
-    fn get_circle_icon(utilization: f64) -> String {
+    pub fn get_circle_icon(utilization: f64) -> String {
         let percent = (utilization * 100.0) as u8;
         match percent {
             0..=12 => "\u{f0a9e}".to_string(),  // circle_slice_1
@@ -65,7 +66,72 @@ impl UsageSegment {
         "?".to_string()
     }
 
-    fn get_cache_path() -> Option<std::path::PathBuf> {
+    /// Format 5-hour reset time as "11am" or "5pm"
+    pub fn format_5hour_reset_time(reset_time_str: Option<&str>) -> String {
+        if let Some(time_str) = reset_time_str {
+            if let Ok(dt) = DateTime::parse_from_rfc3339(time_str) {
+                let mut local_dt = dt.with_timezone(&Local);
+                // Round up if more than 45 minutes past the hour
+                if local_dt.minute() > 45 {
+                    local_dt = local_dt + Duration::hours(1);
+                }
+                let hour = local_dt.hour();
+                let (hour_12, period) = if hour == 0 {
+                    (12, "am")
+                } else if hour < 12 {
+                    (hour, "am")
+                } else if hour == 12 {
+                    (12, "pm")
+                } else {
+                    (hour - 12, "pm")
+                };
+                return format!("{}{}", hour_12, period);
+            }
+        }
+        "?".to_string()
+    }
+
+    /// Format 7-day reset time as "Oct 9, 5am"
+    pub fn format_7day_reset_time(reset_time_str: Option<&str>) -> String {
+        if let Some(time_str) = reset_time_str {
+            if let Ok(dt) = DateTime::parse_from_rfc3339(time_str) {
+                let mut local_dt = dt.with_timezone(&Local);
+                // Round up if more than 45 minutes past the hour
+                if local_dt.minute() > 45 {
+                    local_dt = local_dt + Duration::hours(1);
+                }
+                let month_name = match local_dt.month() {
+                    1 => "Jan",
+                    2 => "Feb",
+                    3 => "Mar",
+                    4 => "Apr",
+                    5 => "May",
+                    6 => "Jun",
+                    7 => "Jul",
+                    8 => "Aug",
+                    9 => "Sep",
+                    10 => "Oct",
+                    11 => "Nov",
+                    12 => "Dec",
+                    _ => "?",
+                };
+                let hour = local_dt.hour();
+                let (hour_12, period) = if hour == 0 {
+                    (12, "am")
+                } else if hour < 12 {
+                    (hour, "am")
+                } else if hour == 12 {
+                    (12, "pm")
+                } else {
+                    (hour - 12, "pm")
+                };
+                return format!("{} {}:{}{}", month_name, local_dt.day(), hour_12, period);
+            }
+        }
+        "?".to_string()
+    }
+
+    pub fn get_cache_path() -> Option<std::path::PathBuf> {
         let home = dirs::home_dir()?;
         Some(
             home.join(".claude")
@@ -75,6 +141,17 @@ impl UsageSegment {
     }
 
     fn load_cache(&self) -> Option<ApiUsageCache> {
+        let cache_path = Self::get_cache_path()?;
+        if !cache_path.exists() {
+            return None;
+        }
+
+        let content = std::fs::read_to_string(&cache_path).ok()?;
+        serde_json::from_str(&content).ok()
+    }
+
+    /// Public helper to load cache for other usage segments
+    pub fn load_usage_cache() -> Option<ApiUsageCache> {
         let cache_path = Self::get_cache_path()?;
         if !cache_path.exists() {
             return None;
@@ -214,7 +291,7 @@ impl Segment for UsageSegment {
             (
                 cache.five_hour_utilization,
                 cache.seven_day_utilization,
-                cache.resets_at,
+                cache.seven_day_resets_at,
             )
         } else {
             match self.fetch_api_usage(api_base_url, &token, timeout) {
@@ -222,7 +299,8 @@ impl Segment for UsageSegment {
                     let cache = ApiUsageCache {
                         five_hour_utilization: response.five_hour.utilization,
                         seven_day_utilization: response.seven_day.utilization,
-                        resets_at: response.seven_day.resets_at.clone(),
+                        five_hour_resets_at: response.five_hour.resets_at.clone(),
+                        seven_day_resets_at: response.seven_day.resets_at.clone(),
                         cached_at: Utc::now().to_rfc3339(),
                     };
                     self.save_cache(&cache);
@@ -237,7 +315,7 @@ impl Segment for UsageSegment {
                         (
                             cache.five_hour_utilization,
                             cache.seven_day_utilization,
-                            cache.resets_at,
+                            cache.seven_day_resets_at,
                         )
                     } else {
                         return None;

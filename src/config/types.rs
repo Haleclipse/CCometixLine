@@ -69,6 +69,8 @@ pub enum SegmentId {
     Git,
     ContextWindow,
     Usage,
+    Usage5Hour,
+    Usage7Day,
     Cost,
     Session,
     OutputStyle,

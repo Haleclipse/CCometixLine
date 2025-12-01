@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.9] - 2025-10-09
+
+### Added
+- **Two New Usage Segments**: Enhanced API usage monitoring with dedicated segments
+  - **Usage5Hour Segment**: Displays 5-hour usage percentage with reset time (e.g., `24% -> 11am`)
+  - **Usage7Day Segment**: Displays 7-day usage percentage with full reset datetime (e.g., `12% -> Oct 9, 5am`)
+  - Both segments share efficient API cache to minimize redundant calls
+  - Dynamic circle icons that change based on utilization level
+  - Automatic UTC to local timezone conversion for reset times
+  - Disabled by default (opt-in via config or TUI)
+
+### Changed
+- **API Cache Structure**: Updated to store both 5-hour and 7-day reset times separately
+  - Cache now includes `five_hour_resets_at` and `seven_day_resets_at` fields
+  - Backward compatible with graceful handling of old cache files
+- **Segment ID Enum**: Added `Usage5Hour` and `Usage7Day` variants
+- **All Theme Files**: Updated all 9 built-in themes to include new usage segments
+- **TUI Components**: Enhanced UI components with new segment name mappings
+
+### Technical Details
+- New time formatting functions: `format_5hour_reset_time()` and `format_7day_reset_time()`
+- Public API for `UsageSegment::load_usage_cache()` to enable cache sharing
+- Added mock preview data for new segments in TUI configurator
+- All UI match statements updated to handle new segment IDs
+
 ## [1.0.4] - 2025-08-28
 
 ### Added
