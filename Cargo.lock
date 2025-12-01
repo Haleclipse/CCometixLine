@@ -160,7 +160,7 @@ dependencies = [
 
 [[package]]
 name = "ccometixline"
-version = "1.0.8"
+version = "1.0.9"
 dependencies = [
  "ansi-to-tui",
  "ansi_term",
@@ -168,6 +168,7 @@ dependencies = [
  "clap",
  "crossterm",
  "dirs",
+ "once_cell",
  "ratatui",
  "regex",
  "semver",
