@@ -52,7 +52,7 @@ impl UsageSegment {
             if let Ok(dt) = DateTime::parse_from_rfc3339(time_str) {
                 let mut local_dt = dt.with_timezone(&Local);
                 if local_dt.minute() > 45 {
-                    local_dt = local_dt + Duration::hours(1);
+                    local_dt += Duration::hours(1);
                 }
                 return format!(
                     "{}-{}-{}",
