@@ -66,7 +66,7 @@ impl GitSegment {
 
     fn is_git_repository(&self, working_dir: &str) -> bool {
         Command::new("git")
-            .args(["rev-parse", "--git-dir"])
+            .args(["--no-optional-locks", "rev-parse", "--git-dir"])
             .current_dir(working_dir)
             .output()
             .map(|output| output.status.success())
@@ -75,7 +75,7 @@ impl GitSegment {
 
     fn get_branch(&self, working_dir: &str) -> Option<String> {
         if let Ok(output) = Command::new("git")
-            .args(["branch", "--show-current"])
+            .args(["--no-optional-locks", "branch", "--show-current"])
             .current_dir(working_dir)
             .output()
         {
@@ -88,7 +88,7 @@ impl GitSegment {
         }
 
         if let Ok(output) = Command::new("git")
-            .args(["symbolic-ref", "--short", "HEAD"])
+            .args(["--no-optional-locks", "symbolic-ref", "--short", "HEAD"])
             .current_dir(working_dir)
             .output()
         {
@@ -105,7 +105,7 @@ impl GitSegment {
 
     fn get_status(&self, working_dir: &str) -> GitStatus {
         let output = Command::new("git")
-            .args(["status", "--porcelain"])
+            .args(["--no-optional-locks", "status", "--porcelain"])
             .current_dir(working_dir)
             .output();
 
@@ -138,7 +138,7 @@ impl GitSegment {
 
     fn get_commit_count(&self, working_dir: &str, range: &str) -> u32 {
         let output = Command::new("git")
-            .args(["rev-list", "--count", range])
+            .args(["--no-optional-locks", "rev-list", "--count", range])
             .current_dir(working_dir)
             .output();
 
@@ -153,7 +153,7 @@ impl GitSegment {
 
     fn get_sha(&self, working_dir: &str) -> Option<String> {
         let output = Command::new("git")
-            .args(["rev-parse", "--short=7", "HEAD"])
+            .args(["--no-optional-locks", "rev-parse", "--short=7", "HEAD"])
             .current_dir(working_dir)
             .output()
             .ok()?;

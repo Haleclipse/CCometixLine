@@ -463,6 +463,11 @@ pub fn collect_all_segments(
     let mut results = Vec::new();
 
     for segment_config in &config.segments {
+        // Skip disabled segments to avoid unnecessary API requests
+        if !segment_config.enabled {
+            continue;
+        }
+
         let segment_data = match segment_config.id {
             crate::config::SegmentId::Model => {
                 let segment = ModelSegment::new();
