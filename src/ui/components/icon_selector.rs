@@ -119,11 +119,13 @@ impl IconSelectorComponent {
         self.custom_input.clear();
     }
 
-    pub fn finish_custom_input(&mut self) {
+    pub fn finish_custom_input(&mut self) -> bool {
         self.editing_custom = false;
         if !self.custom_input.is_empty() {
             self.current_icon = Some(self.custom_input.clone());
+            return true;
         }
+        false
     }
 
     pub fn input_char(&mut self, c: char) {
