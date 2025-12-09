@@ -8,7 +8,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Handle configuration commands
     if cli.init {
-        Config::init()?;
+        use ccometixline::config::InitResult;
+        match Config::init()? {
+            InitResult::Created(path) => println!("Created config at {}", path.display()),
+            InitResult::AlreadyExists(path) => {
+                println!("Config already exists at {}", path.display())
+            }
+        }
         return Ok(());
     }
 
@@ -116,14 +122,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     MenuResult::LaunchConfigurator => {
                         ccometixline::ui::run_configurator()?;
                     }
-                    MenuResult::InitConfig => {
-                        ccometixline::config::Config::init()?;
-                        println!("Configuration initialized successfully!");
-                    }
-                    MenuResult::CheckConfig => {
-                        let config = ccometixline::config::Config::load()?;
-                        config.check()?;
-                        println!("Configuration is valid!");
+                    MenuResult::InitConfig | MenuResult::CheckConfig => {
+                        // These are now handled internally by the menu
+                        // and should not be returned, but handle gracefully
                     }
                     MenuResult::Exit => {
                         // Exit gracefully
