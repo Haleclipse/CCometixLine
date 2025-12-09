@@ -337,13 +337,13 @@ impl App {
             }
         }
 
-        // Add line for status message if present
+        // Add lines for status message if present (empty line + message)
         if self.status_message.is_some() {
-            lines_needed += 1;
+            lines_needed += 2;
         }
 
-        // Return height: content lines + borders, max 6
-        (lines_needed + 2).clamp(3, 6)
+        // Return height: content lines + borders, max 8
+        (lines_needed + 2).clamp(3, 8)
     }
 
     fn ui(&mut self, f: &mut Frame) {
