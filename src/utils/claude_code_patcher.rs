@@ -88,7 +88,12 @@ impl ClaudeCodePatcher {
             &self.file_content[location.end_index..]
         );
 
-        self.show_diff(&new_code, location.start_index, location.end_index);
+        self.show_diff(
+            "Verbose Property",
+            &new_code,
+            location.start_index,
+            location.end_index,
+        );
         self.file_content = new_content;
 
         Ok(())
@@ -106,7 +111,7 @@ impl ClaudeCodePatcher {
     }
 
     /// Show a diff of the changes (for debugging)
-    fn show_diff(&self, injected_text: &str, start_index: usize, end_index: usize) {
+    fn show_diff(&self, title: &str, injected_text: &str, start_index: usize, end_index: usize) {
         let context_start = start_index.saturating_sub(50);
         let context_end_old = std::cmp::min(self.file_content.len(), end_index + 50);
 
@@ -114,7 +119,7 @@ impl ClaudeCodePatcher {
         let old_changed = &self.file_content[start_index..end_index];
         let old_after = &self.file_content[end_index..context_end_old];
 
-        println!("\n--- Verbose Property Diff ---");
+        println!("\n--- {} Diff ---", title);
         println!(
             "OLD: {}\x1b[31m{}\x1b[0m{}",
             old_before, old_changed, old_after
@@ -249,13 +254,13 @@ impl ClaudeCodePatcher {
             );
 
             self.show_diff(
+                "Context Low Condition",
                 replacement_condition,
                 location.start_index,
                 location.end_index,
             );
             self.file_content = new_content;
 
-            println!("✅ Context low warnings disabled successfully");
             Ok(())
         } else {
             Err("Could not locate context low condition using robust method".into())
@@ -286,16 +291,73 @@ impl ClaudeCodePatcher {
             &self.file_content[location.end_index..]
         );
 
-        self.show_diff(&new_code, location.start_index, location.end_index);
+        self.show_diff(
+            "Context Low Message",
+            &new_code,
+            location.start_index,
+            location.end_index,
+        );
         self.file_content = new_content;
 
         Ok(())
     }
 
-    /// Find the ternary condition for esc/interrupt display
+    /// Find the ternary condition for esc/interrupt display (new pattern)
+    /// Pattern: ="esc",VAR="interrupt"...${...} to ${...}...,...CONDITION?[
+    /// Returns the position of CONDITION that needs to be replaced with (false)
+    fn find_esc_interrupt_condition_new(&self) -> Option<LocationResult> {
+        // Anchor pattern: ="esc" followed by ="interrupt" (variable assignment)
+        // Example: SA="esc",_A="interrupt"
+        let anchor_pattern = Regex::new(r#"="esc",\w+="interrupt""#).ok()?;
+
+        if let Some(anchor_match) = anchor_pattern.find(&self.file_content) {
+            let anchor_pos = anchor_match.start();
+            println!(
+                "Found esc/interrupt anchor: '{}' at {}",
+                anchor_match.as_str(),
+                anchor_pos
+            );
+
+            // Search forward for the spread ternary pattern: ...VARNAME?[
+            let search_range = 800;
+            let search_end = (anchor_pos + search_range).min(self.file_content.len());
+            let forward_text = &self.file_content[anchor_pos..search_end];
+
+            // Pattern: ...VARNAME?[ where VARNAME is a short identifier
+            let spread_pattern = Regex::new(r"\.\.\.(\w+)\?\[").ok()?;
+
+            if let Some(spread_match) = spread_pattern.find(forward_text) {
+                let captures = spread_pattern.captures(forward_text)?;
+                let var_name = captures.get(1)?;
+
+                // Calculate absolute position of the variable name
+                let absolute_start = anchor_pos + spread_match.start() + 3; // Skip "..."
+                let absolute_end = absolute_start + var_name.as_str().len();
+
+                println!(
+                    "  Found spread ternary: '{}' at {}-{}",
+                    var_name.as_str(),
+                    absolute_start,
+                    absolute_end
+                );
+
+                return Some(LocationResult {
+                    start_index: absolute_start,
+                    end_index: absolute_end,
+                    variable_name: Some(var_name.as_str().to_string()),
+                });
+            } else {
+                println!("  ❌ Could not find spread ternary pattern after anchor");
+            }
+        }
+
+        None
+    }
+
+    /// Find the ternary condition for esc/interrupt display (legacy pattern)
     /// Pattern: ...CONDITION?[...{key:"esc"}...,"to interrupt"...]:[]
     /// Returns the position of CONDITION that needs to be replaced with (false)
-    fn find_esc_interrupt_condition(&self) -> Option<LocationResult> {
+    fn find_esc_interrupt_condition_legacy(&self) -> Option<LocationResult> {
         let anchor1 = r#"{key:"esc"}"#;
         let anchor2 = r#""to interrupt""#;
 
@@ -347,6 +409,19 @@ impl ClaudeCodePatcher {
         None
     }
 
+    /// Find the ternary condition for esc/interrupt display
+    /// Tries new pattern first, falls back to legacy pattern
+    fn find_esc_interrupt_condition(&self) -> Option<LocationResult> {
+        // Try new pattern first
+        if let Some(result) = self.find_esc_interrupt_condition_new() {
+            return Some(result);
+        }
+
+        // Fall back to legacy pattern
+        println!("New pattern not found, trying legacy pattern...");
+        self.find_esc_interrupt_condition_legacy()
+    }
+
     /// Disable "esc to interrupt" display by replacing ternary condition with (false)
     /// Changes: ...H1?[esc elements]:[] → ...(false)?[esc elements]:[]
     pub fn disable_esc_interrupt_display(&mut self) -> Result<(), Box<dyn std::error::Error>> {
@@ -364,7 +439,12 @@ impl ClaudeCodePatcher {
             original_condition, location.start_index, location.end_index
         );
 
-        self.show_diff("(false)", location.start_index, location.end_index);
+        self.show_diff(
+            "ESC Interrupt",
+            "(false)",
+            location.start_index,
+            location.end_index,
+        );
 
         let new_content = format!(
             "{}(false){}",
@@ -373,8 +453,361 @@ impl ClaudeCodePatcher {
         );
 
         self.file_content = new_content;
-        println!("✅ ESC interrupt display disabled successfully");
 
         Ok(())
+    }
+
+    /// Find the Claude in Chrome subscription check location
+    /// Uses stable anchors: "tengu_claude_in_chrome_setup" and ".chrome"
+    /// Pattern: let VAR=FUNC(PARAM.chrome)&&FUNC2();
+    /// Note: Variable/function names change with versions, but ".chrome" and the anchor string are stable
+    /// Returns the location of "&&FUNC()" to be removed
+    fn find_chrome_subscription_check(&self) -> Option<LocationResult> {
+        // Step 1: Find stable anchor that indicates Chrome setup code
+        let anchor = "tengu_claude_in_chrome_setup";
+        let anchor_pos = self.file_content.find(anchor)?;
+
+        println!("Found anchor '{}' at position: {}", anchor, anchor_pos);
+
+        // Step 2: Search backward to find ".chrome"
+        let search_range = 300;
+        let search_start = anchor_pos.saturating_sub(search_range);
+        let backward_text = &self.file_content[search_start..anchor_pos];
+
+        // Step 3: Find the pattern with .chrome as stable anchor
+        // Pattern: let VAR=FUNC(PARAM.chrome)&&FUNC2();
+        // We match: FUNC(PARAM.chrome)&&FUNC2() and want to remove &&FUNC2()
+        let pattern = Regex::new(r"let\s*\w+=\w+\(\w+\.chrome\)(&&\w+\(\))").ok()?;
+
+        if let Some(captures) = pattern.captures(backward_text) {
+            let full_match = captures.get(0)?;
+            let and_part = captures.get(1)?; // Captures "&&FUNC2()"
+
+            println!("Found Chrome check pattern: '{}'", full_match.as_str());
+            println!("Part to remove: '{}'", and_part.as_str());
+
+            // Calculate absolute position of "&&FUNC2()"
+            let match_start_in_backward = full_match.start();
+            let and_offset_in_match = and_part.start() - full_match.start();
+
+            let absolute_start = search_start + match_start_in_backward + and_offset_in_match;
+            let absolute_end = absolute_start + and_part.as_str().len();
+
+            println!(
+                "Found '{}' at position: {}-{}",
+                and_part.as_str(),
+                absolute_start,
+                absolute_end
+            );
+
+            return Some(LocationResult {
+                start_index: absolute_start,
+                end_index: absolute_end,
+                variable_name: Some(and_part.as_str().to_string()),
+            });
+        }
+
+        println!("❌ Could not find Chrome subscription check pattern");
+        None
+    }
+
+    /// Bypass Claude in Chrome subscription check
+    /// Changes: let qA=XV1(X.chrome)&&zB(); → let qA=XV1(X.chrome);
+    /// This removes the subscription check while keeping the feature flag check
+    pub fn bypass_chrome_subscription_check(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        let location = self
+            .find_chrome_subscription_check()
+            .ok_or("Could not find Chrome subscription check pattern")?;
+
+        println!(
+            "Removing '{}' at position {}-{}",
+            location.variable_name.as_ref().unwrap_or(&String::new()),
+            location.start_index,
+            location.end_index
+        );
+
+        self.show_diff(
+            "Chrome Subscription Check",
+            "",
+            location.start_index,
+            location.end_index,
+        );
+
+        // Remove "&&FUNC()" by replacing it with empty string
+        let new_content = format!(
+            "{}{}",
+            &self.file_content[..location.start_index],
+            &self.file_content[location.end_index..]
+        );
+
+        self.file_content = new_content;
+
+        Ok(())
+    }
+
+    /// Find the /chrome command subscription message location
+    /// Pattern: !G&&...createElement(...,"Claude in Chrome requires a claude.ai subscription.")
+    /// Returns the location of "!G&&" to be replaced with "false&&"
+    fn find_chrome_command_message(&self) -> Option<LocationResult> {
+        // Stable anchor: the subscription message string
+        let anchor = r#""Claude in Chrome requires a claude.ai subscription.""#;
+        let anchor_pos = self.file_content.find(anchor)?;
+
+        println!(
+            "Found /chrome subscription message at position: {}",
+            anchor_pos
+        );
+
+        // Search backward for "!G&&" pattern (or similar variable name)
+        let search_range = 100;
+        let search_start = anchor_pos.saturating_sub(search_range);
+        let backward_text = &self.file_content[search_start..anchor_pos];
+
+        // Pattern: !VARNAME&& where VARNAME is typically a single letter
+        let pattern = Regex::new(r"!(\w+)&&").ok()?;
+
+        // Find the last occurrence (closest to anchor)
+        let mut last_match: Option<(usize, &str)> = None;
+        for mat in pattern.find_iter(backward_text) {
+            if let Some(captures) = pattern.captures(mat.as_str()) {
+                if let Some(var) = captures.get(1) {
+                    last_match = Some((mat.start(), var.as_str()));
+                }
+            }
+        }
+
+        if let Some((offset, var_name)) = last_match {
+            let absolute_start = search_start + offset;
+            let absolute_end = absolute_start + format!("!{}&&", var_name).len();
+
+            println!(
+                "  Found condition '!{}&&' at {}-{}",
+                var_name, absolute_start, absolute_end
+            );
+
+            return Some(LocationResult {
+                start_index: absolute_start,
+                end_index: absolute_end,
+                variable_name: Some(format!("!{}&&", var_name)),
+            });
+        }
+
+        println!("  ❌ Could not find !VAR&& pattern before message");
+        None
+    }
+
+    /// Remove /chrome command subscription message
+    /// Changes: !G&&...("requires subscription") → false&&...("requires subscription")
+    /// This prevents the error message from being rendered
+    pub fn remove_chrome_command_subscription_message(
+        &mut self,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let location = self
+            .find_chrome_command_message()
+            .ok_or("Could not find /chrome command subscription message")?;
+
+        println!(
+            "Replacing '{}' with 'false&&' at position {}-{}",
+            location.variable_name.as_ref().unwrap_or(&String::new()),
+            location.start_index,
+            location.end_index
+        );
+
+        self.show_diff(
+            "/chrome Command Message",
+            "false&&",
+            location.start_index,
+            location.end_index,
+        );
+
+        // Replace "!G&&" with "false&&"
+        let new_content = format!(
+            "{}false&&{}",
+            &self.file_content[..location.start_index],
+            &self.file_content[location.end_index..]
+        );
+
+        self.file_content = new_content;
+
+        Ok(())
+    }
+
+    /// Find the Chrome startup notification subscription check
+    /// Pattern: if(!zB()){A({key:"chrome-requires-subscription"...
+    /// Returns the location of "!zB()" to be replaced with "false"
+    fn find_chrome_startup_notification_check(&self) -> Option<LocationResult> {
+        // Stable anchor: the unique key for this notification
+        let anchor = r#"key:"chrome-requires-subscription""#;
+        let anchor_pos = self.file_content.find(anchor)?;
+
+        println!(
+            "Found Chrome startup notification anchor at position: {}",
+            anchor_pos
+        );
+
+        // Search backward for "if(!zB())" or similar pattern
+        let search_range = 150;
+        let search_start = anchor_pos.saturating_sub(search_range);
+        let backward_text = &self.file_content[search_start..anchor_pos];
+
+        // Pattern: if(!FUNC()){  where FUNC is typically 2-3 chars
+        // We want to capture the "!FUNC()" part
+        let pattern = Regex::new(r"if\((!\w+\(\))\)\{").ok()?;
+
+        // Find the last occurrence (closest to anchor)
+        let mut last_match: Option<(usize, String)> = None;
+        for cap in pattern.captures_iter(backward_text) {
+            if let Some(condition) = cap.get(1) {
+                last_match = Some((cap.get(0).unwrap().start(), condition.as_str().to_string()));
+            }
+        }
+
+        if let Some((match_offset, condition)) = last_match {
+            // Calculate position of the condition part (inside the if)
+            let if_start = search_start + match_offset;
+            let condition_start = if_start + "if(".len();
+            let condition_end = condition_start + condition.len();
+
+            println!(
+                "  Found condition '{}' at {}-{}",
+                condition, condition_start, condition_end
+            );
+
+            return Some(LocationResult {
+                start_index: condition_start,
+                end_index: condition_end,
+                variable_name: Some(condition),
+            });
+        }
+
+        println!("  ❌ Could not find if(!FUNC()) pattern before notification");
+        None
+    }
+
+    /// Remove Chrome startup subscription notification check
+    /// Changes: if(!zB()){...} → if(false){...}
+    /// This prevents the startup notification from showing
+    pub fn remove_chrome_startup_notification_check(
+        &mut self,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let location = self
+            .find_chrome_startup_notification_check()
+            .ok_or("Could not find Chrome startup notification check")?;
+
+        println!(
+            "Replacing '{}' with 'false' at position {}-{}",
+            location.variable_name.as_ref().unwrap_or(&String::new()),
+            location.start_index,
+            location.end_index
+        );
+
+        self.show_diff(
+            "Chrome Startup Notification",
+            "false",
+            location.start_index,
+            location.end_index,
+        );
+
+        // Replace "!zB()" with "false"
+        let new_content = format!(
+            "{}false{}",
+            &self.file_content[..location.start_index],
+            &self.file_content[location.end_index..]
+        );
+
+        self.file_content = new_content;
+
+        Ok(())
+    }
+
+    /// Apply all patches and return results
+    pub fn apply_all_patches(&mut self) -> Vec<(&'static str, bool)> {
+        let mut results = Vec::new();
+
+        // 1. Set verbose property to true
+        match self.write_verbose_property(true) {
+            Ok(_) => results.push(("Verbose property", true)),
+            Err(e) => {
+                println!("⚠️ Could not modify verbose property: {}", e);
+                results.push(("Verbose property", false));
+            }
+        }
+
+        // 2. Disable context low warnings
+        match self.disable_context_low_warnings() {
+            Ok(_) => results.push(("Context low warnings", true)),
+            Err(e) => {
+                println!("⚠️ Could not disable context low warnings: {}", e);
+                results.push(("Context low warnings", false));
+            }
+        }
+
+        // 3. Disable ESC interrupt display
+        match self.disable_esc_interrupt_display() {
+            Ok(_) => results.push(("ESC interrupt display", true)),
+            Err(e) => {
+                println!("⚠️ Could not disable esc/interrupt display: {}", e);
+                results.push(("ESC interrupt display", false));
+            }
+        }
+
+        // 4. Bypass Chrome subscription check
+        match self.bypass_chrome_subscription_check() {
+            Ok(_) => results.push(("Chrome subscription check", true)),
+            Err(e) => {
+                println!("⚠️ Could not bypass Chrome subscription check: {}", e);
+                results.push(("Chrome subscription check", false));
+            }
+        }
+
+        // 5. Remove /chrome command subscription message
+        match self.remove_chrome_command_subscription_message() {
+            Ok(_) => results.push(("/chrome command message", true)),
+            Err(e) => {
+                println!(
+                    "⚠️ Could not remove /chrome command subscription message: {}",
+                    e
+                );
+                results.push(("/chrome command message", false));
+            }
+        }
+
+        // 6. Remove Chrome startup notification check
+        match self.remove_chrome_startup_notification_check() {
+            Ok(_) => results.push(("Chrome startup notification", true)),
+            Err(e) => {
+                println!(
+                    "⚠️ Could not remove Chrome startup notification check: {}",
+                    e
+                );
+                results.push(("Chrome startup notification", false));
+            }
+        }
+
+        results
+    }
+
+    /// Print patch results summary
+    pub fn print_summary(results: &[(&str, bool)]) {
+        println!("\n📊 Patch Results:");
+        for (name, success) in results {
+            if *success {
+                println!("  ✅ {}", name);
+            } else {
+                println!("  ❌ {}", name);
+            }
+        }
+
+        let success_count = results.iter().filter(|(_, s)| *s).count();
+        let total_count = results.len();
+
+        if success_count == total_count {
+            println!("\n✅ All {} patches applied successfully!", total_count);
+        } else {
+            println!(
+                "\n⚠️ {}/{} patches applied successfully",
+                success_count, total_count
+            );
+        }
     }
 }

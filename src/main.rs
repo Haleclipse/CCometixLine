@@ -77,25 +77,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         // Load and patch
         let mut patcher = ClaudeCodePatcher::new(&claude_path)?;
 
-        // Apply all modifications
         println!("\n🔄 Applying patches...");
-
-        // 1. Set verbose property to true
-        if let Err(e) = patcher.write_verbose_property(true) {
-            println!("⚠️ Could not modify verbose property: {}", e);
-        }
-
-        // 2. Disable context low warnings
-        patcher.disable_context_low_warnings()?;
-
-        // 3. Disable ESC interrupt display
-        if let Err(e) = patcher.disable_esc_interrupt_display() {
-            println!("⚠️ Could not disable esc/interrupt display: {}", e);
-        }
-
+        let results = patcher.apply_all_patches();
         patcher.save()?;
 
-        println!("✅ All patches applied successfully!");
+        ClaudeCodePatcher::print_summary(&results);
         println!("💡 To restore warnings, replace your cli.js with the backup file:");
         println!("   cp {} {}", backup_path, claude_path);
 
