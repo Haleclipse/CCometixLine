@@ -18,6 +18,13 @@ pub struct MainMenu {
     selected_item: usize,
     should_quit: bool,
     show_about: bool,
+    status_message: Option<StatusMessage>,
+}
+
+/// Status message to display in the footer
+struct StatusMessage {
+    message: String,
+    is_error: bool,
 }
 
 #[derive(Debug)]
@@ -70,6 +77,9 @@ impl MainMenu {
                     continue;
                 }
 
+                // Clear status message on any key press
+                self.status_message = None;
+
                 match key.code {
                     KeyCode::Esc | KeyCode::Char('q') => {
                         self.should_quit = true;
@@ -86,7 +96,10 @@ impl MainMenu {
                         }
                     }
                     KeyCode::Enter => {
-                        return Ok(Some(self.handle_selection()?));
+                        if let Some(result) = self.handle_selection() {
+                            return Ok(Some(result));
+                        }
+                        // None means stay in menu (action was handled internally)
                     }
                     _ => {}
                 }
@@ -108,37 +121,82 @@ impl MainMenu {
         ]
     }
 
-    fn handle_selection(&mut self) -> Result<MenuResult, Box<dyn std::error::Error>> {
+    fn handle_selection(&mut self) -> Option<MenuResult> {
         match self.selected_item {
-            0 => Ok(MenuResult::LaunchConfigurator),
-            1 => Ok(MenuResult::InitConfig),
-            2 => Ok(MenuResult::CheckConfig),
+            0 => Some(MenuResult::LaunchConfigurator),
+            1 => {
+                // Initialize config and show result in footer
+                use crate::config::InitResult;
+                match crate::config::Config::init() {
+                    Ok(InitResult::Created(path)) => {
+                        self.status_message = Some(StatusMessage {
+                            message: format!("✓ Created config at {}", path.display()),
+                            is_error: false,
+                        });
+                    }
+                    Ok(InitResult::AlreadyExists(path)) => {
+                        self.status_message = Some(StatusMessage {
+                            message: format!("Config already exists at {}", path.display()),
+                            is_error: false,
+                        });
+                    }
+                    Err(e) => {
+                        self.status_message = Some(StatusMessage {
+                            message: format!("✗ Error: {}", e),
+                            is_error: true,
+                        });
+                    }
+                }
+                None // Stay in menu
+            }
+            2 => {
+                // Check config and show result in footer
+                match crate::config::Config::load() {
+                    Ok(config) => match config.check() {
+                        Ok(_) => {
+                            self.status_message = Some(StatusMessage {
+                                message: "✓ Configuration is valid!".to_string(),
+                                is_error: false,
+                            });
+                        }
+                        Err(e) => {
+                            self.status_message = Some(StatusMessage {
+                                message: format!("✗ Invalid: {}", e),
+                                is_error: true,
+                            });
+                        }
+                    },
+                    Err(e) => {
+                        self.status_message = Some(StatusMessage {
+                            message: format!("✗ Failed to load: {}", e),
+                            is_error: true,
+                        });
+                    }
+                }
+                None // Stay in menu
+            }
             3 => {
                 self.show_about = true;
-                // Return to loop to show about dialog
-                self.main_loop_once()
+                None // Stay in menu
             }
-            4 => Ok(MenuResult::Exit),
-            _ => Ok(MenuResult::Exit),
+            4 => Some(MenuResult::Exit),
+            _ => Some(MenuResult::Exit),
         }
-    }
-
-    fn main_loop_once(&mut self) -> Result<MenuResult, Box<dyn std::error::Error>> {
-        // This is a placeholder - in the actual flow, we'd continue the main loop
-        // but for now, let's just show about and continue
-        Ok(MenuResult::Exit) // This won't actually be used
     }
 
     fn ui(&mut self, f: &mut Frame) {
         let size = f.area();
 
+        // Calculate footer height based on status message
+        let footer_height = if self.status_message.is_some() { 5 } else { 3 };
+
         // Main layout
         let main_layout = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(5), // Header
-                Constraint::Min(10),   // Menu
-                Constraint::Length(3), // Footer
+                Constraint::Length(5),             // Header
+                Constraint::Min(10),               // Menu
+                Constraint::Length(footer_height), // Footer/Help
             ])
             .split(size);
 
@@ -207,8 +265,8 @@ impl MainMenu {
 
         f.render_stateful_widget(menu_list, main_layout[1], &mut list_state);
 
-        // Footer
-        let footer_text = Text::from(vec![Line::from(vec![
+        // Footer/Help - with optional status message
+        let mut footer_lines = vec![Line::from(vec![
             Span::styled(
                 "[↑↓]",
                 Style::default()
@@ -230,10 +288,24 @@ impl MainMenu {
                     .add_modifier(Modifier::BOLD),
             ),
             Span::styled(" Exit", Style::default().fg(Color::Gray)),
-        ])]);
+        ])];
 
-        let footer = Paragraph::new(footer_text)
-            .block(Block::default().borders(Borders::ALL))
+        // Add status message if present
+        if let Some(ref status) = self.status_message {
+            let color = if status.is_error {
+                Color::Red
+            } else {
+                Color::Green
+            };
+            footer_lines.push(Line::from(""));
+            footer_lines.push(Line::from(Span::styled(
+                status.message.as_str(),
+                Style::default().fg(color),
+            )));
+        }
+
+        let footer = Paragraph::new(Text::from(footer_lines))
+            .block(Block::default().borders(Borders::ALL).title("Help"))
             .alignment(Alignment::Center);
 
         f.render_widget(footer, main_layout[2]);

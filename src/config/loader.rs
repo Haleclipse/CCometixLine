@@ -2,6 +2,15 @@ use super::types::Config;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+/// Result of config initialization
+#[derive(Debug)]
+pub enum InitResult {
+    /// Config was created at the given path
+    Created(PathBuf),
+    /// Config already existed at the given path
+    AlreadyExists(PathBuf),
+}
+
 pub struct ConfigLoader;
 
 impl ConfigLoader {
@@ -143,7 +152,7 @@ impl Config {
     }
 
     /// Initialize config directory and create default config
-    pub fn init() -> Result<(), Box<dyn std::error::Error>> {
+    pub fn init() -> Result<InitResult, Box<dyn std::error::Error>> {
         let config_path = Self::get_config_path();
 
         // Create directory
@@ -158,12 +167,10 @@ impl Config {
         if !config_path.exists() {
             let default_config = Config::default();
             default_config.save()?;
-            println!("Created config at {}", config_path.display());
+            Ok(InitResult::Created(config_path))
         } else {
-            println!("Config already exists at {}", config_path.display());
+            Ok(InitResult::AlreadyExists(config_path))
         }
-
-        Ok(())
     }
 
     /// Validate configuration
