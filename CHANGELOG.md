@@ -5,6 +5,56 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.9] - 2025-12-21
+
+### Added
+- **Claude in Chrome Subscription Bypass**: New patcher functionality to bypass Chrome feature subscription checks
+  - `bypass_chrome_subscription_check()`: Enables Chrome feature without subscription
+  - `remove_chrome_startup_notification_check()`: Disables startup subscription notification
+  - `remove_chrome_command_subscription_message()`: Hides /chrome command subscription error
+- **Lefthook Integration**: Pre-commit hooks for automatic code formatting and clippy checks
+
+### Fixed
+- **Icon Selector Input**: Fixed bug where 'c' key couldn't be typed in custom icon input mode
+- **Icon Selector Save**: Fixed custom icon not being saved properly on Enter
+- **Git Lock Conflicts**: Added `--no-optional-locks` flag to all git commands to prevent `.git/index.lock` conflicts
+- **Disabled Segments**: Skip disabled segments in `collect_all_segments` to avoid unnecessary API requests
+- **Main Menu UX**: Keep menu open after "Check Configuration" or "Initialize Config" actions
+- **Help Panel Height**: Fixed height calculation to properly show status messages in configuration mode
+
+### Changed
+- **ESC Interrupt Pattern**: Updated pattern matching for new Claude Code versions with legacy fallback
+- **Config Init Return**: `Config::init()` now returns `InitResult` enum for better status handling
+
+## [1.0.8] - 2025-10-08
+
+### Fixed
+- **API Usage Timezone**: Convert API usage reset time from UTC to local timezone with proper rounding
+
+## [1.0.7] - 2025-10-02
+
+### Fixed
+- **Proxy Support**: Added proxy support for API usage requests
+- **CI Pipeline**: Install rustfmt and clippy components in CI
+- **Debug Output**: Remove debug output from proxy configuration
+
+## [1.0.6] - 2025-10-02
+
+### Added
+- **API Usage Segment**: New segment showing Anthropic API usage statistics
+- **ESC Interrupt Disabler**: Claude Code patcher can now disable "esc to interrupt" display
+
+### Changed
+- **Token Usage Renamed**: Renamed "Token Usage" segment to "Context Window" for clarity
+
+## [1.0.5] - 2025-09-09
+
+### Fixed
+- **Third-party Model Usage**: Resolved usage calculation issues for third-party models (GLM-4.5, etc.)
+
+### Documentation
+- Added related projects section to README
+
 ## [1.0.4] - 2025-08-28
 
 ### Added

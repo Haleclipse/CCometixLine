@@ -1,11 +1,11 @@
 [package]
 name = "ccometixline"
-version = "1.0.8"
+version = "1.0.9"
 edition = "2021"
 description = "CCometixLine (ccline) - High-performance Claude Code StatusLine tool written in Rust"
 authors = ["Haleclipse"]
 license = "MIT"
-repository = "https://github.com/username/CCometixLine"
+repository = "https://github.com/Haleclipse/CCometixLine"
 readme = "README.md"
 keywords = ["claude", "statusline", "powerline", "rust", "claude-code"]
 categories = ["command-line-utilities", "development-tools"]
