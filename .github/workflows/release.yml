@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: write
+  id-token: write
 
 jobs:
   build:
@@ -86,17 +87,28 @@ jobs:
     steps:
     - name: Checkout
       uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
 
     - name: Download artifacts
       uses: actions/download-artifact@v4
       with:
         path: artifacts
 
+    - name: Generate Release Notes
+      uses: orhun/git-cliff-action@v4
+      id: git-cliff
+      with:
+        config: cliff.toml
+        args: --latest --strip header
+      env:
+        OUTPUT: RELEASE_NOTES.md
+
     - name: Create Release
       uses: softprops/action-gh-release@v2
       with:
         files: artifacts/*/*
-        generate_release_notes: true
+        body_path: RELEASE_NOTES.md
         draft: false
         prerelease: false
 
