@@ -56,6 +56,7 @@ pub fn git_segment() -> SegmentConfig {
         options: {
             let mut opts = HashMap::new();
             opts.insert("show_sha".to_string(), serde_json::Value::Bool(false));
+            opts.insert("show_dirty_count".to_string(), serde_json::Value::Bool(true));
             opts
         },
     }
@@ -75,7 +76,34 @@ pub fn context_window_segment() -> SegmentConfig {
             background: None,
         },
         styles: TextStyleConfig { text_bold: true },
-        options: HashMap::new(),
+        options: {
+            let mut opts = HashMap::new();
+            opts.insert(
+                "warning_threshold".to_string(),
+                serde_json::Value::Number(60.into()),
+            );
+            opts.insert(
+                "critical_threshold".to_string(),
+                serde_json::Value::Number(80.into()),
+            );
+            opts.insert(
+                "warning_color".to_string(),
+                serde_json::json!({"c16": 11}),
+            );
+            opts.insert(
+                "critical_color".to_string(),
+                serde_json::json!({"c16": 9}),
+            );
+            opts.insert(
+                "warning_bold".to_string(),
+                serde_json::Value::Bool(false),
+            );
+            opts.insert(
+                "critical_bold".to_string(),
+                serde_json::Value::Bool(true),
+            );
+            opts
+        },
     }
 }
 
@@ -158,6 +186,102 @@ pub fn usage_segment() -> SegmentConfig {
                 serde_json::Value::Number(180.into()),
             );
             opts.insert("timeout".to_string(), serde_json::Value::Number(2.into()));
+            opts
+        },
+    }
+}
+
+pub fn usage_5hour_segment() -> SegmentConfig {
+    SegmentConfig {
+        id: SegmentId::Usage5Hour,
+        enabled: false,
+        icon: IconConfig {
+            plain: "📊".to_string(),
+            nerd_font: "\u{f0a9e}".to_string(),
+        },
+        colors: ColorConfig {
+            icon: Some(AnsiColor::Color16 { c16: 14 }),
+            text: Some(AnsiColor::Color16 { c16: 14 }),
+            background: None,
+        },
+        styles: TextStyleConfig::default(),
+        options: {
+            let mut opts = HashMap::new();
+            opts.insert(
+                "warning_threshold".to_string(),
+                serde_json::Value::Number(60.into()),
+            );
+            opts.insert(
+                "critical_threshold".to_string(),
+                serde_json::Value::Number(80.into()),
+            );
+            // Yellow for warning (16-color palette)
+            opts.insert(
+                "warning_color".to_string(),
+                serde_json::json!({"c16": 11}),
+            );
+            // Red for critical (16-color palette)
+            opts.insert(
+                "critical_color".to_string(),
+                serde_json::json!({"c16": 9}),
+            );
+            // Bold text for warnings
+            opts.insert(
+                "warning_bold".to_string(),
+                serde_json::Value::Bool(false),
+            );
+            opts.insert(
+                "critical_bold".to_string(),
+                serde_json::Value::Bool(true),
+            );
+            opts
+        },
+    }
+}
+
+pub fn usage_7day_segment() -> SegmentConfig {
+    SegmentConfig {
+        id: SegmentId::Usage7Day,
+        enabled: false,
+        icon: IconConfig {
+            plain: "📊".to_string(),
+            nerd_font: "\u{f0a9e}".to_string(),
+        },
+        colors: ColorConfig {
+            icon: Some(AnsiColor::Color16 { c16: 12 }), // Light Blue
+            text: Some(AnsiColor::Color16 { c16: 12 }),
+            background: None,
+        },
+        styles: TextStyleConfig::default(),
+        options: {
+            let mut opts = HashMap::new();
+            opts.insert(
+                "warning_threshold".to_string(),
+                serde_json::Value::Number(60.into()),
+            );
+            opts.insert(
+                "critical_threshold".to_string(),
+                serde_json::Value::Number(80.into()),
+            );
+            // Yellow for warning (16-color palette)
+            opts.insert(
+                "warning_color".to_string(),
+                serde_json::json!({"c16": 11}),
+            );
+            // Red for critical (16-color palette)
+            opts.insert(
+                "critical_color".to_string(),
+                serde_json::json!({"c16": 9}),
+            );
+            // Bold text for warnings
+            opts.insert(
+                "warning_bold".to_string(),
+                serde_json::Value::Bool(false),
+            );
+            opts.insert(
+                "critical_bold".to_string(),
+                serde_json::Value::Bool(true),
+            );
             opts
         },
     }

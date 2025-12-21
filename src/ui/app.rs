@@ -1,4 +1,5 @@
 use crate::config::{Config, SegmentId, StyleMode};
+use crate::core::segments::color_utils;
 use crate::ui::components::{
     color_picker::{ColorPickerComponent, NavDirection},
     help::HelpComponent,
@@ -23,6 +24,12 @@ use ratatui::{
     Frame, Terminal,
 };
 use std::io;
+
+// Field count constants to avoid hardcoding
+// These represent the number of configurable fields in the Settings panel
+const DEFAULT_SEGMENT_FIELD_COUNT: usize = 7;  // Enabled, Icon, IconColor, TextColor, BackgroundColor, TextStyle, Options
+const THRESHOLD_SEGMENT_FIELD_COUNT: usize = 13; // Default fields + WarningThreshold, CriticalThreshold, WarningColor, CriticalColor, WarningBold, CriticalBold
+const GIT_SEGMENT_FIELD_COUNT: usize = 9; // Default fields + ShowSha, ShowDirtyCount
 
 pub struct App {
     config: Config,
@@ -465,7 +472,23 @@ impl App {
                 self.selected_segment = new_selection;
             }
             Panel::Settings => {
-                let field_count = 7; // Enabled, Icon, IconColor, TextColor, TextStyle, BackgroundColor, Options
+                // Check segment type to determine field count
+                let is_usage_segment = self.config.segments.get(self.selected_segment)
+                    .map(|s| matches!(s.id, crate::config::SegmentId::Usage5Hour | crate::config::SegmentId::Usage7Day | crate::config::SegmentId::ContextWindow))
+                    .unwrap_or(false);
+
+                let is_git_segment = self.config.segments.get(self.selected_segment)
+                    .map(|s| matches!(s.id, crate::config::SegmentId::Git))
+                    .unwrap_or(false);
+
+                let field_count = if is_usage_segment {
+                    THRESHOLD_SEGMENT_FIELD_COUNT
+                } else if is_git_segment {
+                    GIT_SEGMENT_FIELD_COUNT
+                } else {
+                    DEFAULT_SEGMENT_FIELD_COUNT
+                };
+
                 let current_field = match self.selected_field {
                     FieldSelection::Enabled => 0i32,
                     FieldSelection::Icon => 1,
@@ -473,9 +496,17 @@ impl App {
                     FieldSelection::TextColor => 3,
                     FieldSelection::BackgroundColor => 4,
                     FieldSelection::TextStyle => 5,
-                    FieldSelection::Options => 6,
+                    FieldSelection::WarningThreshold => 6,
+                    FieldSelection::CriticalThreshold => 7,
+                    FieldSelection::WarningColor => 8,
+                    FieldSelection::CriticalColor => 9,
+                    FieldSelection::WarningBold => 10,
+                    FieldSelection::CriticalBold => 11,
+                    FieldSelection::ShowSha => 6,
+                    FieldSelection::ShowDirtyCount => 7,
+                    FieldSelection::Options => if is_usage_segment { 12 } else if is_git_segment { 8 } else { 6 },
                 };
-                let new_field = (current_field + delta).clamp(0, field_count - 1) as usize;
+                let new_field = (current_field + delta).clamp(0, (field_count - 1) as i32) as usize;
                 self.selected_field = match new_field {
                     0 => FieldSelection::Enabled,
                     1 => FieldSelection::Icon,
@@ -483,7 +514,17 @@ impl App {
                     3 => FieldSelection::TextColor,
                     4 => FieldSelection::BackgroundColor,
                     5 => FieldSelection::TextStyle,
-                    6 => FieldSelection::Options,
+                    6 if is_usage_segment => FieldSelection::WarningThreshold,
+                    7 if is_usage_segment => FieldSelection::CriticalThreshold,
+                    8 if is_usage_segment => FieldSelection::WarningColor,
+                    9 if is_usage_segment => FieldSelection::CriticalColor,
+                    10 if is_usage_segment => FieldSelection::WarningBold,
+                    11 if is_usage_segment => FieldSelection::CriticalBold,
+                    12 if is_usage_segment => FieldSelection::Options,
+                    6 if is_git_segment => FieldSelection::ShowSha,
+                    7 if is_git_segment => FieldSelection::ShowDirtyCount,
+                    8 if is_git_segment => FieldSelection::Options,
+                    6 => FieldSelection::Options, // For default segments
                     _ => FieldSelection::Enabled,
                 };
             }
@@ -502,6 +543,8 @@ impl App {
                         SegmentId::Git => "Git",
                         SegmentId::ContextWindow => "Context Window",
                         SegmentId::Usage => "Usage",
+                        SegmentId::Usage5Hour => "Usage (5-hour)",
+                        SegmentId::Usage7Day => "Usage (7-day)",
                         SegmentId::Cost => "Cost",
                         SegmentId::Session => "Session",
                         SegmentId::OutputStyle => "Output Style",
@@ -529,6 +572,8 @@ impl App {
                                 SegmentId::Git => "Git",
                                 SegmentId::ContextWindow => "Context Window",
                                 SegmentId::Usage => "Usage",
+                                SegmentId::Usage5Hour => "Usage (5-hour)",
+                                SegmentId::Usage7Day => "Usage (7-day)",
                                 SegmentId::Cost => "Cost",
                                 SegmentId::Session => "Session",
                                 SegmentId::OutputStyle => "Output Style",
@@ -546,7 +591,9 @@ impl App {
                     FieldSelection::Icon => self.open_icon_selector(),
                     FieldSelection::IconColor
                     | FieldSelection::TextColor
-                    | FieldSelection::BackgroundColor => self.open_color_picker(),
+                    | FieldSelection::BackgroundColor
+                    | FieldSelection::WarningColor
+                    | FieldSelection::CriticalColor => self.open_color_picker(),
                     FieldSelection::TextStyle => {
                         // Toggle text bold style
                         if let Some(segment) = self.config.segments.get_mut(self.selected_segment) {
@@ -558,6 +605,132 @@ impl App {
                                 } else {
                                     "disabled"
                                 }
+                            ));
+                            self.preview.update_preview(&self.config);
+                        }
+                    }
+                    FieldSelection::WarningThreshold => {
+                        // Cycle through common warning thresholds
+                        if let Some(segment) = self.config.segments.get_mut(self.selected_segment) {
+                            let current = segment
+                                .options
+                                .get("warning_threshold")
+                                .and_then(|v| v.as_u64())
+                                .unwrap_or(60);
+                            let new_value = match current {
+                                x if x < 50 => 50,
+                                50 => 60,
+                                60 => 70,
+                                70 => 80,
+                                _ => 40,
+                            };
+                            segment.options.insert(
+                                "warning_threshold".to_string(),
+                                serde_json::Value::Number(new_value.into()),
+                            );
+                            self.status_message = Some(format!("Warning threshold set to {}%", new_value));
+                            self.preview.update_preview(&self.config);
+                        }
+                    }
+                    FieldSelection::CriticalThreshold => {
+                        // Cycle through common critical thresholds
+                        if let Some(segment) = self.config.segments.get_mut(self.selected_segment) {
+                            let current = segment
+                                .options
+                                .get("critical_threshold")
+                                .and_then(|v| v.as_u64())
+                                .unwrap_or(80);
+                            let new_value = match current {
+                                x if x < 70 => 70,
+                                70 => 80,
+                                80 => 90,
+                                90 => 95,
+                                _ => 60,
+                            };
+                            segment.options.insert(
+                                "critical_threshold".to_string(),
+                                serde_json::Value::Number(new_value.into()),
+                            );
+                            self.status_message = Some(format!("Critical threshold set to {}%", new_value));
+                            self.preview.update_preview(&self.config);
+                        }
+                    }
+                    FieldSelection::WarningBold => {
+                        // Toggle warning bold option
+                        if let Some(segment) = self.config.segments.get_mut(self.selected_segment) {
+                            let current = segment
+                                .options
+                                .get("warning_bold")
+                                .and_then(|v| v.as_bool())
+                                .unwrap_or(false);
+                            let new_value = !current;
+                            segment.options.insert(
+                                "warning_bold".to_string(),
+                                serde_json::Value::Bool(new_value),
+                            );
+                            self.status_message = Some(format!(
+                                "Warning bold {}",
+                                if new_value { "enabled" } else { "disabled" }
+                            ));
+                            self.preview.update_preview(&self.config);
+                        }
+                    }
+                    FieldSelection::CriticalBold => {
+                        // Toggle critical bold option
+                        if let Some(segment) = self.config.segments.get_mut(self.selected_segment) {
+                            let current = segment
+                                .options
+                                .get("critical_bold")
+                                .and_then(|v| v.as_bool())
+                                .unwrap_or(true);
+                            let new_value = !current;
+                            segment.options.insert(
+                                "critical_bold".to_string(),
+                                serde_json::Value::Bool(new_value),
+                            );
+                            self.status_message = Some(format!(
+                                "Critical bold {}",
+                                if new_value { "enabled" } else { "disabled" }
+                            ));
+                            self.preview.update_preview(&self.config);
+                        }
+                    }
+                    FieldSelection::ShowSha => {
+                        // Toggle show_sha option for Git segment
+                        if let Some(segment) = self.config.segments.get_mut(self.selected_segment) {
+                            let current = segment
+                                .options
+                                .get("show_sha")
+                                .and_then(|v| v.as_bool())
+                                .unwrap_or(false);
+                            let new_value = !current;
+                            segment.options.insert(
+                                "show_sha".to_string(),
+                                serde_json::Value::Bool(new_value),
+                            );
+                            self.status_message = Some(format!(
+                                "Show SHA {}",
+                                if new_value { "enabled" } else { "disabled" }
+                            ));
+                            self.preview.update_preview(&self.config);
+                        }
+                    }
+                    FieldSelection::ShowDirtyCount => {
+                        // Toggle show_dirty_count option for Git segment
+                        if let Some(segment) = self.config.segments.get_mut(self.selected_segment) {
+                            let current = segment
+                                .options
+                                .get("show_dirty_count")
+                                .and_then(|v| v.as_bool())
+                                .unwrap_or(false);
+                            let new_value = !current;
+                            segment.options.insert(
+                                "show_dirty_count".to_string(),
+                                serde_json::Value::Bool(new_value),
+                            );
+                            self.status_message = Some(format!(
+                                "Show dirty count {}",
+                                if new_value { "enabled" } else { "disabled" }
                             ));
                             self.preview.update_preview(&self.config);
                         }
@@ -583,7 +756,9 @@ impl App {
         if self.selected_panel == Panel::Settings
             && (self.selected_field == FieldSelection::IconColor
                 || self.selected_field == FieldSelection::TextColor
-                || self.selected_field == FieldSelection::BackgroundColor)
+                || self.selected_field == FieldSelection::BackgroundColor
+                || self.selected_field == FieldSelection::WarningColor
+                || self.selected_field == FieldSelection::CriticalColor)
         {
             self.color_picker.open();
         }
@@ -601,6 +776,20 @@ impl App {
                 FieldSelection::IconColor => segment.colors.icon = Some(color),
                 FieldSelection::TextColor => segment.colors.text = Some(color),
                 FieldSelection::BackgroundColor => segment.colors.background = Some(color),
+                FieldSelection::WarningColor => {
+                    // Store warning color in options using shared helper
+                    let color_str = color_utils::serialize_ansi_color_to_json(&color);
+                    if let Ok(color_json) = serde_json::from_str::<serde_json::Value>(&color_str) {
+                        segment.options.insert("warning_color".to_string(), color_json);
+                    }
+                }
+                FieldSelection::CriticalColor => {
+                    // Store critical color in options using shared helper
+                    let color_str = color_utils::serialize_ansi_color_to_json(&color);
+                    if let Ok(color_json) = serde_json::from_str::<serde_json::Value>(&color_str) {
+                        segment.options.insert("critical_color".to_string(), color_json);
+                    }
+                }
                 _ => {}
             }
             self.preview.update_preview(&self.config);
