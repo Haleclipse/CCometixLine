@@ -1,4 +1,6 @@
 #[cfg(feature = "tui")]
+pub mod alias_editor;
+#[cfg(feature = "tui")]
 pub mod app;
 #[cfg(feature = "tui")]
 pub mod components;
@@ -21,8 +23,19 @@ pub fn run_configurator() -> Result<(), Box<dyn std::error::Error>> {
     App::run()
 }
 
+#[cfg(feature = "tui")]
+pub fn run_alias_editor() -> Result<(), Box<dyn std::error::Error>> {
+    alias_editor::AliasEditorApp::run()
+}
+
 #[cfg(not(feature = "tui"))]
 pub fn run_configurator() -> Result<(), Box<dyn std::error::Error>> {
+    eprintln!("TUI feature is not enabled. Please install with --features tui");
+    std::process::exit(1);
+}
+
+#[cfg(not(feature = "tui"))]
+pub fn run_alias_editor() -> Result<(), Box<dyn std::error::Error>> {
     eprintln!("TUI feature is not enabled. Please install with --features tui");
     std::process::exit(1);
 }

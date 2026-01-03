@@ -30,6 +30,7 @@ struct StatusMessage {
 #[derive(Debug)]
 pub enum MenuResult {
     LaunchConfigurator,
+    LaunchAliasEditor,
     InitConfig,
     CheckConfig,
     Exit,
@@ -114,6 +115,7 @@ impl MainMenu {
     fn get_menu_items(&self) -> Vec<(&str, &str)> {
         vec![
             (" Configuration Mode", "Enter TUI configuration interface"),
+            (" Model Aliases", "Manage model display names and limits"),
             (" Initialize Config", "Create default configuration"),
             (" Check Configuration", "Validate configuration file"),
             (" About", "Show application information"),
@@ -124,7 +126,8 @@ impl MainMenu {
     fn handle_selection(&mut self) -> Option<MenuResult> {
         match self.selected_item {
             0 => Some(MenuResult::LaunchConfigurator),
-            1 => {
+            1 => Some(MenuResult::LaunchAliasEditor),
+            2 => {
                 // Initialize config and show result in footer
                 use crate::config::InitResult;
                 match crate::config::Config::init() {
@@ -149,7 +152,7 @@ impl MainMenu {
                 }
                 None // Stay in menu
             }
-            2 => {
+            3 => {
                 // Check config and show result in footer
                 match crate::config::Config::load() {
                     Ok(config) => match config.check() {
@@ -175,11 +178,11 @@ impl MainMenu {
                 }
                 None // Stay in menu
             }
-            3 => {
+            4 => {
                 self.show_about = true;
                 None // Stay in menu
             }
-            4 => Some(MenuResult::Exit),
+            5 => Some(MenuResult::Exit),
             _ => Some(MenuResult::Exit),
         }
     }

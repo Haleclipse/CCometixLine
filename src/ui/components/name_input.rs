@@ -36,13 +36,21 @@ impl NameInputComponent {
         self.placeholder = placeholder.to_string();
     }
 
+    pub fn open_with_value(&mut self, title: &str, placeholder: &str, value: &str) {
+        self.is_open = true;
+        self.input = value.to_string();
+        self.title = title.to_string();
+        self.placeholder = placeholder.to_string();
+    }
+
     pub fn close(&mut self) {
         self.is_open = false;
         self.input.clear();
     }
 
     pub fn input_char(&mut self, c: char) {
-        if c.is_ascii_alphanumeric() || c == '_' || c == '-' {
+        // Allow alphanumeric, common punctuation for model IDs and display names
+        if c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '.' | ' ' | ':' | '/' | '+') {
             self.input.push(c);
         }
     }

@@ -108,6 +108,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     MenuResult::LaunchConfigurator => {
                         ccometixline::ui::run_configurator()?;
                     }
+                    MenuResult::LaunchAliasEditor => {
+                        ccometixline::ui::run_alias_editor()?;
+                    }
                     MenuResult::InitConfig | MenuResult::CheckConfig => {
                         // These are now handled internally by the menu
                         // and should not be returned, but handle gracefully

@@ -2,9 +2,25 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
 
+/// Model alias entry for exact model ID matching
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ModelAlias {
+    /// Exact model ID to match
+    pub id: String,
+    /// Display name to show in statusline
+    pub display_name: String,
+    /// Optional context limit override
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub context_limit: Option<u32>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModelConfig {
-    #[serde(rename = "models")]
+    /// Model aliases for exact ID matching (highest priority)
+    #[serde(default, rename = "aliases")]
+    pub model_aliases: Vec<ModelAlias>,
+    /// Model patterns for fuzzy matching (fallback)
+    #[serde(default, rename = "models")]
     pub model_entries: Vec<ModelEntry>,
 }
 
@@ -44,6 +60,11 @@ impl ModelConfig {
         for path in config_paths.iter().flatten() {
             if path.exists() {
                 if let Ok(config) = Self::load_from_file(path) {
+                    // Merge aliases (user config takes priority)
+                    let mut merged_aliases = config.model_aliases;
+                    merged_aliases.extend(model_config.model_aliases);
+                    model_config.model_aliases = merged_aliases;
+
                     // Prepend external models to built-in ones for priority
                     let mut merged_entries = config.model_entries;
                     merged_entries.extend(model_config.model_entries);
@@ -57,12 +78,21 @@ impl ModelConfig {
         model_config
     }
 
-    /// Get context limit for a model based on ID pattern matching
-    /// Checks external config first, then falls back to built-in config
+    /// Get context limit for a model based on ID matching
+    /// Priority: exact alias match > pattern match > default
     pub fn get_context_limit(&self, model_id: &str) -> u32 {
+        // First, check exact alias match
+        for alias in &self.model_aliases {
+            if alias.id == model_id {
+                if let Some(limit) = alias.context_limit {
+                    return limit;
+                }
+            }
+        }
+
         let model_lower = model_id.to_lowercase();
 
-        // Check model entries
+        // Check model entries (pattern matching)
         for entry in &self.model_entries {
             if model_lower.contains(&entry.pattern.to_lowercase()) {
                 return entry.context_limit;
@@ -72,13 +102,19 @@ impl ModelConfig {
         200_000
     }
 
-    /// Get display name for a model based on ID pattern matching
-    /// Checks external config first, then falls back to built-in config
-    /// Returns None if no match found (should use fallback display_name)
+    /// Get display name for a model based on ID matching
+    /// Priority: exact alias match > pattern match > None (use fallback)
     pub fn get_display_name(&self, model_id: &str) -> Option<String> {
+        // First, check exact alias match (highest priority)
+        for alias in &self.model_aliases {
+            if alias.id == model_id {
+                return Some(alias.display_name.clone());
+            }
+        }
+
         let model_lower = model_id.to_lowercase();
 
-        // Check model entries
+        // Check model entries (pattern matching)
         for entry in &self.model_entries {
             if model_lower.contains(&entry.pattern.to_lowercase()) {
                 return Some(entry.display_name.clone());
@@ -90,37 +126,45 @@ impl ModelConfig {
 
     /// Create default model configuration file with minimal template
     pub fn create_default_file<P: AsRef<Path>>(path: P) -> Result<(), Box<dyn std::error::Error>> {
-        // Create a minimal template config (not the full fallback config)
-        let template_config = Self {
-            model_entries: vec![], // Empty - just provide the structure
-        };
-
-        let toml_content = toml::to_string_pretty(&template_config)?;
-
-        // Add comments and examples to the template
-        let template_content = format!(
-            "# CCometixLine Model Configuration\n\
-             # This file defines model display names and context limits for different LLM models\n\
-             # File location: ~/.claude/ccline/models.toml\n\
-             \n\
-             {}\n\
-             \n\
-             # Model configurations\n\
-             # Each [[models]] section defines a model pattern and its properties\n\
-             # Order matters: first match wins, so put more specific patterns first\n\
-             \n\
-             # Example of how to add new models:\n\
-             # [[models]]\n\
-             # pattern = \"glm-4.5\"\n\
-             # display_name = \"GLM-4.5\"\n\
-             # context_limit = 128000\n",
-            toml_content.trim()
-        );
-
         // Create parent directory if it doesn't exist
         if let Some(parent) = path.as_ref().parent() {
             fs::create_dir_all(parent)?;
         }
+
+        // Create template content with examples
+        let template_content = r#"# CCometixLine Model Configuration
+# This file defines model display names and context limits for different LLM models
+# File location: ~/.claude/ccline/models.toml
+
+# =============================================================================
+# Model Aliases (Exact Match - Highest Priority)
+# =============================================================================
+# Use aliases for exact model ID matching. This is useful when you want to
+# customize the display name for a specific model ID.
+#
+# Example:
+# [[aliases]]
+# id = "gemini-claude-opus-4-5-thinking"      # Exact model ID to match
+# display_name = "Opus 4.5"                    # Display name in statusline
+# context_limit = 200000                       # Optional: override context limit
+
+# [[aliases]]
+# id = "my-custom-model-v1"
+# display_name = "Custom Model"
+# context_limit = 128000
+
+# =============================================================================
+# Model Patterns (Fuzzy Match - Fallback)
+# =============================================================================
+# Use patterns for fuzzy matching. The pattern is matched using "contains".
+# Order matters: first match wins, so put more specific patterns first.
+#
+# Example:
+# [[models]]
+# pattern = "glm-4.5"
+# display_name = "GLM-4.5"
+# context_limit = 128000
+"#;
 
         fs::write(path, template_content)?;
         Ok(())
@@ -130,6 +174,7 @@ impl ModelConfig {
 impl Default for ModelConfig {
     fn default() -> Self {
         Self {
+            model_aliases: vec![],
             model_entries: vec![
                 // 1M context models (put first for priority matching)
                 ModelEntry {
@@ -137,31 +182,6 @@ impl Default for ModelConfig {
                     display_name: "Sonnet 4.5 1M".to_string(),
                     context_limit: 1_000_000,
                 },
-                // ModelEntry {
-                //     pattern: "claude-sonnet-4-5".to_string(),
-                //     display_name: "Sonnet 4.5".to_string(),
-                //     context_limit: 200_000,
-                // },
-                // ModelEntry {
-                //     pattern: "claude-sonnet-4".to_string(),
-                //     display_name: "Sonnet 4".to_string(),
-                //     context_limit: 200_000,
-                // },
-                // ModelEntry {
-                //     pattern: "claude-4-sonnet".to_string(),
-                //     display_name: "Sonnet 4".to_string(),
-                //     context_limit: 200_000,
-                // },
-                // ModelEntry {
-                //     pattern: "claude-4-opus".to_string(),
-                //     display_name: "Opus 4".to_string(),
-                //     context_limit: 200_000,
-                // },
-                // ModelEntry {
-                //     pattern: "sonnet-4".to_string(),
-                //     display_name: "Sonnet 4".to_string(),
-                //     context_limit: 200_000,
-                // },
                 ModelEntry {
                     pattern: "claude-3-7-sonnet".to_string(),
                     display_name: "Sonnet 3.7".to_string(),
