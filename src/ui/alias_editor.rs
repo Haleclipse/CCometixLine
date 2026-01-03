@@ -216,7 +216,24 @@ impl AliasEditorApp {
         if let Some(alias) = &mut self.temp_alias {
             match self.input_mode {
                 InputMode::EditingId => {
-                    alias.id = input;
+                    let trimmed_id = input.trim().to_string();
+
+                    // Validate: ID must not be empty
+                    if trimmed_id.is_empty() {
+                        self.status_message = Some("Error: Model ID cannot be empty".to_string());
+                        return;
+                    }
+
+                    // Validate: ID must be unique (except when editing the same entry)
+                    let is_duplicate = self.config.model_aliases.iter().enumerate().any(|(i, a)| {
+                        a.id == trimmed_id && self.editing_index != Some(i)
+                    });
+                    if is_duplicate {
+                        self.status_message = Some(format!("Error: Model ID '{}' already exists", trimmed_id));
+                        return;
+                    }
+
+                    alias.id = trimmed_id;
                     self.input_mode = InputMode::EditingName;
                     self.name_input.open_with_value(
                         if self.editing_index.is_some() { "Edit Alias" } else { "Add New Alias" },
@@ -225,7 +242,15 @@ impl AliasEditorApp {
                     );
                 }
                 InputMode::EditingName => {
-                    alias.display_name = input;
+                    let trimmed_name = input.trim().to_string();
+
+                    // Validate: Display name must not be empty
+                    if trimmed_name.is_empty() {
+                        self.status_message = Some("Error: Display name cannot be empty".to_string());
+                        return;
+                    }
+
+                    alias.display_name = trimmed_name;
                     self.input_mode = InputMode::EditingContext;
                     let limit_str = alias.context_limit.map(|l| l.to_string()).unwrap_or_default();
                     self.name_input.open_with_value(
@@ -235,14 +260,18 @@ impl AliasEditorApp {
                     );
                 }
                 InputMode::EditingContext => {
-                    if input.trim().is_empty() {
+                    let trimmed = input.trim();
+                    if trimmed.is_empty() {
                         alias.context_limit = None;
-                    } else if let Ok(limit) = input.parse::<u32>() {
+                    } else if let Ok(limit) = trimmed.parse::<u32>() {
+                        if limit == 0 {
+                            self.status_message = Some("Error: Context limit must be greater than 0".to_string());
+                            return;
+                        }
                         alias.context_limit = Some(limit);
                     } else {
-                        // Keep previous value or handle error? For now just keep None if invalid
-                        // But let's be nice and warn?
-                        // alias.context_limit = None;
+                        self.status_message = Some(format!("Error: '{}' is not a valid number", trimmed));
+                        return;
                     }
 
                     // Save to list
@@ -267,24 +296,133 @@ impl AliasEditorApp {
         }
     }
 
+    /// Escape a string for TOML (handle quotes and backslashes)
+    fn escape_toml_string(s: &str) -> String {
+        s.replace('\\', "\\\\").replace('"', "\\\"")
+    }
+
     fn save_config(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        // Create template content with preserved aliases
-        let toml_content = toml::to_string_pretty(&self.config)?;
-
-        // Add header comments
-        let content = format!(
-            "# CCometixLine Model Configuration\n\
-             # File location: {}\n\
-             \n\
-             {}\n",
-            self.config_path.display(),
-            toml_content
-        );
-
         if let Some(parent) = self.config_path.parent() {
             std::fs::create_dir_all(parent)?;
         }
-        std::fs::write(&self.config_path, content)?;
+
+        // Try to preserve existing file content (comments, models section, etc.)
+        let existing_content = std::fs::read_to_string(&self.config_path).unwrap_or_default();
+
+        // Generate only the aliases section with proper TOML escaping
+        let aliases_toml = if self.config.model_aliases.is_empty() {
+            String::new()
+        } else {
+            let mut aliases_str = String::new();
+            for alias in &self.config.model_aliases {
+                aliases_str.push_str("[[aliases]]\n");
+                aliases_str.push_str(&format!("id = \"{}\"\n", Self::escape_toml_string(&alias.id)));
+                aliases_str.push_str(&format!("display_name = \"{}\"\n", Self::escape_toml_string(&alias.display_name)));
+                if let Some(limit) = alias.context_limit {
+                    aliases_str.push_str(&format!("context_limit = {}\n", limit));
+                }
+                aliases_str.push('\n');
+            }
+            aliases_str
+        };
+
+        let new_content = if existing_content.is_empty() {
+            // Create new file with header and aliases
+            format!(
+                "# CCometixLine Model Configuration\n\
+                 # File location: {}\n\
+                 \n\
+                 # =============================================================================\n\
+                 # Model Aliases (Exact Match - Highest Priority)\n\
+                 # =============================================================================\n\
+                 \n\
+                 {}\
+                 # =============================================================================\n\
+                 # Model Patterns (Fuzzy Match - Fallback)\n\
+                 # =============================================================================\n\
+                 # Add [[models]] entries below for pattern matching\n",
+                self.config_path.display(),
+                aliases_toml
+            )
+        } else {
+            // Preserve existing content, only update aliases section
+            // Strategy: Remove old [[aliases]] entries and insert new ones
+
+            let lines: Vec<&str> = existing_content.lines().collect();
+            let mut new_lines: Vec<String> = Vec::new();
+            let mut in_alias_block = false;
+            let mut aliases_inserted = false;
+
+            for line in lines.iter() {
+                let trimmed = line.trim();
+
+                // Detect start of [[aliases]] block
+                if trimmed == "[[aliases]]" {
+                    in_alias_block = true;
+
+                    // Insert all new aliases at the position of first [[aliases]]
+                    if !aliases_inserted {
+                        for alias_line in aliases_toml.lines() {
+                            new_lines.push(alias_line.to_string());
+                        }
+                        aliases_inserted = true;
+                    }
+                    continue;
+                }
+
+                // Inside alias block: skip until we hit another section or empty line followed by non-alias content
+                if in_alias_block {
+                    // Check if this line starts a new section
+                    if trimmed.starts_with("[[") || (trimmed.starts_with('[') && !trimmed.starts_with("[[")) {
+                        in_alias_block = false;
+                        new_lines.push(line.to_string());
+                    }
+                    // Skip alias content (key = value lines and empty lines within alias blocks)
+                    continue;
+                }
+
+                new_lines.push(line.to_string());
+            }
+
+            // If no aliases existed in file, insert at appropriate position
+            if !aliases_inserted && !aliases_toml.is_empty() {
+                // Find position after header comments
+                let mut insert_pos = 0;
+                for (i, line) in new_lines.iter().enumerate() {
+                    let trimmed = line.trim();
+                    if !trimmed.is_empty() && !trimmed.starts_with('#') {
+                        insert_pos = i;
+                        break;
+                    }
+                    insert_pos = i + 1;
+                }
+
+                // Insert aliases
+                let alias_lines: Vec<String> = aliases_toml.lines().map(|s| s.to_string()).collect();
+                for (i, alias_line) in alias_lines.into_iter().enumerate() {
+                    new_lines.insert(insert_pos + i, alias_line);
+                }
+            }
+
+            // Clean up: remove excessive empty lines (more than 2 consecutive)
+            let mut result_lines: Vec<String> = Vec::new();
+            let mut empty_count = 0;
+            for line in new_lines {
+                if line.trim().is_empty() {
+                    empty_count += 1;
+                    if empty_count <= 2 {
+                        result_lines.push(line);
+                    }
+                } else {
+                    empty_count = 0;
+                    result_lines.push(line);
+                }
+            }
+
+            result_lines.join("\n")
+        };
+
+        std::fs::write(&self.config_path, new_content)?;
         self.status_message = Some(format!("Saved to {}", self.config_path.display()));
         Ok(())
     }
