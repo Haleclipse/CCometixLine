@@ -36,6 +36,13 @@ impl NameInputComponent {
         self.placeholder = placeholder.to_string();
     }
 
+    pub fn open_with_value(&mut self, title: &str, placeholder: &str, initial_value: &str) {
+        self.is_open = true;
+        self.input = initial_value.to_string();
+        self.title = title.to_string();
+        self.placeholder = placeholder.to_string();
+    }
+
     pub fn close(&mut self) {
         self.is_open = false;
         self.input.clear();

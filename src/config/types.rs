@@ -73,6 +73,7 @@ pub enum SegmentId {
     Session,
     OutputStyle,
     Update,
+    CliProxyApiQuota,
 }
 
 // Legacy compatibility structure

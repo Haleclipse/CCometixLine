@@ -220,6 +220,11 @@ impl StatusLineGenerator {
         } else {
             self.get_icon(config)
         };
+        let use_raw_text = data
+            .metadata
+            .get("raw_text")
+            .map(|v| v == "true")
+            .unwrap_or(false);
 
         // Apply background color to the entire segment if set
         if let Some(bg_color) = &config.colors.background {
@@ -233,24 +238,30 @@ impl StatusLineGenerator {
                 icon.clone()
             };
 
-            let text_styled = self
-                .apply_style(
+            let text_styled = (if use_raw_text {
+                data.primary.clone()
+            } else {
+                self.apply_style(
                     &data.primary,
                     config.colors.text.as_ref(),
                     config.styles.text_bold,
                 )
-                .replace("\x1b[0m", "");
+            })
+            .replace("\x1b[0m", "");
 
             let mut segment_content = format!(" {} {} ", icon_colored, text_styled);
 
             if !data.secondary.is_empty() {
-                let secondary_styled = self
-                    .apply_style(
+                let secondary_styled = (if use_raw_text {
+                    data.secondary.clone()
+                } else {
+                    self.apply_style(
                         &data.secondary,
                         config.colors.text.as_ref(),
                         config.styles.text_bold,
                     )
-                    .replace("\x1b[0m", "");
+                })
+                .replace("\x1b[0m", "");
                 segment_content.push_str(&format!("{} ", secondary_styled));
             }
 
@@ -259,23 +270,29 @@ impl StatusLineGenerator {
         } else {
             // No background color, use original logic
             let icon_colored = self.apply_color(&icon, config.colors.icon.as_ref());
-            let text_styled = self.apply_style(
-                &data.primary,
-                config.colors.text.as_ref(),
-                config.styles.text_bold,
-            );
+            let text_styled = if use_raw_text {
+                data.primary.clone()
+            } else {
+                self.apply_style(
+                    &data.primary,
+                    config.colors.text.as_ref(),
+                    config.styles.text_bold,
+                )
+            };
 
             let mut segment = format!("{} {}", icon_colored, text_styled);
 
             if !data.secondary.is_empty() {
-                segment.push_str(&format!(
-                    " {}",
+                let secondary_styled = if use_raw_text {
+                    data.secondary.clone()
+                } else {
                     self.apply_style(
                         &data.secondary,
                         config.colors.text.as_ref(),
-                        config.styles.text_bold
+                        config.styles.text_bold,
                     )
-                ));
+                };
+                segment.push_str(&format!(" {}", secondary_styled));
             }
 
             segment
@@ -509,6 +526,10 @@ pub fn collect_all_segments(
             crate::config::SegmentId::Update => {
                 let segment = UpdateSegment::new();
                 segment.collect(input)
+            }
+            crate::config::SegmentId::CliProxyApiQuota => {
+                let segment = CliProxyApiQuotaSegment::new();
+                segment.collect_with_options(&segment_config.options)
             }
         };
 

@@ -1,4 +1,5 @@
 pub mod color_picker;
+pub mod cli_proxy_api_quota_options;
 pub mod editor;
 pub mod help;
 pub mod icon_selector;

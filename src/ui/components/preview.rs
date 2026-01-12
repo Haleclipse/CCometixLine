@@ -1,5 +1,5 @@
 use crate::config::{Config, SegmentId};
-use crate::core::segments::SegmentData;
+use crate::core::segments::{CliProxyApiQuotaSegment, SegmentData};
 use crate::core::StatusLineGenerator;
 use ratatui::{
     layout::Rect,
@@ -180,6 +180,59 @@ impl PreviewComponent {
                             env!("CARGO_PKG_VERSION").to_string(),
                         );
                         map.insert("update_available".to_string(), "false".to_string());
+                        map
+                    },
+                },
+                SegmentId::CliProxyApiQuota => SegmentData {
+                    primary: {
+                        let separator = segment_config
+                            .options
+                            .get("separator")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or(" | ");
+
+                        let alias = |key: &str, default: &str| -> String {
+                            segment_config
+                                .options
+                                .get(key)
+                                .and_then(|v| v.as_str())
+                                .unwrap_or(default)
+                                .to_string()
+                        };
+
+                        let color = |key: &str, default: crate::config::AnsiColor| {
+                            segment_config
+                                .options
+                                .get(key)
+                                .and_then(|v| serde_json::from_value::<crate::config::AnsiColor>(v.clone()).ok())
+                                .unwrap_or(default)
+                        };
+
+                        let opus = CliProxyApiQuotaSegment::apply_foreground_color(
+                            &format!("{}:27%", alias("opus_alias", "opus")),
+                            &color("opus_color", crate::config::AnsiColor::Color256 { c256: 214 }),
+                        );
+                        let g3p = CliProxyApiQuotaSegment::apply_foreground_color(
+                            &format!("{}:100%", alias("gemini3pro_alias", "3pro")),
+                            &color(
+                                "gemini3pro_color",
+                                crate::config::AnsiColor::Color256 { c256: 129 },
+                            ),
+                        );
+                        let g3f = CliProxyApiQuotaSegment::apply_foreground_color(
+                            &format!("{}:83%", alias("gemini3flash_alias", "3flash")),
+                            &color(
+                                "gemini3flash_color",
+                                crate::config::AnsiColor::Color256 { c256: 45 },
+                            ),
+                        );
+
+                        vec![opus, g3p, g3f].join(separator)
+                    },
+                    secondary: "".to_string(),
+                    metadata: {
+                        let mut map = HashMap::new();
+                        map.insert("raw_text".to_string(), "true".to_string());
                         map
                     },
                 },

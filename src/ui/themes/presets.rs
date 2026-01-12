@@ -1,6 +1,8 @@
 // Theme presets for TUI configuration
 
-use crate::config::{Config, StyleConfig, StyleMode};
+use crate::config::{AnsiColor, ColorConfig, Config, IconConfig, SegmentConfig, SegmentId, StyleConfig, StyleMode, TextStyleConfig};
+use std::collections::HashMap;
+use std::collections::HashSet;
 
 // Import all theme modules
 use super::{
@@ -11,6 +13,48 @@ use super::{
 pub struct ThemePresets;
 
 impl ThemePresets {
+    /// Default CLI Proxy API Quota segment configuration (shared across all themes)
+    fn default_cli_proxy_api_quota_segment() -> SegmentConfig {
+        SegmentConfig {
+            id: SegmentId::CliProxyApiQuota,
+            enabled: false,
+            icon: IconConfig {
+                plain: "📈".to_string(),
+                nerd_font: "\u{f0201}".to_string(),
+            },
+            colors: ColorConfig {
+                icon: Some(AnsiColor::Color16 { c16: 11 }),
+                text: Some(AnsiColor::Color16 { c16: 11 }),
+                background: None,
+            },
+            styles: TextStyleConfig::default(),
+            options: {
+                let mut opts = HashMap::new();
+                opts.insert(
+                    "host".to_string(),
+                    serde_json::Value::String("http://localhost:8317".to_string()),
+                );
+                opts.insert(
+                    "key".to_string(),
+                    serde_json::Value::String("nbkey".to_string()),
+                );
+                opts.insert(
+                    "cache_duration".to_string(),
+                    serde_json::Value::Number(180.into()),
+                );
+                opts.insert(
+                    "auth_type".to_string(),
+                    serde_json::Value::String("all".to_string()),
+                );
+                opts.insert(
+                    "separator".to_string(),
+                    serde_json::Value::String(" | ".to_string()),
+                );
+                opts
+            },
+        }
+    }
+
     pub fn get_theme(theme_name: &str) -> Config {
         // First try to load from file
         if let Ok(config) = Self::load_theme_from_file(theme_name) {
@@ -18,18 +62,7 @@ impl ThemePresets {
         }
 
         // Fallback to built-in themes
-        match theme_name {
-            "cometix" => Self::get_cometix(),
-            "default" => Self::get_default(),
-            "gruvbox" => Self::get_gruvbox(),
-            "minimal" => Self::get_minimal(),
-            "nord" => Self::get_nord(),
-            "powerline-dark" => Self::get_powerline_dark(),
-            "powerline-light" => Self::get_powerline_light(),
-            "powerline-rose-pine" => Self::get_powerline_rose_pine(),
-            "powerline-tokyo-night" => Self::get_powerline_tokyo_night(),
-            _ => Self::get_default(),
-        }
+        Self::builtin_theme(theme_name).unwrap_or_else(Self::get_default)
     }
 
     /// Load theme from file system
@@ -47,7 +80,37 @@ impl ThemePresets {
         // Ensure the theme field matches the requested theme
         config.theme = theme_name.to_string();
 
+        // Keep older theme files forward-compatible by auto-adding any new segments
+        // that didn't exist when the theme file was created.
+        let baseline = Self::builtin_theme(theme_name).unwrap_or_else(Self::get_default);
+        config = Self::merge_missing_segments(config, &baseline);
+
         Ok(config)
+    }
+
+    fn builtin_theme(theme_name: &str) -> Option<Config> {
+        match theme_name {
+            "cometix" => Some(Self::get_cometix()),
+            "default" => Some(Self::get_default()),
+            "gruvbox" => Some(Self::get_gruvbox()),
+            "minimal" => Some(Self::get_minimal()),
+            "nord" => Some(Self::get_nord()),
+            "powerline-dark" => Some(Self::get_powerline_dark()),
+            "powerline-light" => Some(Self::get_powerline_light()),
+            "powerline-rose-pine" => Some(Self::get_powerline_rose_pine()),
+            "powerline-tokyo-night" => Some(Self::get_powerline_tokyo_night()),
+            _ => None,
+        }
+    }
+
+    fn merge_missing_segments(mut config: Config, baseline: &Config) -> Config {
+        let mut existing: HashSet<SegmentId> = config.segments.iter().map(|s| s.id).collect();
+        for segment in &baseline.segments {
+            if existing.insert(segment.id) {
+                config.segments.push(segment.clone());
+            }
+        }
+        config
     }
 
     /// Get the themes directory path (~/.claude/ccline/themes/)
@@ -137,6 +200,7 @@ impl ThemePresets {
                 theme_cometix::cost_segment(),
                 theme_cometix::session_segment(),
                 theme_cometix::output_style_segment(),
+                Self::default_cli_proxy_api_quota_segment(),
             ],
             theme: "cometix".to_string(),
         }
@@ -157,6 +221,7 @@ impl ThemePresets {
                 theme_default::cost_segment(),
                 theme_default::session_segment(),
                 theme_default::output_style_segment(),
+                Self::default_cli_proxy_api_quota_segment(),
             ],
             theme: "default".to_string(),
         }
@@ -177,6 +242,7 @@ impl ThemePresets {
                 theme_minimal::cost_segment(),
                 theme_minimal::session_segment(),
                 theme_minimal::output_style_segment(),
+                Self::default_cli_proxy_api_quota_segment(),
             ],
             theme: "minimal".to_string(),
         }
@@ -197,6 +263,7 @@ impl ThemePresets {
                 theme_gruvbox::cost_segment(),
                 theme_gruvbox::session_segment(),
                 theme_gruvbox::output_style_segment(),
+                Self::default_cli_proxy_api_quota_segment(),
             ],
             theme: "gruvbox".to_string(),
         }
@@ -217,6 +284,7 @@ impl ThemePresets {
                 theme_nord::cost_segment(),
                 theme_nord::session_segment(),
                 theme_nord::output_style_segment(),
+                Self::default_cli_proxy_api_quota_segment(),
             ],
             theme: "nord".to_string(),
         }
@@ -237,6 +305,7 @@ impl ThemePresets {
                 theme_powerline_dark::cost_segment(),
                 theme_powerline_dark::session_segment(),
                 theme_powerline_dark::output_style_segment(),
+                Self::default_cli_proxy_api_quota_segment(),
             ],
             theme: "powerline-dark".to_string(),
         }
@@ -257,6 +326,7 @@ impl ThemePresets {
                 theme_powerline_light::cost_segment(),
                 theme_powerline_light::session_segment(),
                 theme_powerline_light::output_style_segment(),
+                Self::default_cli_proxy_api_quota_segment(),
             ],
             theme: "powerline-light".to_string(),
         }
@@ -277,6 +347,7 @@ impl ThemePresets {
                 theme_powerline_rose_pine::cost_segment(),
                 theme_powerline_rose_pine::session_segment(),
                 theme_powerline_rose_pine::output_style_segment(),
+                Self::default_cli_proxy_api_quota_segment(),
             ],
             theme: "powerline-rose-pine".to_string(),
         }
@@ -297,6 +368,7 @@ impl ThemePresets {
                 theme_powerline_tokyo_night::cost_segment(),
                 theme_powerline_tokyo_night::session_segment(),
                 theme_powerline_tokyo_night::output_style_segment(),
+                Self::default_cli_proxy_api_quota_segment(),
             ],
             theme: "powerline-tokyo-night".to_string(),
         }

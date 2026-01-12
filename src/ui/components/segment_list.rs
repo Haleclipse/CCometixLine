@@ -57,6 +57,7 @@ impl SegmentListComponent {
                     SegmentId::Session => "Session",
                     SegmentId::OutputStyle => "Output Style",
                     SegmentId::Update => "Update",
+                    SegmentId::CliProxyApiQuota => "CLI Proxy API Quota",
                 };
 
                 if is_selected {
