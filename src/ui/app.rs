@@ -1,6 +1,7 @@
 use crate::config::{Config, SegmentId, StyleMode};
 use crate::ui::components::{
     color_picker::{ColorPickerComponent, NavDirection},
+    cpa_quota_options::{CpaQuotaModelKind, CpaQuotaOptionField, CpaQuotaOptionsComponent},
     help::HelpComponent,
     icon_selector::IconSelectorComponent,
     name_input::NameInputComponent,
@@ -22,7 +23,20 @@ use ratatui::{
     widgets::{Block, Borders, Paragraph},
     Frame, Terminal,
 };
+use serde_json::Value;
 use std::io;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TextInputTarget {
+    SaveThemeName,
+    CpaQuotaAlias(CpaQuotaModelKind),
+    CpaQuotaSeparator,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ColorPickerTarget {
+    CpaQuotaModelColor(CpaQuotaModelKind),
+}
 
 pub struct App {
     config: Config,
@@ -40,6 +54,9 @@ pub struct App {
     theme_selector: ThemeSelectorComponent,
     help: HelpComponent,
     status_message: Option<String>,
+    cpa_quota_options: CpaQuotaOptionsComponent,
+    text_input_target: Option<TextInputTarget>,
+    color_picker_target: Option<ColorPickerTarget>,
 }
 
 impl App {
@@ -60,6 +77,9 @@ impl App {
             theme_selector: ThemeSelectorComponent::new(),
             help: HelpComponent::new(),
             status_message: None,
+            cpa_quota_options: CpaQuotaOptionsComponent::new(),
+            text_input_target: None,
+            color_picker_target: None,
         };
         app.preview.update_preview(&config);
         app
@@ -105,12 +125,16 @@ impl App {
                 // Handle popup events first
                 if app.name_input.is_open {
                     match key.code {
-                        KeyCode::Esc => app.name_input.close(),
+                        KeyCode::Esc => {
+                            app.name_input.close();
+                            app.text_input_target = None;
+                        }
                         KeyCode::Enter => {
-                            if let Some(name) = app.name_input.get_input() {
-                                app.save_as_new_theme(&name);
+                            if let Some(value) = app.name_input.get_input() {
+                                app.apply_text_input(value);
                             }
                             app.name_input.close();
+                            app.text_input_target = None;
                         }
                         KeyCode::Char(c) => app.name_input.input_char(c),
                         KeyCode::Backspace => app.name_input.backspace(),
@@ -138,7 +162,10 @@ impl App {
                     }
                 } else if app.color_picker.is_open {
                     match key.code {
-                        KeyCode::Esc => app.color_picker.close(),
+                        KeyCode::Esc => {
+                            app.color_picker.close();
+                            app.color_picker_target = None;
+                        }
                         KeyCode::Up => app.color_picker.move_direction(NavDirection::Up),
                         KeyCode::Down => app.color_picker.move_direction(NavDirection::Down),
                         KeyCode::Left => app.color_picker.move_direction(NavDirection::Left),
@@ -150,6 +177,7 @@ impl App {
                                 app.apply_selected_color(color);
                             }
                             app.color_picker.close();
+                            app.color_picker_target = None;
                         }
                         KeyCode::Char(c) => app.color_picker.input_char(c),
                         KeyCode::Backspace => app.color_picker.backspace(),
@@ -183,6 +211,14 @@ impl App {
                         }
                         _ => {}
                     }
+                } else if app.cpa_quota_options.is_open {
+                    match key.code {
+                        KeyCode::Esc => app.cpa_quota_options.close(),
+                        KeyCode::Up => app.cpa_quota_options.move_selection(-1),
+                        KeyCode::Down => app.cpa_quota_options.move_selection(1),
+                        KeyCode::Enter => app.open_cpa_quota_option_editor(),
+                        _ => {}
+                    }
                 } else {
                     // Handle main app events
                     match key.code {
@@ -191,6 +227,7 @@ impl App {
                             if key.modifiers.contains(KeyModifiers::CONTROL) {
                                 // Ctrl+S: Save as new theme with name input
                                 app.name_input.open("Save as New Theme", "Enter theme name");
+                                app.text_input_target = Some(TextInputTarget::SaveThemeName);
                             } else {
                                 // s: Save config to config.toml
                                 if let Err(e) = app.save_config() {
@@ -441,6 +478,10 @@ impl App {
         );
 
         // Render popups on top
+        if self.cpa_quota_options.is_open {
+            self.cpa_quota_options
+                .render(f, f.area(), &self.config, self.selected_segment);
+        }
         if self.color_picker.is_open {
             self.color_picker.render(f, f.area());
         }
@@ -506,6 +547,7 @@ impl App {
                         SegmentId::Session => "Session",
                         SegmentId::OutputStyle => "Output Style",
                         SegmentId::Update => "Update",
+                        SegmentId::CpaQuota => "CPA Quota",
                     };
                     let is_enabled = segment.enabled;
                     self.status_message = Some(format!(
@@ -533,6 +575,7 @@ impl App {
                                 SegmentId::Session => "Session",
                                 SegmentId::OutputStyle => "Output Style",
                                 SegmentId::Update => "Update",
+                        SegmentId::CpaQuota => "CPA Quota",
                             };
                             let is_enabled = segment.enabled;
                             self.status_message = Some(format!(
@@ -563,9 +606,16 @@ impl App {
                         }
                     }
                     FieldSelection::Options => {
-                        // TODO: Implement options editor
-                        self.status_message =
-                            Some("Options editor not implemented yet".to_string());
+                        if let Some(segment) = self.config.segments.get(self.selected_segment) {
+                            if segment.id == SegmentId::CpaQuota {
+                                self.cpa_quota_options.open();
+                                self.status_message =
+                                    Some("Editing CPA Quota options".to_string());
+                            } else {
+                                self.status_message =
+                                    Some("Options editor not implemented yet".to_string());
+                            }
+                        }
                     }
                 }
             }
@@ -585,6 +635,7 @@ impl App {
                 || self.selected_field == FieldSelection::TextColor
                 || self.selected_field == FieldSelection::BackgroundColor)
         {
+            self.color_picker_target = None;
             self.color_picker.open();
         }
     }
@@ -596,6 +647,24 @@ impl App {
     }
 
     fn apply_selected_color(&mut self, color: crate::config::AnsiColor) {
+        if let Some(target) = self.color_picker_target {
+            match target {
+                ColorPickerTarget::CpaQuotaModelColor(model) => {
+                    if let Some(segment) = self.config.segments.get_mut(self.selected_segment) {
+                        if segment.id == SegmentId::CpaQuota {
+                            if let Ok(v) = serde_json::to_value(color) {
+                                segment.options.insert(model.color_key().to_string(), v);
+                                self.status_message =
+                                    Some(format!("Updated {} color", model.display_name()));
+                                self.preview.update_preview(&self.config);
+                            }
+                        }
+                    }
+                }
+            }
+            return;
+        }
+
         if let Some(segment) = self.config.segments.get_mut(self.selected_segment) {
             match self.selected_field {
                 FieldSelection::IconColor => segment.colors.icon = Some(color),
@@ -705,5 +774,74 @@ impl App {
     fn open_separator_editor(&mut self) {
         self.status_message = Some("Opening separator editor...".to_string());
         self.separator_editor.open(&self.config.style.separator);
+    }
+
+    fn apply_text_input(&mut self, value: String) {
+        match self.text_input_target {
+            Some(TextInputTarget::SaveThemeName) => self.save_as_new_theme(&value),
+            Some(TextInputTarget::CpaQuotaSeparator) => {
+                if let Some(segment) = self.config.segments.get_mut(self.selected_segment) {
+                    if segment.id == SegmentId::CpaQuota {
+                        segment
+                            .options
+                            .insert("separator".to_string(), Value::String(value));
+                        self.status_message = Some("Updated CPA Quota separator".to_string());
+                        self.preview.update_preview(&self.config);
+                    }
+                }
+            }
+            Some(TextInputTarget::CpaQuotaAlias(model)) => {
+                if let Some(segment) = self.config.segments.get_mut(self.selected_segment) {
+                    if segment.id == SegmentId::CpaQuota {
+                        segment
+                            .options
+                            .insert(model.alias_key().to_string(), Value::String(value));
+                        self.status_message =
+                            Some(format!("Updated {} alias", model.display_name()));
+                        self.preview.update_preview(&self.config);
+                    }
+                }
+            }
+            None => {}
+        }
+    }
+
+    fn open_cpa_quota_option_editor(&mut self) {
+        let Some(segment) = self.config.segments.get(self.selected_segment) else {
+            return;
+        };
+        if segment.id != SegmentId::CpaQuota {
+            return;
+        }
+
+        match self.cpa_quota_options.selected_field() {
+            CpaQuotaOptionField::Alias(model) => {
+                let current = segment
+                    .options
+                    .get(model.alias_key())
+                    .and_then(|v| v.as_str())
+                    .unwrap_or(model.default_alias());
+                self.name_input.open_with_value(
+                    &format!("{} Alias", model.display_name()),
+                    "Enter alias...",
+                    current,
+                );
+                self.text_input_target = Some(TextInputTarget::CpaQuotaAlias(model));
+            }
+            CpaQuotaOptionField::Color(model) => {
+                self.color_picker_target = Some(ColorPickerTarget::CpaQuotaModelColor(model));
+                self.color_picker.open();
+            }
+            CpaQuotaOptionField::Separator => {
+                let current = segment
+                    .options
+                    .get("separator")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or(" | ");
+                self.name_input
+                    .open_with_value("CPA Quota Separator", "Enter separator...", current);
+                self.text_input_target = Some(TextInputTarget::CpaQuotaSeparator);
+            }
+        }
     }
 }

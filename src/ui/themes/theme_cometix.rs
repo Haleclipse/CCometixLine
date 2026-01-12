@@ -162,3 +162,53 @@ pub fn usage_segment() -> SegmentConfig {
         },
     }
 }
+
+pub fn cpa_quota_segment() -> SegmentConfig {
+    SegmentConfig {
+        id: SegmentId::CpaQuota,
+        enabled: false,
+        icon: IconConfig {
+            plain: "📈".to_string(),
+            nerd_font: "\u{f0201}".to_string(),
+        },
+        colors: ColorConfig {
+            icon: Some(AnsiColor::Color16 { c16: 11 }),
+            text: Some(AnsiColor::Color16 { c16: 11 }),
+            background: None,
+        },
+        styles: TextStyleConfig::default(),
+        options: {
+            let mut opts = HashMap::new();
+            opts.insert(
+                "host".to_string(),
+                serde_json::Value::String("http://localhost:8317".to_string()),
+            );
+            opts.insert(
+                "key".to_string(),
+                serde_json::Value::String("nbkey".to_string()),
+            );
+            opts.insert(
+                "cache_duration".to_string(),
+                serde_json::Value::Number(180.into()),
+            );
+            opts.insert(
+                "auth_type".to_string(),
+                serde_json::Value::String("all".to_string()),
+            );
+            opts.insert(
+                "separator".to_string(),
+                serde_json::Value::String(" | ".to_string()),
+            );
+            // Default models configuration
+            opts.insert(
+                "models".to_string(),
+                serde_json::json!([
+                    {"pattern": "opus", "alias": "opus"},
+                    {"pattern": "gemini-2.5-pro", "alias": "g3p"},
+                    {"pattern": "gemini-2.5-flash", "alias": "g3f"}
+                ]),
+            );
+            opts
+        },
+    }
+}

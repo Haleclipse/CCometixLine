@@ -1,4 +1,5 @@
 pub mod color_picker;
+pub mod cpa_quota_options;
 pub mod editor;
 pub mod help;
 pub mod icon_selector;

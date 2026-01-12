@@ -183,6 +183,75 @@ impl PreviewComponent {
                         map
                     },
                 },
+                SegmentId::CpaQuota => SegmentData {
+                    primary: {
+                        let separator = segment_config
+                            .options
+                            .get("separator")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or(" | ");
+
+                        let alias = |key: &str, default: &str| -> String {
+                            segment_config
+                                .options
+                                .get(key)
+                                .and_then(|v| v.as_str())
+                                .unwrap_or(default)
+                                .to_string()
+                        };
+
+                        let color = |key: &str, default: crate::config::AnsiColor| {
+                            segment_config
+                                .options
+                                .get(key)
+                                .and_then(|v| serde_json::from_value::<crate::config::AnsiColor>(v.clone()).ok())
+                                .unwrap_or(default)
+                        };
+
+                        let apply = |text: &str, c: &crate::config::AnsiColor| -> String {
+                            let prefix = match c {
+                                crate::config::AnsiColor::Color16 { c16 } => {
+                                    let code = if *c16 < 8 { 30 + c16 } else { 90 + (c16 - 8) };
+                                    format!("\x1b[{}m", code)
+                                }
+                                crate::config::AnsiColor::Color256 { c256 } => {
+                                    format!("\x1b[38;5;{}m", c256)
+                                }
+                                crate::config::AnsiColor::Rgb { r, g, b } => {
+                                    format!("\x1b[38;2;{};{};{}m", r, g, b)
+                                }
+                            };
+                            format!("{}{}\x1b[39m", prefix, text)
+                        };
+
+                        let opus = apply(
+                            &format!("{}:27%", alias("opus_alias", "opus")),
+                            &color("opus_color", crate::config::AnsiColor::Color256 { c256: 214 }),
+                        );
+                        let g3p = apply(
+                            &format!("{}:100%", alias("gemini3pro_alias", "3pro")),
+                            &color(
+                                "gemini3pro_color",
+                                crate::config::AnsiColor::Color256 { c256: 129 },
+                            ),
+                        );
+                        let g3f = apply(
+                            &format!("{}:83%", alias("gemini3flash_alias", "3flash")),
+                            &color(
+                                "gemini3flash_color",
+                                crate::config::AnsiColor::Color256 { c256: 45 },
+                            ),
+                        );
+
+                        vec![opus, g3p, g3f].join(separator)
+                    },
+                    secondary: "".to_string(),
+                    metadata: {
+                        let mut map = HashMap::new();
+                        map.insert("raw_text".to_string(), "true".to_string());
+                        map
+                    },
+                },
             };
 
             segments_data.push((segment_config.clone(), mock_data));
