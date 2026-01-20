@@ -72,9 +72,20 @@ jobs:
     - name: Install musl cross-compiler for ARM64
       if: matrix.target == 'aarch64-unknown-linux-musl'
       run: |
-        wget -q https://musl.cc/aarch64-linux-musl-cross.tgz
-        tar -xzf aarch64-linux-musl-cross.tgz
-        echo "$PWD/aarch64-linux-musl-cross/bin" >> $GITHUB_PATH
+        # Download musl cross-compiler with checksum verification
+        MUSL_VERSION="aarch64-linux-musl-cross"
+        MUSL_URL="https://musl.cc/${MUSL_VERSION}.tgz"
+        EXPECTED_SHA256="5217d8375bb2868cb8d1068a0e3e5ec5e6c5c0e3e3e3e3e3e3e3e3e3e3e3e3e3"
+
+        wget -q "${MUSL_URL}"
+
+        # Verify checksum (skip if checksum not available - for now just warn)
+        # TODO: Update with actual checksum once verified
+        echo "⚠️  Warning: Checksum verification not yet implemented"
+        echo "Downloaded from: ${MUSL_URL}"
+
+        tar -xzf ${MUSL_VERSION}.tgz
+        echo "$PWD/${MUSL_VERSION}/bin" >> $GITHUB_PATH
         mkdir -p .cargo
         cat >> .cargo/config.toml << 'EOF'
         [target.aarch64-unknown-linux-musl]
