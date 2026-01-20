@@ -1,0 +1,14 @@
+{
+  "name": "@cometix/ccline-linux-arm64",
+  "version": "0.0.0",
+  "description": "Linux ARM64 binary for CCometixLine",
+  "files": ["ccline"],
+  "os": ["linux"],
+  "cpu": ["arm64"],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Haleclipse/CCometixLine"
+  },
+  "author": "Haleclipse",
+  "license": "MIT"
+}

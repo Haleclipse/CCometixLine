@@ -31,11 +31,11 @@ if (platform === 'linux') {
   function shouldUseStaticBinary() {
     try {
       const { execSync } = require('child_process');
-      const lddOutput = execSync('ldd --version 2>/dev/null || echo ""', { 
+      const lddOutput = execSync('ldd --version 2>/dev/null || echo ""', {
         encoding: 'utf8',
-        timeout: 1000 
+        timeout: 1000
       });
-      
+
       // Parse "ldd (GNU libc) 2.35" format
       const match = lddOutput.match(/(?:GNU libc|GLIBC).*?(\d+)\.(\d+)/);
       if (match) {
@@ -48,11 +48,14 @@ if (platform === 'linux') {
       // If detection fails, default to dynamic binary
       return false;
     }
-    
+
     return false;
   }
-  
-  if (shouldUseStaticBinary()) {
+
+  if (arch === 'arm64') {
+    // ARM64 Linux: choose between glibc and musl based on glibc version
+    platformKey = shouldUseStaticBinary() ? 'linux-arm64-musl' : 'linux-arm64';
+  } else if (shouldUseStaticBinary()) {
     platformKey = 'linux-x64-musl';
   }
 }
@@ -62,6 +65,8 @@ const packageMap = {
   'darwin-arm64': '@cometix/ccline-darwin-arm64',
   'linux-x64': '@cometix/ccline-linux-x64',
   'linux-x64-musl': '@cometix/ccline-linux-x64-musl',
+  'linux-arm64': '@cometix/ccline-linux-arm64',
+  'linux-arm64-musl': '@cometix/ccline-linux-arm64-musl',
   'win32-x64': '@cometix/ccline-win32-x64',
   'win32-ia32': '@cometix/ccline-win32-x64', // Use 64-bit for 32-bit systems
 };
@@ -69,7 +74,7 @@ const packageMap = {
 const packageName = packageMap[platformKey];
 if (!packageName) {
   console.error(`Error: Unsupported platform ${platformKey}`);
-  console.error('Supported platforms: darwin (x64/arm64), linux (x64), win32 (x64)');
+  console.error('Supported platforms: darwin (x64/arm64), linux (x64/arm64), win32 (x64)');
   console.error('Please visit https://github.com/Haleclipse/CCometixLine for manual installation');
   process.exit(1);
 }
