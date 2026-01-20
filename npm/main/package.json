@@ -13,6 +13,8 @@
     "@cometix/ccline-darwin-arm64": "0.0.0",
     "@cometix/ccline-linux-x64": "0.0.0",
     "@cometix/ccline-linux-x64-musl": "0.0.0",
+    "@cometix/ccline-linux-arm64": "0.0.0",
+    "@cometix/ccline-linux-arm64-musl": "0.0.0",
     "@cometix/ccline-win32-x64": "0.0.0"
   },
   "repository": {
