@@ -149,7 +149,7 @@ pub struct CurrentContextUsage {
 impl ContextWindow {
     pub fn total_tokens(&self) -> Option<u32> {
         match (self.total_input_tokens, self.total_output_tokens) {
-            (Some(input), Some(output)) => Some(input + output),
+            (Some(input), Some(output)) => Some(input.saturating_add(output)),
             (Some(input), None) => Some(input),
             (None, Some(output)) => Some(output),
             (None, None) => None,
@@ -163,13 +163,15 @@ impl ContextWindow {
             || self.used_percentage.is_some()
     }
 
-    pub fn get_display_percentage(&self) -> Option<f64> {
+    /// Calculate display percentage with provided context limit.
+    /// If used_percentage is available, returns it directly.
+    /// Otherwise calculates from total_tokens divided by the provided limit.
+    pub fn get_display_percentage(&self, context_limit: u32) -> Option<f64> {
         if let Some(percentage) = self.used_percentage {
             Some(percentage)
         } else if self.is_available() {
             self.total_tokens().map(|tokens| {
-                let limit = self.context_window_size.unwrap_or(200000);
-                (tokens as f64 / limit as f64) * 100.0
+                (tokens as f64 / context_limit as f64) * 100.0
             })
         } else {
             None
