@@ -110,6 +110,73 @@ pub struct OutputStyle {
     pub name: String,
 }
 
+#[derive(Deserialize, Default)]
+pub struct ContextWindow {
+    #[serde(default)]
+    pub total_input_tokens: Option<u32>,
+
+    #[serde(default)]
+    pub total_output_tokens: Option<u32>,
+
+    #[serde(default)]
+    pub context_window_size: Option<u32>,
+
+    #[serde(default)]
+    pub used_percentage: Option<f64>,
+
+    #[serde(default)]
+    pub remaining_percentage: Option<f64>,
+
+    #[serde(default)]
+    pub current_usage: Option<CurrentContextUsage>,
+}
+
+#[derive(Deserialize, Default)]
+pub struct CurrentContextUsage {
+    #[serde(default)]
+    pub input_tokens: Option<u32>,
+
+    #[serde(default)]
+    pub output_tokens: Option<u32>,
+
+    #[serde(default)]
+    pub cache_creation_input_tokens: Option<u32>,
+
+    #[serde(default)]
+    pub cache_read_input_tokens: Option<u32>,
+}
+
+impl ContextWindow {
+    pub fn total_tokens(&self) -> Option<u32> {
+        match (self.total_input_tokens, self.total_output_tokens) {
+            (Some(input), Some(output)) => Some(input + output),
+            (Some(input), None) => Some(input),
+            (None, Some(output)) => Some(output),
+            (None, None) => None,
+        }
+    }
+
+    pub fn is_available(&self) -> bool {
+        self.context_window_size.is_some()
+            || self.total_input_tokens.is_some()
+            || self.total_output_tokens.is_some()
+            || self.used_percentage.is_some()
+    }
+
+    pub fn get_display_percentage(&self) -> Option<f64> {
+        if let Some(percentage) = self.used_percentage {
+            Some(percentage)
+        } else if self.is_available() {
+            self.total_tokens().map(|tokens| {
+                let limit = self.context_window_size.unwrap_or(200000);
+                (tokens as f64 / limit as f64) * 100.0
+            })
+        } else {
+            None
+        }
+    }
+}
+
 #[derive(Deserialize)]
 pub struct InputData {
     pub model: Model,
@@ -117,6 +184,9 @@ pub struct InputData {
     pub transcript_path: String,
     pub cost: Option<Cost>,
     pub output_style: Option<OutputStyle>,
+
+    #[serde(default)]
+    pub context_window: ContextWindow,
 }
 
 // OpenAI-style nested token details
