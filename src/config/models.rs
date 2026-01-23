@@ -60,16 +60,21 @@ impl ModelConfig {
     /// Get context limit for a model based on ID pattern matching
     /// Checks external config first, then falls back to built-in config
     pub fn get_context_limit(&self, model_id: &str) -> u32 {
+        self.try_get_context_limit(model_id).unwrap_or(200_000)
+    }
+
+    /// Try to get context limit for a model, returns None if no match found
+    /// Use this to check if there's a matching config entry for the model
+    pub fn try_get_context_limit(&self, model_id: &str) -> Option<u32> {
         let model_lower = model_id.to_lowercase();
 
-        // Check model entries
         for entry in &self.model_entries {
             if model_lower.contains(&entry.pattern.to_lowercase()) {
-                return entry.context_limit;
+                return Some(entry.context_limit);
             }
         }
 
-        200_000
+        None
     }
 
     /// Get display name for a model based on ID pattern matching

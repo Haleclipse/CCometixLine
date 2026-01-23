@@ -13,11 +13,6 @@ impl ContextWindowSegment {
         Self
     }
 
-    fn get_context_limit_for_model(model_id: &str) -> u32 {
-        let model_config = ModelConfig::load();
-        model_config.get_context_limit(model_id)
-    }
-
     fn get_context_usage_with_fallback(input: &InputData) -> Option<u32> {
         if input.context_window.is_available() {
             return input.context_window.total_tokens();
@@ -78,66 +73,70 @@ impl Segment for ContextWindowSegment {
     fn collect(&self, input: &InputData) -> Option<SegmentData> {
         let context_window = &input.context_window;
 
-        let context_limit = context_window
-            .context_window_size
-            .unwrap_or_else(|| Self::get_context_limit_for_model(&input.model.id));
+        // Priority: models.toml config > native API > default
+        let model_config = ModelConfig::load();
+        let context_limit = model_config
+            .try_get_context_limit(&input.model.id)
+            .or(context_window.context_window_size)
+            .unwrap_or(200_000);
 
-        let (percentage_display, tokens_display) = match context_window.get_display_percentage(context_limit) {
-            Some(percentage) => {
-                let percentage_str = if percentage.fract() == 0.0 {
-                    format!("{:.0}%", percentage)
-                } else {
-                    format!("{:.1}%", percentage)
-                };
+        let (percentage_display, tokens_display) =
+            match context_window.get_display_percentage(context_limit) {
+                Some(percentage) => {
+                    let percentage_str = if percentage.fract() == 0.0 {
+                        format!("{:.0}%", percentage)
+                    } else {
+                        format!("{:.1}%", percentage)
+                    };
 
-                let tokens_str = match context_window.total_tokens() {
-                    Some(tokens) => {
-                        if tokens >= 1000 {
-                            let k_value = tokens as f64 / 1000.0;
-                            if k_value.fract() == 0.0 {
-                                format!("{}k", k_value as u32)
+                    let tokens_str = match context_window.total_tokens() {
+                        Some(tokens) => {
+                            if tokens >= 1000 {
+                                let k_value = tokens as f64 / 1000.0;
+                                if k_value.fract() == 0.0 {
+                                    format!("{}k", k_value as u32)
+                                } else {
+                                    format!("{:.1}k", k_value)
+                                }
                             } else {
-                                format!("{:.1}k", k_value)
+                                tokens.to_string()
                             }
-                        } else {
-                            tokens.to_string()
                         }
-                    }
-                    None => "-".to_string(),
-                };
+                        None => "-".to_string(),
+                    };
 
-                (percentage_str, tokens_str)
-            }
-            None => {
-                let context_used_token_opt = Self::get_context_usage_with_fallback(input);
-                match context_used_token_opt {
-                    Some(context_used_token) => {
-                        let context_used_rate =
-                            (context_used_token as f64 / context_limit as f64) * 100.0;
-
-                        let percentage = if context_used_rate.fract() == 0.0 {
-                            format!("{:.0}%", context_used_rate)
-                        } else {
-                            format!("{:.1}%", context_used_rate)
-                        };
-
-                        let tokens = if context_used_token >= 1000 {
-                            let k_value = context_used_token as f64 / 1000.0;
-                            if k_value.fract() == 0.0 {
-                                format!("{}k", k_value as u32)
-                            } else {
-                                format!("{:.1}k", k_value)
-                            }
-                        } else {
-                            context_used_token.to_string()
-                        };
-
-                        (percentage, tokens)
-                    }
-                    None => ("-".to_string(), "-".to_string()),
+                    (percentage_str, tokens_str)
                 }
-            }
-        };
+                None => {
+                    let context_used_token_opt = Self::get_context_usage_with_fallback(input);
+                    match context_used_token_opt {
+                        Some(context_used_token) => {
+                            let context_used_rate =
+                                (context_used_token as f64 / context_limit as f64) * 100.0;
+
+                            let percentage = if context_used_rate.fract() == 0.0 {
+                                format!("{:.0}%", context_used_rate)
+                            } else {
+                                format!("{:.1}%", context_used_rate)
+                            };
+
+                            let tokens = if context_used_token >= 1000 {
+                                let k_value = context_used_token as f64 / 1000.0;
+                                if k_value.fract() == 0.0 {
+                                    format!("{}k", k_value as u32)
+                                } else {
+                                    format!("{:.1}k", k_value)
+                                }
+                            } else {
+                                context_used_token.to_string()
+                            };
+
+                            (percentage, tokens)
+                        }
+                        None => ("-".to_string(), "-".to_string()),
+                    }
+                }
+            };
 
         let mut metadata = HashMap::new();
 
@@ -146,7 +145,10 @@ impl Segment for ContextWindowSegment {
             // Use "-" when token count is unknown, not "0", to avoid misleading zero-usage metadata
             metadata.insert(
                 "tokens".to_string(),
-                context_window.total_tokens().map(|t| t.to_string()).unwrap_or_else(|| "-".to_string()),
+                context_window
+                    .total_tokens()
+                    .map(|t| t.to_string())
+                    .unwrap_or_else(|| "-".to_string()),
             );
         } else if let Some(context_used_token) = Self::get_context_usage_with_fallback(input) {
             let context_used_rate = (context_used_token as f64 / context_limit as f64) * 100.0;

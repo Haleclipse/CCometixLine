@@ -170,9 +170,8 @@ impl ContextWindow {
         if let Some(percentage) = self.used_percentage {
             Some(percentage)
         } else if self.is_available() {
-            self.total_tokens().map(|tokens| {
-                (tokens as f64 / context_limit as f64) * 100.0
-            })
+            self.total_tokens()
+                .map(|tokens| (tokens as f64 / context_limit as f64) * 100.0)
         } else {
             None
         }
