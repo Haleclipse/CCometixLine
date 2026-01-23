@@ -27,8 +27,8 @@ semver = { version = "1.0", optional = true }
 chrono = { version = "0.4", features = ["serde"], optional = true }
 dirs = { version = "5.0", optional = true }
 regex = "1.0"
-
-
+tree-sitter = "0.24"
+tree-sitter-javascript = "0.23"
 
 [features]
 default = ["tui", "self-update", "dirs"]
