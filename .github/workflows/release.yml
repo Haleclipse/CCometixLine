@@ -23,6 +23,12 @@ jobs:
           - target: x86_64-unknown-linux-musl
             os: ubuntu-latest
             name: ccline-linux-x64-static.tar.gz
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-22.04
+            name: ccline-linux-arm64.tar.gz
+          - target: aarch64-unknown-linux-musl
+            os: ubuntu-latest
+            name: ccline-linux-arm64-static.tar.gz
           - target: x86_64-pc-windows-gnu
             os: ubuntu-latest
             name: ccline-windows-x64.zip
@@ -47,6 +53,34 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install -y mingw-w64
+
+    - name: Install ARM64 cross-compilation tools
+      if: matrix.target == 'aarch64-unknown-linux-gnu' || matrix.target == 'aarch64-unknown-linux-musl'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y gcc-aarch64-linux-gnu
+
+    - name: Configure ARM64 cross-compilation
+      if: matrix.target == 'aarch64-unknown-linux-gnu'
+      run: |
+        mkdir -p .cargo
+        cat >> .cargo/config.toml << 'EOF'
+        [target.aarch64-unknown-linux-gnu]
+        linker = "aarch64-linux-gnu-gcc"
+        EOF
+
+    - name: Install musl cross-compiler for ARM64
+      if: matrix.target == 'aarch64-unknown-linux-musl'
+      run: |
+        MUSL_VERSION="aarch64-linux-musl-cross"
+        wget -q "https://musl.cc/${MUSL_VERSION}.tgz"
+        tar -xzf ${MUSL_VERSION}.tgz
+        echo "$PWD/${MUSL_VERSION}/bin" >> $GITHUB_PATH
+        mkdir -p .cargo
+        cat >> .cargo/config.toml << 'EOF'
+        [target.aarch64-unknown-linux-musl]
+        linker = "aarch64-linux-musl-gcc"
+        EOF
 
     - name: Install musl tools
       if: matrix.target == 'x86_64-unknown-linux-musl'
@@ -121,27 +155,35 @@ jobs:
     - name: Extract binaries from archives
       run: |
         mkdir -p extracted
-        
+
         # macOS x64
         tar -xzf artifacts/ccline-macos-x64.tar.gz/ccline-macos-x64.tar.gz -C extracted
         mv extracted/ccline extracted/ccline-darwin-x64
-        
+
         # macOS ARM64
         tar -xzf artifacts/ccline-macos-arm64.tar.gz/ccline-macos-arm64.tar.gz -C extracted
         mv extracted/ccline extracted/ccline-darwin-arm64
-        
+
         # Linux x64
         tar -xzf artifacts/ccline-linux-x64.tar.gz/ccline-linux-x64.tar.gz -C extracted
         mv extracted/ccline extracted/ccline-linux-x64
-        
+
         # Linux musl (static)
         tar -xzf artifacts/ccline-linux-x64-static.tar.gz/ccline-linux-x64-static.tar.gz -C extracted
         mv extracted/ccline extracted/ccline-linux-x64-musl
-        
+
+        # Linux ARM64
+        tar -xzf artifacts/ccline-linux-arm64.tar.gz/ccline-linux-arm64.tar.gz -C extracted
+        mv extracted/ccline extracted/ccline-linux-arm64
+
+        # Linux ARM64 musl (static)
+        tar -xzf artifacts/ccline-linux-arm64-static.tar.gz/ccline-linux-arm64-static.tar.gz -C extracted
+        mv extracted/ccline extracted/ccline-linux-arm64-musl
+
         # Windows
         unzip artifacts/ccline-windows-x64.zip/ccline-windows-x64.zip -d extracted
         mv extracted/ccline.exe extracted/ccline-win32-x64.exe
-        
+
         # List extracted files
         ls -la extracted/
 
@@ -149,20 +191,24 @@ jobs:
       run: |
         # Prepare packages with version management
         node npm/scripts/prepare-packages.js
-        
+
         # Copy binaries to platform directories
         cp extracted/ccline-darwin-x64 npm-publish/darwin-x64/ccline
         cp extracted/ccline-darwin-arm64 npm-publish/darwin-arm64/ccline
         cp extracted/ccline-linux-x64 npm-publish/linux-x64/ccline
         cp extracted/ccline-linux-x64-musl npm-publish/linux-x64-musl/ccline
+        cp extracted/ccline-linux-arm64 npm-publish/linux-arm64/ccline
+        cp extracted/ccline-linux-arm64-musl npm-publish/linux-arm64-musl/ccline
         cp extracted/ccline-win32-x64.exe npm-publish/win32-x64/ccline.exe
-        
+
         # Set executable permissions for Unix binaries
         chmod +x npm-publish/darwin-x64/ccline
         chmod +x npm-publish/darwin-arm64/ccline
         chmod +x npm-publish/linux-x64/ccline
         chmod +x npm-publish/linux-x64-musl/ccline
-        
+        chmod +x npm-publish/linux-arm64/ccline
+        chmod +x npm-publish/linux-arm64-musl/ccline
+
         # Verify packages
         echo "Package structure:"
         find npm-publish -name "package.json" -exec echo "=== {} ===" \; -exec head -5 {} \;
@@ -172,7 +218,7 @@ jobs:
         NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
       run: |
         # Publish platform packages first
-        for platform in darwin-x64 darwin-arm64 linux-x64 linux-x64-musl win32-x64; do
+        for platform in darwin-x64 darwin-arm64 linux-x64 linux-x64-musl linux-arm64 linux-arm64-musl win32-x64; do
           echo "📦 Publishing @cometix/ccline-$platform"
           cd npm-publish/$platform
           npm publish --access public

@@ -22,33 +22,52 @@ try {
   // Determine platform key
   let platformKey = `${platform}-${arch}`;
   if (platform === 'linux') {
-    // Detect if static linking is needed based on glibc version
-    function shouldUseStaticBinary() {
+    // Detect libc type and version
+    function getLibcInfo() {
       try {
         const { execSync } = require('child_process');
-        const lddOutput = execSync('ldd --version 2>/dev/null || echo ""', { 
+        const lddOutput = execSync('ldd --version 2>/dev/null || echo ""', {
           encoding: 'utf8',
-          timeout: 1000 
+          timeout: 1000
         });
-        
-        // Parse "ldd (GNU libc) 2.35" format
+
+        // Check for musl explicitly
+        if (lddOutput.includes('musl')) {
+          return { type: 'musl' };
+        }
+
+        // Parse glibc version: "ldd (GNU libc) 2.35" format
         const match = lddOutput.match(/(?:GNU libc|GLIBC).*?(\d+)\.(\d+)/);
         if (match) {
           const major = parseInt(match[1]);
           const minor = parseInt(match[2]);
-          // Use static binary if glibc < 2.35
-          return major < 2 || (major === 2 && minor < 35);
+          return { type: 'glibc', major, minor };
         }
+
+        // If we can't detect, default to musl for safety (more portable)
+        return { type: 'musl' };
       } catch (e) {
-        // If detection fails, default to dynamic binary
-        return false;
+        // If detection fails, default to musl (more portable)
+        return { type: 'musl' };
       }
-      
-      return false;
     }
-    
-    if (shouldUseStaticBinary()) {
-      platformKey = 'linux-x64-musl';
+
+    const libcInfo = getLibcInfo();
+
+    if (arch === 'arm64') {
+      // ARM64 Linux: choose based on libc type and version
+      if (libcInfo.type === 'musl' ||
+          (libcInfo.type === 'glibc' && (libcInfo.major < 2 || (libcInfo.major === 2 && libcInfo.minor < 35)))) {
+        platformKey = 'linux-arm64-musl';
+      } else {
+        platformKey = 'linux-arm64';
+      }
+    } else {
+      // x64 Linux: choose based on libc type and version
+      if (libcInfo.type === 'musl' ||
+          (libcInfo.type === 'glibc' && (libcInfo.major < 2 || (libcInfo.major === 2 && libcInfo.minor < 35)))) {
+        platformKey = 'linux-x64-musl';
+      }
     }
   }
 
@@ -57,6 +76,8 @@ try {
     'darwin-arm64': '@cometix/ccline-darwin-arm64',
     'linux-x64': '@cometix/ccline-linux-x64',
     'linux-x64-musl': '@cometix/ccline-linux-x64-musl',
+    'linux-arm64': '@cometix/ccline-linux-arm64',
+    'linux-arm64-musl': '@cometix/ccline-linux-arm64-musl',
     'win32-x64': '@cometix/ccline-win32-x64',
     'win32-ia32': '@cometix/ccline-win32-x64', // Use 64-bit for 32-bit
   };
