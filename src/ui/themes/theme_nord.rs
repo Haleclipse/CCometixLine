@@ -226,9 +226,21 @@ pub fn usage_segment() -> SegmentConfig {
             nerd_font: "\u{f0a9e}".to_string(),
         },
         colors: ColorConfig {
-            icon: Some(AnsiColor::Color16 { c16: 14 }),
-            text: Some(AnsiColor::Color16 { c16: 14 }),
-            background: None,
+            icon: Some(AnsiColor::Rgb {
+                r: 46,
+                g: 52,
+                b: 64,
+            }),
+            text: Some(AnsiColor::Rgb {
+                r: 46,
+                g: 52,
+                b: 64,
+            }),
+            background: Some(AnsiColor::Rgb {
+                r: 235,
+                g: 203,
+                b: 139,
+            }), // Nord yellow background
         },
         styles: TextStyleConfig::default(),
         options: {

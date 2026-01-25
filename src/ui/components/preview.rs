@@ -152,7 +152,7 @@ impl PreviewComponent {
                 },
                 SegmentId::Session => SegmentData {
                     primary: "3m45s".to_string(),
-                    secondary: "+156 -23".to_string(),
+                    secondary: "\x1b[32m+156\x1b[0m \x1b[31m-23\x1b[0m".to_string(),
                     metadata: {
                         let mut map = HashMap::new();
                         map.insert("duration_ms".to_string(), "225000".to_string());
