@@ -5,6 +5,43 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-01-26
+
+### Added
+- **Linux ARM64 Support**: Full ARM64 (aarch64) platform support for Linux (#68)
+  - New `linux-arm64` and `linux-arm64-musl` NPM packages
+  - ARM64 cross-compilation in GitHub Actions workflow
+  - Improved libc detection (glibc vs musl) for ARM64
+- **Custom Credentials Path**: Prioritize `CLAUDE_CONFIG_DIR` environment variable for OAuth credentials (#45)
+  - Support reading from `$CLAUDE_CONFIG_DIR/.credentials.json`
+  - Fallback to default `~/.claude/.credentials.json`
+
+### Changed
+- **Patcher Optimization**: Single-pass AST parsing for 5-6x speedup
+  - Parse AST only once and reuse for all 6 patches
+  - Fix verbose property matching to only check direct props object keys
+  - Rename "Verbose property" to "Spinner token counter" for clarity
+- **Session Segment Colors**: Line changes now use fixed colors
+  - Added lines (`+XX`) displayed in green
+  - Removed lines (`-XX`) displayed in red
+
+### Fixed
+- **Usage Segment Backgrounds**: Sync all powerline themes with TOML configurations
+  - powerline-dark: RGB(209,213,219) text, RGB(45,50,59) background
+  - powerline-light: RGB(255,255,255) text, RGB(40,167,69) background
+  - powerline-rose-pine: RGB(246,193,119) text, RGB(35,33,54) background
+  - powerline-tokyo-night: RGB(224,175,104) text, RGB(36,40,59) background
+  - nord: RGB(46,52,64) text, RGB(235,203,139) background
+- **Preview Session Colors**: Apply green/red ANSI colors to preview mock data
+
+### Removed
+- **npm Deprecation Warning Patch**: Use `DISABLE_INSTALLATION_CHECKS=1` environment variable instead
+- **Legacy Patcher APIs**: Removed unused single-patch functions
+- **Native Context Window API**: Reverted PR #71 for further refinement
+
+### Refactored
+- **Credentials Module**: Extract `read_token_from_path()` helper to reduce code duplication
+
 ## [1.0.9] - 2025-12-21
 
 ### Added

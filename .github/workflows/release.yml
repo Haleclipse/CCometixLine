@@ -26,9 +26,11 @@ jobs:
           - target: aarch64-unknown-linux-gnu
             os: ubuntu-22.04
             name: ccline-linux-arm64.tar.gz
+            use_zigbuild: true
           - target: aarch64-unknown-linux-musl
             os: ubuntu-latest
             name: ccline-linux-arm64-static.tar.gz
+            use_zigbuild: true
           - target: x86_64-pc-windows-gnu
             os: ubuntu-latest
             name: ccline-windows-x64.zip
@@ -54,33 +56,15 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y mingw-w64
 
-    - name: Install ARM64 cross-compilation tools
-      if: matrix.target == 'aarch64-unknown-linux-gnu' || matrix.target == 'aarch64-unknown-linux-musl'
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y gcc-aarch64-linux-gnu
+    - name: Setup Zig
+      if: matrix.use_zigbuild
+      uses: mlugg/setup-zig@v2
+      with:
+        version: 0.13.0
 
-    - name: Configure ARM64 cross-compilation
-      if: matrix.target == 'aarch64-unknown-linux-gnu'
-      run: |
-        mkdir -p .cargo
-        cat >> .cargo/config.toml << 'EOF'
-        [target.aarch64-unknown-linux-gnu]
-        linker = "aarch64-linux-gnu-gcc"
-        EOF
-
-    - name: Install musl cross-compiler for ARM64
-      if: matrix.target == 'aarch64-unknown-linux-musl'
-      run: |
-        MUSL_VERSION="aarch64-linux-musl-cross"
-        wget -q "https://musl.cc/${MUSL_VERSION}.tgz"
-        tar -xzf ${MUSL_VERSION}.tgz
-        echo "$PWD/${MUSL_VERSION}/bin" >> $GITHUB_PATH
-        mkdir -p .cargo
-        cat >> .cargo/config.toml << 'EOF'
-        [target.aarch64-unknown-linux-musl]
-        linker = "aarch64-linux-musl-gcc"
-        EOF
+    - name: Install cargo-zigbuild
+      if: matrix.use_zigbuild
+      run: cargo install cargo-zigbuild
 
     - name: Install musl tools
       if: matrix.target == 'x86_64-unknown-linux-musl'
@@ -89,7 +73,12 @@ jobs:
         sudo apt-get install -y musl-tools
 
     - name: Build binary
+      if: ${{ !matrix.use_zigbuild }}
       run: cargo build --release --target ${{ matrix.target }}
+
+    - name: Build binary with zigbuild
+      if: matrix.use_zigbuild
+      run: cargo zigbuild --release --target ${{ matrix.target }}
 
     - name: Package Linux/macOS
       if: matrix.os != 'windows-latest' && matrix.target != 'x86_64-pc-windows-gnu'
