@@ -510,6 +510,18 @@ pub fn collect_all_segments(
                 let segment = UpdateSegment::new();
                 segment.collect(input)
             }
+            crate::config::SegmentId::ConfigCounts => {
+                let cache_ttl = segment_config
+                    .options
+                    .get("cache_ttl_secs")
+                    .and_then(|v| v.as_u64());
+                let segment = if let Some(ttl) = cache_ttl {
+                    ConfigCountsSegment::with_cache_ttl(ttl)
+                } else {
+                    ConfigCountsSegment::new()
+                };
+                segment.collect(input)
+            }
         };
 
         if let Some(data) = segment_data {

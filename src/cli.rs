@@ -31,6 +31,10 @@ pub struct Cli {
     /// Patch Claude Code cli.js to disable context warnings
     #[arg(long = "patch")]
     pub patch: Option<String>,
+
+    /// Enable multiline output with activity tracking (agents/tools lines)
+    #[arg(short = 'm', long = "multiline")]
+    pub multiline: bool,
 }
 
 impl Cli {

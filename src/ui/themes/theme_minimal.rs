@@ -79,6 +79,24 @@ pub fn context_window_segment() -> SegmentConfig {
     }
 }
 
+pub fn config_counts_segment() -> SegmentConfig {
+    SegmentConfig {
+        id: SegmentId::ConfigCounts,
+        enabled: true,
+        icon: IconConfig {
+            plain: "CFG".to_string(),
+            nerd_font: "\u{f013}".to_string(), // gear icon
+        },
+        colors: ColorConfig {
+            icon: Some(AnsiColor::Color16 { c16: 5 }), // Magenta
+            text: Some(AnsiColor::Color16 { c16: 7 }), // White
+            background: None,
+        },
+        styles: TextStyleConfig::default(),
+        options: HashMap::new(),
+    }
+}
+
 pub fn cost_segment() -> SegmentConfig {
     SegmentConfig {
         id: SegmentId::Cost,

@@ -127,6 +127,36 @@ pub fn context_window_segment() -> SegmentConfig {
     }
 }
 
+pub fn config_counts_segment() -> SegmentConfig {
+    SegmentConfig {
+        id: SegmentId::ConfigCounts,
+        enabled: true,
+        icon: IconConfig {
+            plain: "CFG".to_string(),
+            nerd_font: "\u{f013}".to_string(), // gear icon
+        },
+        colors: ColorConfig {
+            icon: Some(AnsiColor::Rgb {
+                r: 187,
+                g: 154,
+                b: 247,
+            }), // Tokyo Night purple
+            text: Some(AnsiColor::Rgb {
+                r: 192,
+                g: 202,
+                b: 245,
+            }),
+            background: Some(AnsiColor::Rgb {
+                r: 52,
+                g: 47,
+                b: 75,
+            }), // Tokyo Night dark purple background
+        },
+        styles: TextStyleConfig::default(),
+        options: HashMap::new(),
+    }
+}
+
 pub fn cost_segment() -> SegmentConfig {
     SegmentConfig {
         id: SegmentId::Cost,
