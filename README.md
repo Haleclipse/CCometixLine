@@ -16,7 +16,9 @@ The statusline shows: Model | Directory | Git Branch Status | Context Window Inf
 ## Features
 
 ### Core Functionality
-- **Git integration** with branch, status, and tracking info  
+- **Git integration** with branch, status, and tracking info
+- **Multi-subdirectory Git support** for monorepo projects (ddline fork feature)
+- **Project-level configuration** override global settings per project
 - **Model display** with simplified Claude model names
 - **Usage tracking** based on transcript analysis
 - **Directory display** showing current workspace
@@ -231,8 +233,36 @@ Displays: `Directory | Git Branch Status | Model | Context Window`
 ### Git Status Indicators
 
 - Branch name with Nerd Font icon
-- Status: `✓` Clean, `●` Dirty, `⚠` Conflicts  
+- Status: `✓` Clean, `●` Dirty, `⚠` Conflicts
 - Remote tracking: `↑n` Ahead, `↓n` Behind
+
+### Multi-Subdirectory Git Support (ddline fork)
+
+For monorepo projects with multiple Git repositories in subdirectories, you can configure ddline to show branch and status for each:
+
+**Output example:**
+```
+🗂️ api:master ✓ | 🗂️ web:feature/my-feature ●
+```
+
+**Global configuration** (`~/.claude/ccline/config.toml`):
+```toml
+[[segments]]
+id = "git"
+enabled = true
+
+[segments.options]
+sub_dirs = ["api", "web"]  # List of subdirectories to monitor
+```
+
+**Project-level configuration** (`<project-dir>/.ccline.toml`):
+```toml
+# Project-level config overrides global config
+[segments.git]
+sub_dirs = ["api", "web", "shared"]
+```
+
+Project-level configuration takes precedence over global configuration, allowing different subdirectory settings per project.
 
 ### Model Display
 
@@ -248,10 +278,26 @@ Token usage percentage based on transcript analysis with context limit tracking.
 
 CCometixLine supports full configuration via TOML files and interactive TUI:
 
-- **Configuration file**: `~/.claude/ccline/config.toml`
+- **Global configuration file**: `~/.claude/ccline/config.toml`
+- **Project-level configuration**: `<project-dir>/.ccline.toml` (overrides global)
 - **Interactive TUI**: `ccline --config` for real-time editing with preview
 - **Theme files**: `~/.claude/ccline/themes/*.toml` for custom themes
 - **Automatic initialization**: `ccline --init` creates default configuration
+
+### Project-Level Configuration
+
+Create a `.ccline.toml` file in your project root to override global settings:
+
+```toml
+# .ccline.toml - Project-level configuration
+# Only segment options can be overridden
+
+[segments.git]
+sub_dirs = ["api", "web"]  # Override git subdirectories for this project
+
+[segments.directory]
+# Add other segment-specific options here
+```
 
 ### Available Segments
 

@@ -88,14 +88,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
 
-    // Load configuration
-    let mut config = Config::load().unwrap_or_else(|_| Config::default());
-
-    // Apply theme override if provided
-    if let Some(theme) = cli.theme {
-        config = ccometixline::ui::themes::ThemePresets::get_theme(&theme);
-    }
-
     // Check if stdin has data
     if io::stdin().is_terminal() {
         // No input data available, show main menu
@@ -130,6 +122,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Read Claude Code data from stdin
     let stdin = io::stdin();
     let input: InputData = serde_json::from_reader(stdin.lock())?;
+
+    // Load configuration with project-level override
+    let mut config = Config::load_with_project(&input.workspace.current_dir)
+        .unwrap_or_else(|_| Config::default());
+
+    // Apply theme override if provided
+    if let Some(theme) = cli.theme {
+        config = ccometixline::ui::themes::ThemePresets::get_theme(&theme);
+    }
 
     // Collect segment data
     let segments_data = collect_all_segments(&config, &input);

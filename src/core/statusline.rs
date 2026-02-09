@@ -483,7 +483,22 @@ pub fn collect_all_segments(
                     .get("show_sha")
                     .and_then(|v| v.as_bool())
                     .unwrap_or(false);
-                let segment = GitSegment::new().with_sha(show_sha);
+
+                // 读取 sub_dirs 配置
+                let sub_dirs = segment_config
+                    .options
+                    .get("sub_dirs")
+                    .and_then(|v| v.as_array())
+                    .map(|arr| {
+                        arr.iter()
+                            .filter_map(|v| v.as_str().map(String::from))
+                            .collect()
+                    })
+                    .unwrap_or_default();
+
+                let segment = GitSegment::new()
+                    .with_sha(show_sha)
+                    .with_sub_dirs(sub_dirs);
                 segment.collect(input)
             }
             crate::config::SegmentId::ContextWindow => {
