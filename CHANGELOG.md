@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.1] - 2026-02-09
+
+### Changed
+- **Model Recognition Redesign**: Replace hardcoded model entries with regex-based Claude model family recognition
+  - Auto-extract version numbers from model IDs (e.g., `claude-opus-4-6-20250901` → "Opus 4.6")
+  - Support both naming conventions: `claude-{variant}-{major}-{minor}-{date}` and `claude-{major}-{minor}-{variant}-{date}`
+  - New model versions (Opus 4.7, Sonnet 5, etc.) require zero config changes
+  - Handle text suffixes like `-thinking`, `-preview`, `-latest`
+- **Context Modifier System**: Decouple `[1m]` context modifier from model identity
+  - Modifiers compose independently with any model: "Opus 4.6" + " 1M" = "Opus 4.6 1M"
+  - Fixes incorrect display when Opus models gained `[1m]` variants (was hardcoded as "Sonnet 4.5 1M")
+  - User-configurable via `[[context_modifiers]]` in `models.toml`
+- **Single-pass Model Resolution**: New `resolve()` method eliminates redundant matching
+  - `get_display_name()`, `get_context_limit()`, `get_display_suffix()` all delegate to one pass
+  - Compiled regex cached via `OnceLock` for zero-cost repeated access
+
+### Fixed
+- **Empty Display Name Fallback**: Show raw model_id when upstream `display_name` is empty
+  - Third-party models like `minimax/minimax-2-1` now display correctly instead of blank
+- **Opus Model Recognition**: `claude-opus-4-6-*[1m]` now correctly shows "Opus 4.6 1M" instead of "Sonnet 4.5 1M"
+
 ## [1.1.0] - 2026-01-26
 
 ### Added

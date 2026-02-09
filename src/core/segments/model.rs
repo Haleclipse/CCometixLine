@@ -33,12 +33,21 @@ impl ModelSegment {
     fn format_model_name(&self, id: &str, display_name: &str) -> String {
         let model_config = ModelConfig::load();
 
-        // Try to get display name from external config first
         if let Some(config_name) = model_config.get_display_name(id) {
+            // Model recognized by config, display_name already includes modifier suffix
             config_name
         } else {
-            // Fallback to Claude Code's official display_name for unrecognized models
-            display_name.to_string()
+            // Fallback: prefer upstream display_name, fall back to model_id if empty
+            let base = if display_name.is_empty() {
+                id.to_string()
+            } else {
+                display_name.to_string()
+            };
+            // Still apply context modifier suffix (e.g., " 1M") if present
+            match model_config.get_display_suffix(id) {
+                Some(suffix) => format!("{}{}", base, suffix),
+                None => base,
+            }
         }
     }
 }
