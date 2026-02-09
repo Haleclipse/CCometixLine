@@ -141,6 +141,10 @@ impl Config {
 
     /// Load configuration with project-level override
     /// Project config path: <project_dir>/.ccline.toml
+    ///
+    /// Error handling:
+    /// - Global config failure: falls back to default config
+    /// - Project config failure: logs warning but keeps global config
     pub fn load_with_project(project_dir: &str) -> Result<Config, Box<dyn std::error::Error>> {
         // Load global config first
         let mut config = Self::load()?;
@@ -149,11 +153,29 @@ impl Config {
         let project_config_path = Path::new(project_dir).join(".ccline.toml");
 
         if project_config_path.exists() {
-            let content = fs::read_to_string(&project_config_path)?;
-            let project_config: ProjectConfig = toml::from_str(&content)?;
-
-            // Merge project config into global config
-            config.merge_project_config(project_config);
+            match fs::read_to_string(&project_config_path) {
+                Ok(content) => match toml::from_str::<ProjectConfig>(&content) {
+                    Ok(project_config) => {
+                        config.merge_project_config(project_config);
+                    }
+                    Err(e) => {
+                        eprintln!(
+                            "Warning: Failed to parse project config at {}: {}",
+                            project_config_path.display(),
+                            e
+                        );
+                        // Continue with global config only
+                    }
+                },
+                Err(e) => {
+                    eprintln!(
+                        "Warning: Failed to read project config at {}: {}",
+                        project_config_path.display(),
+                        e
+                    );
+                    // Continue with global config only
+                }
+            }
         }
 
         Ok(config)
@@ -165,9 +187,9 @@ impl Config {
         if let Some(segment_options) = project_config.segments {
             for (segment_id, options) in segment_options {
                 // Find the matching segment in config
+                // Use stable config_key() instead of Debug formatting
                 for segment in &mut self.segments {
-                    let segment_id_str = format!("{:?}", segment.id).to_lowercase();
-                    if segment_id_str == segment_id {
+                    if segment.id.config_key() == segment_id {
                         // Merge options
                         for (key, value) in options {
                             segment.options.insert(key, value);

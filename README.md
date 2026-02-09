@@ -17,8 +17,8 @@ The statusline shows: Model | Directory | Git Branch Status | Context Window Inf
 
 ### Core Functionality
 - **Git integration** with branch, status, and tracking info
-- **Multi-subdirectory Git support** for monorepo projects (ddline fork feature)
-- **Project-level configuration** override global settings per project
+- **Multi-subdirectory Git support** for monorepo projects
+- **Project-level configuration** overrides global settings per project
 - **Model display** with simplified Claude model names
 - **Usage tracking** based on transcript analysis
 - **Directory display** showing current workspace
