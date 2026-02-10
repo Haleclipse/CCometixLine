@@ -36,6 +36,7 @@ impl SettingsComponent {
                 SegmentId::Session => "Session",
                 SegmentId::OutputStyle => "Output Style",
                 SegmentId::Update => "Update",
+                SegmentId::ConfigCounts => "Config Counts",
             };
             let current_icon = match config.style.mode {
                 StyleMode::Plain => &segment.icon.plain,

@@ -73,6 +73,7 @@ pub enum SegmentId {
     Session,
     OutputStyle,
     Update,
+    ConfigCounts,
 }
 
 // Legacy compatibility structure
@@ -85,14 +86,17 @@ pub struct SegmentsConfig {
 }
 
 // Data structures compatible with existing main.rs
-#[derive(Deserialize)]
+#[derive(Deserialize, Default)]
 pub struct Model {
+    #[serde(default)]
     pub id: String,
+    #[serde(default)]
     pub display_name: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Default)]
 pub struct Workspace {
+    #[serde(default)]
     pub current_dir: String,
 }
 
@@ -110,10 +114,13 @@ pub struct OutputStyle {
     pub name: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Default)]
 pub struct InputData {
+    #[serde(default)]
     pub model: Model,
+    #[serde(default)]
     pub workspace: Workspace,
+    #[serde(default)]
     pub transcript_path: String,
     pub cost: Option<Cost>,
     pub output_style: Option<OutputStyle>,

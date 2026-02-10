@@ -506,6 +506,7 @@ impl App {
                         SegmentId::Session => "Session",
                         SegmentId::OutputStyle => "Output Style",
                         SegmentId::Update => "Update",
+                        SegmentId::ConfigCounts => "Config Counts",
                     };
                     let is_enabled = segment.enabled;
                     self.status_message = Some(format!(
@@ -533,6 +534,7 @@ impl App {
                                 SegmentId::Session => "Session",
                                 SegmentId::OutputStyle => "Output Style",
                                 SegmentId::Update => "Update",
+                                SegmentId::ConfigCounts => "Config Counts",
                             };
                             let is_enabled = segment.enabled;
                             self.status_message = Some(format!(

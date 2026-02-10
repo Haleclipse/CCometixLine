@@ -183,6 +183,18 @@ impl PreviewComponent {
                         map
                     },
                 },
+                SegmentId::ConfigCounts => SegmentData {
+                    primary: "2 CLAUDE.md | 3 rules | 5 MCPs | 2 hooks".to_string(),
+                    secondary: "".to_string(),
+                    metadata: {
+                        let mut map = HashMap::new();
+                        map.insert("claude_md_count".to_string(), "2".to_string());
+                        map.insert("rules_count".to_string(), "3".to_string());
+                        map.insert("mcp_count".to_string(), "5".to_string());
+                        map.insert("hooks_count".to_string(), "2".to_string());
+                        map
+                    },
+                },
             };
 
             segments_data.push((segment_config.clone(), mock_data));

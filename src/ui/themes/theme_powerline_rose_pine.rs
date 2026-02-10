@@ -127,6 +127,36 @@ pub fn context_window_segment() -> SegmentConfig {
     }
 }
 
+pub fn config_counts_segment() -> SegmentConfig {
+    SegmentConfig {
+        id: SegmentId::ConfigCounts,
+        enabled: true,
+        icon: IconConfig {
+            plain: "CFG".to_string(),
+            nerd_font: "\u{f013}".to_string(), // gear icon
+        },
+        colors: ColorConfig {
+            icon: Some(AnsiColor::Rgb {
+                r: 235,
+                g: 111,
+                b: 146,
+            }), // Rose Pine love (pink)
+            text: Some(AnsiColor::Rgb {
+                r: 224,
+                g: 222,
+                b: 244,
+            }),
+            background: Some(AnsiColor::Rgb {
+                r: 45,
+                g: 42,
+                b: 67,
+            }), // Rose Pine surface
+        },
+        styles: TextStyleConfig::default(),
+        options: HashMap::new(),
+    }
+}
+
 pub fn cost_segment() -> SegmentConfig {
     SegmentConfig {
         id: SegmentId::Cost,
