@@ -21,7 +21,8 @@ struct UsagePeriod {
 struct ApiUsageCache {
     five_hour_utilization: f64,
     seven_day_utilization: f64,
-    resets_at: Option<String>,
+    five_hour_resets_at: Option<String>,
+    seven_day_resets_at: Option<String>,
     cached_at: String,
 }
 
@@ -60,6 +61,34 @@ impl UsageSegment {
                     local_dt.day(),
                     local_dt.hour()
                 );
+            }
+        }
+        "?".to_string()
+    }
+
+    fn format_reset_duration(reset_time_str: Option<&str>) -> String {
+        if let Some(time_str) = reset_time_str {
+            if let Ok(dt) = DateTime::parse_from_rfc3339(time_str) {
+                let now = Utc::now();
+                let reset_utc = dt.with_timezone(&Utc);
+                let remaining = reset_utc.signed_duration_since(now);
+
+                if remaining.num_seconds() <= 0 {
+                    return "now".to_string();
+                }
+
+                let total_minutes = remaining.num_minutes();
+                let days = total_minutes / (24 * 60);
+                let hours = (total_minutes % (24 * 60)) / 60;
+                let minutes = total_minutes % 60;
+
+                return if days > 0 {
+                    format!("{}d {}h", days, hours)
+                } else if hours > 0 {
+                    format!("{}h {}m", hours, minutes)
+                } else {
+                    format!("{}m", minutes)
+                };
             }
         }
         "?".to_string()
@@ -209,12 +238,25 @@ impl Segment for UsageSegment {
             .map(|cache| self.is_cache_valid(cache, cache_duration))
             .unwrap_or(false);
 
-        let (five_hour_util, seven_day_util, resets_at) = if use_cached {
+        let reset_period = segment_config
+            .and_then(|sc| sc.options.get("reset_period"))
+            .and_then(|v| v.as_str())
+            .unwrap_or("session")
+            .to_string();
+
+        let reset_format = segment_config
+            .and_then(|sc| sc.options.get("reset_format"))
+            .and_then(|v| v.as_str())
+            .unwrap_or("time")
+            .to_string();
+
+        let (five_hour_util, seven_day_util, five_hour_resets_at, seven_day_resets_at) = if use_cached {
             let cache = cached_data.unwrap();
             (
                 cache.five_hour_utilization,
                 cache.seven_day_utilization,
-                cache.resets_at,
+                cache.five_hour_resets_at,
+                cache.seven_day_resets_at,
             )
         } else {
             match self.fetch_api_usage(api_base_url, &token, timeout) {
@@ -222,13 +264,15 @@ impl Segment for UsageSegment {
                     let cache = ApiUsageCache {
                         five_hour_utilization: response.five_hour.utilization,
                         seven_day_utilization: response.seven_day.utilization,
-                        resets_at: response.seven_day.resets_at.clone(),
+                        five_hour_resets_at: response.five_hour.resets_at.clone(),
+                        seven_day_resets_at: response.seven_day.resets_at.clone(),
                         cached_at: Utc::now().to_rfc3339(),
                     };
                     self.save_cache(&cache);
                     (
                         response.five_hour.utilization,
                         response.seven_day.utilization,
+                        response.five_hour.resets_at,
                         response.seven_day.resets_at,
                     )
                 }
@@ -237,7 +281,8 @@ impl Segment for UsageSegment {
                         (
                             cache.five_hour_utilization,
                             cache.seven_day_utilization,
-                            cache.resets_at,
+                            cache.five_hour_resets_at,
+                            cache.seven_day_resets_at,
                         )
                     } else {
                         return None;
@@ -246,10 +291,21 @@ impl Segment for UsageSegment {
             }
         };
 
+        let resets_at = if reset_period == "weekly" {
+            seven_day_resets_at.as_deref()
+        } else {
+            five_hour_resets_at.as_deref()
+        };
+
         let dynamic_icon = Self::get_circle_icon(seven_day_util / 100.0);
         let five_hour_percent = five_hour_util.round() as u8;
         let primary = format!("{}%", five_hour_percent);
-        let secondary = format!("· {}", Self::format_reset_time(resets_at.as_deref()));
+        let reset_str = if reset_format == "duration" {
+            Self::format_reset_duration(resets_at)
+        } else {
+            Self::format_reset_time(resets_at)
+        };
+        let secondary = format!("· {}", reset_str);
 
         let mut metadata = HashMap::new();
         metadata.insert("dynamic_icon".to_string(), dynamic_icon);

@@ -263,6 +263,30 @@ All segments are configurable with:
 
 Supported segments: Directory, Git, Model, Usage, Time, Cost, OutputStyle
 
+### Usage Segment Options
+
+The `usage` segment displays Claude API usage from the `/api/oauth/usage` endpoint and supports the following options:
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `api_base_url` | string | `"https://api.anthropic.com"` | Base URL for the Anthropic API |
+| `cache_duration` | integer | `300` | How long to cache API results (seconds) |
+| `timeout` | integer | `2` | API request timeout (seconds) |
+| `reset_period` | string | `"session"` | Which reset time to display: `"session"` (5-hour window) or `"weekly"` (7-day window) |
+| `reset_format` | string | `"time"` | How to format the reset time: `"time"` (e.g. `2-22-13`) or `"duration"` (e.g. `4h 52m`) |
+
+Example configuration:
+
+```toml
+[[segments]]
+id = "usage"
+enabled = true
+
+[segments.options]
+reset_period = "session"
+reset_format = "duration"
+cache_duration = 180
+```
 
 ## Requirements
 
