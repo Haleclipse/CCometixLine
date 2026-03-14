@@ -152,31 +152,31 @@ impl UsageSegment {
         let url = format!("{}/api/oauth/usage", api_base_url);
         let user_agent = Self::get_claude_code_version();
 
-        let mut agent_builder = ureq::AgentBuilder::new();
-
-        // Configure proxy from Claude settings if available
-        if let Some(proxy_url) = Self::get_proxy_from_settings() {
+        let agent = if let Some(proxy_url) = Self::get_proxy_from_settings() {
             if let Ok(proxy) = ureq::Proxy::new(&proxy_url) {
-                agent_builder = agent_builder.proxy(proxy);
+                ureq::Agent::config_builder()
+                    .proxy(Some(proxy))
+                    .build()
+                    .new_agent()
+            } else {
+                ureq::Agent::new_with_defaults()
             }
-        }
-
-        let agent = agent_builder.build();
+        } else {
+            ureq::Agent::new_with_defaults()
+        };
 
         let response = agent
             .get(&url)
-            .set("Authorization", &format!("Bearer {}", token))
-            .set("anthropic-beta", "oauth-2025-04-20")
-            .set("User-Agent", &user_agent)
-            .timeout(std::time::Duration::from_secs(timeout_secs))
+            .header("Authorization", &format!("Bearer {}", token))
+            .header("anthropic-beta", "oauth-2025-04-20")
+            .header("User-Agent", &user_agent)
+            .config()
+            .timeout_global(Some(std::time::Duration::from_secs(timeout_secs)))
+            .build()
             .call()
             .ok()?;
 
-        if response.status() == 200 {
-            response.into_json().ok()
-        } else {
-            None
-        }
+        response.into_body().read_json().ok()
     }
 }
 

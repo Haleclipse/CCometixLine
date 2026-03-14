@@ -67,7 +67,6 @@ impl StatusLineGenerator {
 
     /// Generate statusline for TUI preview with proper width calculation
     /// This method handles ANSI escape sequences properly for ratatui rendering
-    #[cfg(feature = "tui")]
     pub fn generate_for_tui(
         &self,
         segments: Vec<(SegmentConfig, SegmentData)>,

@@ -66,33 +66,26 @@ After installation:
 
 Add to your Claude Code `settings.json`:
 
-**Linux/macOS:**
+**Cross-Platform (Recommended)**
 ```json
 {
   "statusLine": {
-    "type": "command", 
+    "type": "command",
     "command": "~/.claude/ccline/ccline",
     "padding": 0
   }
 }
 ```
 
-**Windows:**
-```json
-{
-  "statusLine": {
-    "type": "command", 
-    "command": "%USERPROFILE%\\.claude\\ccline\\ccline.exe",
-    "padding": 0
-  }
-}
-```
+> **Note for Windows users:** Starting from Claude Code v2.1.47+, Unix-style path parsing is supported on Windows. The `~` symbol is automatically expanded to your user home directory. **Do not use `%USERPROFILE%`** - it no longer works reliably in v2.1.47+.
+> - Recommended: `~/.claude/ccline/ccline` (works on all platforms)
+> - Alternative: `"ccline"` (requires npm global installation)
 
 **Fallback (npm installation):**
 ```json
 {
   "statusLine": {
-    "type": "command", 
+    "type": "command",
     "command": "ccline",
     "padding": 0
   }
@@ -184,22 +177,6 @@ copy target\release\ccometixline.exe "$env:USERPROFILE\.claude\ccline\ccline.exe
 
 ## Usage
 
-### Configuration Management
-
-```bash
-# Initialize configuration file
-ccline --init
-
-# Check configuration validity  
-ccline --check
-
-# Print current configuration
-ccline --print
-
-# Enter TUI configuration mode
-ccline --config
-```
-
 ### Theme Override
 
 ```bash
@@ -262,6 +239,34 @@ All segments are configurable with:
 - Format options
 
 Supported segments: Directory, Git, Model, Usage, Time, Cost, OutputStyle
+
+### Model Configuration (`models.toml`)
+
+Location: `~/.claude/ccline/models.toml` (auto-created on first run)
+
+This file configures how model IDs are displayed and their context window limits. Claude models (Sonnet, Opus, Haiku) are automatically recognized with version extraction — you only need this file for overrides or third-party models.
+
+```toml
+# Model entries: simple substring matching on the model ID
+# These take priority over built-in Claude model recognition
+[[models]]
+pattern = "glm-4.5"
+display_name = "GLM-4.5"
+context_limit = 128000
+
+[[models]]
+pattern = "kimi-k2"
+display_name = "Kimi K2"
+context_limit = 128000
+
+# Context modifiers: matched independently and composable with model entries
+# Overrides context_limit and appends display_suffix to the display name
+# e.g., model "Opus 4" + modifier " 1M" = "Opus 4 1M"
+[[context_modifiers]]
+pattern = "[1m]"
+display_suffix = " 1M"
+context_limit = 1000000
+```
 
 
 ## Requirements

@@ -66,33 +66,26 @@ npm install -g @cometix/ccline --registry https://registry.npmmirror.com
 
 添加到 Claude Code `settings.json`：
 
-**Linux/macOS:**
+**跨平台通用（推荐）**
 ```json
 {
   "statusLine": {
-    "type": "command", 
+    "type": "command",
     "command": "~/.claude/ccline/ccline",
     "padding": 0
   }
 }
 ```
 
-**Windows:**
-```json
-{
-  "statusLine": {
-    "type": "command", 
-    "command": "%USERPROFILE%\\.claude\\ccline\\ccline.exe",
-    "padding": 0
-  }
-}
-```
+> **Windows 用户注意：** 从 Claude Code v2.1.47+ 开始，Windows 上支持 Unix 风格路径解析。`~` 符号会自动展开为您的用户主目录。**请勿使用 `%USERPROFILE%`** — 它在 v2.1.47+ 版本中不再可靠。
+> - 推荐：`~/.claude/ccline/ccline`（跨平台通用）
+> - 备选：`"ccline"`（需要 npm 全局安装）
 
 **后备方案 (npm 安装):**
 ```json
 {
   "statusLine": {
-    "type": "command", 
+    "type": "command",
     "command": "ccline",
     "padding": 0
   }
@@ -176,22 +169,6 @@ cp target/release/ccometixline ~/.claude/ccline/ccline
 
 ## 使用
 
-### 配置管理
-
-```bash
-# 初始化配置文件
-ccline --init
-
-# 检查配置有效性  
-ccline --check
-
-# 打印当前配置
-ccline --print
-
-# 进入 TUI 配置模式
-ccline --config
-```
-
 ### 主题覆盖
 
 ```bash
@@ -254,6 +231,34 @@ CCometixLine 支持通过 TOML 文件和交互式 TUI 进行完整配置：
 - 格式选项
 
 支持的段落：目录、Git、模型、使用量、时间、成本、输出样式
+
+### 模型配置 (`models.toml`)
+
+文件位置：`~/.claude/ccline/models.toml`（首次运行时自动创建）
+
+此文件配置模型 ID 的显示名称及其上下文窗口限制。Claude 模型（Sonnet、Opus、Haiku）会自动识别并提取版本号，此文件仅用于覆盖默认行为或添加第三方模型支持。
+
+```toml
+# 模型条目：基于模型 ID 的子字符串匹配
+# 优先级高于内置 Claude 模型识别
+[[models]]
+pattern = "glm-4.5"
+display_name = "GLM-4.5"
+context_limit = 128000
+
+[[models]]
+pattern = "kimi-k2"
+display_name = "Kimi K2"
+context_limit = 128000
+
+# 上下文修饰符：独立匹配，可与模型条目组合使用
+# 覆盖 context_limit 并将 display_suffix 追加到显示名称
+# 例如：模型 "Opus 4" + 修饰符 " 1M" = "Opus 4 1M"
+[[context_modifiers]]
+pattern = "[1m]"
+display_suffix = " 1M"
+context_limit = 1000000
+```
 
 
 ## 系统要求

@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.2] - 2026-03-15
+
+### Changed
+- **Dependency Upgrades**: All dependencies updated to latest major versions
+  - ratatui 0.29→0.30, crossterm 0.28→0.29, ansi-to-tui 7→8
+  - ureq 2→3, toml 0.8→1.0, dirs 5→6, tree-sitter 0.24→0.26
+- **Update Check Source**: Replaced GitHub Releases API with npm registry (`@cometix/ccline`) to avoid rate limiting
+- **ureq v3 API Migration**: Adapt all HTTP client code to ureq 3.x breaking changes
+  - `AgentBuilder` → `Agent::config_builder()`, `.set()` → `.header()`
+  - `response.into_json()` → `response.into_body().read_json()`
+  - Request timeout via `.config().timeout_global()`
+
+### Removed
+- **Feature Gates**: `tui` and `self-update` features removed; all modules are now always compiled
+- **Unused CLI Flags**: `--init`, `--print`, `--check`, `--update` removed
+- **Self-Update Logic**: Removed auto-update download/install code (infeasible for statusline binary)
+
+### Fixed
+- **models.toml Template** ([#93](https://github.com/Haleclipse/CCometixLine/issues/93)): Fixed template generation inserting empty TOML content; added `#[serde(default)]` to `model_entries` to prevent parse failure when field is missing
+
+### Documentation
+- Added `models.toml` configuration guide to README
+- Removed redundant "Configuration Management" section from README
+
 ## [1.1.1] - 2026-02-09
 
 ### Changed

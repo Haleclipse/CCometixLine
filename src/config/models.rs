@@ -6,7 +6,7 @@ use std::sync::OnceLock;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModelConfig {
-    #[serde(rename = "models")]
+    #[serde(rename = "models", default)]
     pub model_entries: Vec<ModelEntry>,
     #[serde(default)]
     pub context_modifiers: Vec<ContextModifier>,
@@ -252,25 +252,14 @@ impl ModelConfig {
 
     /// Create default model configuration file with minimal template
     pub fn create_default_file<P: AsRef<Path>>(path: P) -> Result<(), Box<dyn std::error::Error>> {
-        // Create a minimal template config (not the full fallback config)
-        let template_config = Self {
-            model_entries: vec![],
-            context_modifiers: vec![],
-        };
-
-        let toml_content = toml::to_string_pretty(&template_config)?;
-
         // Add comments and examples to the template
-        let template_content = format!(
-            "# CCometixLine Model Configuration\n\
+        let template_content = "# CCometixLine Model Configuration\n\
              # This file defines model display names and context limits for different LLM models\n\
              # File location: ~/.claude/ccline/models.toml\n\
              #\n\
              # Claude models are automatically recognized (Sonnet, Opus, Haiku) with\n\
              # version extraction. You only need to add entries here for overrides or\n\
              # third-party models.\n\
-             \n\
-             {}\n\
              \n\
              # Model configurations (simple substring matching)\n\
              # Each [[models]] section defines a model pattern and its properties\n\
@@ -290,9 +279,8 @@ impl ModelConfig {
              # [[context_modifiers]]\n\
              # pattern = \"[1m]\"\n\
              # display_suffix = \" 1M\"\n\
-             # context_limit = 1000000\n",
-            toml_content.trim()
-        );
+             # context_limit = 1000000\n"
+            .to_string();
 
         // Create parent directory if it doesn't exist
         if let Some(parent) = path.as_ref().parent() {
