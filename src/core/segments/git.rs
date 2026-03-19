@@ -1,6 +1,7 @@
 use super::{Segment, SegmentData};
 use crate::config::{InputData, SegmentId};
 use std::collections::HashMap;
+use std::path::Path;
 use std::process::Command;
 
 #[derive(Debug)]
@@ -21,6 +22,7 @@ pub enum GitStatus {
 
 pub struct GitSegment {
     show_sha: bool,
+    sub_dirs: Vec<String>,
 }
 
 impl Default for GitSegment {
@@ -31,11 +33,19 @@ impl Default for GitSegment {
 
 impl GitSegment {
     pub fn new() -> Self {
-        Self { show_sha: false }
+        Self {
+            show_sha: false,
+            sub_dirs: Vec::new(),
+        }
     }
 
     pub fn with_sha(mut self, show_sha: bool) -> Self {
         self.show_sha = show_sha;
+        self
+    }
+
+    pub fn with_sub_dirs(mut self, sub_dirs: Vec<String>) -> Self {
+        self.sub_dirs = sub_dirs;
         self
     }
 
@@ -169,11 +179,56 @@ impl GitSegment {
             None
         }
     }
+
+    /// 多子目录模式：获取多个子目录的 git 分支信息
+    fn collect_multi_dirs(&self, working_dir: &str) -> Option<SegmentData> {
+        // 文件夹索引 emoji: 🗂️
+        let folder_icon = "🗂️";
+        let mut branch_parts = Vec::new();
+        let mut metadata = HashMap::new();
+
+        for sub_dir in &self.sub_dirs {
+            let full_path = Path::new(working_dir).join(sub_dir);
+            let full_path_str = full_path.to_string_lossy();
+
+            if let Some(branch) = self.get_branch(&full_path_str) {
+                // 获取 git status
+                let status = self.get_status(&full_path_str);
+                let status_icon = match status {
+                    GitStatus::Clean => "✓",
+                    GitStatus::Dirty => "●",
+                    GitStatus::Conflicts => "⚠",
+                };
+
+                branch_parts.push(format!("{} {}:{} {}", folder_icon, sub_dir, branch, status_icon));
+                metadata.insert(format!("{}_branch", sub_dir), branch);
+                metadata.insert(format!("{}_status", sub_dir), format!("{:?}", status));
+            }
+        }
+
+        if branch_parts.is_empty() {
+            return None;
+        }
+
+        Some(SegmentData {
+            primary: branch_parts.join(" | "),
+            secondary: String::new(),
+            metadata,
+        })
+    }
 }
 
 impl Segment for GitSegment {
     fn collect(&self, input: &InputData) -> Option<SegmentData> {
-        let git_info = self.get_git_info(&input.workspace.current_dir)?;
+        let working_dir = &input.workspace.current_dir;
+
+        // 多子目录模式
+        if !self.sub_dirs.is_empty() {
+            return self.collect_multi_dirs(working_dir);
+        }
+
+        // 原有逻辑：单目录模式
+        let git_info = self.get_git_info(working_dir)?;
 
         let mut metadata = HashMap::new();
         metadata.insert("branch".to_string(), git_info.branch.clone());

@@ -17,8 +17,10 @@
 
 ### 核心功能
 - **Git 集成** 显示分支、状态和跟踪信息
+- **多子目录 Git 支持** 适用于 monorepo 项目
+- **项目级配置** 支持按项目覆盖全局设置
 - **模型显示** 简化的 Claude 模型名称
-- **使用量跟踪** 基于转录文件分析  
+- **使用量跟踪** 基于转录文件分析
 - **目录显示** 显示当前工作空间
 - **简洁设计** 使用 Nerd Font 图标
 
@@ -203,6 +205,34 @@ ccline --patch ~/.local/share/fnm/node-versions/v24.4.1/installation/lib/node_mo
 - 状态：`✓` 清洁，`●` 有更改，`⚠` 冲突
 - 远程跟踪：`↑n` 领先，`↓n` 落后
 
+### 多子目录 Git 支持（ddline fork 新增）
+
+对于包含多个 Git 仓库子目录的 monorepo 项目，可以配置 ddline 显示每个子目录的分支和状态：
+
+**输出示例：**
+```
+🗂️ api:master ✓ | 🗂️ web:feature/my-feature ●
+```
+
+**全局配置** (`~/.claude/ccline/config.toml`)：
+```toml
+[[segments]]
+id = "git"
+enabled = true
+
+[segments.options]
+sub_dirs = ["api", "web"]  # 要监控的子目录列表
+```
+
+**项目级配置** (`<项目目录>/.ccline.toml`)：
+```toml
+# 项目级配置覆盖全局配置
+[segments.git]
+sub_dirs = ["api", "web", "shared"]
+```
+
+项目级配置优先于全局配置，允许每个项目使用不同的子目录设置。
+
 ### 模型显示
 
 显示简化的 Claude 模型名称：
@@ -217,10 +247,26 @@ ccline --patch ~/.local/share/fnm/node-versions/v24.4.1/installation/lib/node_mo
 
 CCometixLine 支持通过 TOML 文件和交互式 TUI 进行完整配置：
 
-- **配置文件**: `~/.claude/ccline/config.toml`
+- **全局配置文件**: `~/.claude/ccline/config.toml`
+- **项目级配置**: `<项目目录>/.ccline.toml`（覆盖全局配置）
 - **交互式 TUI**: `ccline --config` 实时编辑配置并预览效果
 - **主题文件**: `~/.claude/ccline/themes/*.toml` 自定义主题文件
 - **自动初始化**: `ccline --init` 创建默认配置
+
+### 项目级配置
+
+在项目根目录创建 `.ccline.toml` 文件来覆盖全局设置：
+
+```toml
+# .ccline.toml - 项目级配置
+# 仅支持覆盖 segment options
+
+[segments.git]
+sub_dirs = ["api", "web"]  # 为此项目覆盖 git 子目录设置
+
+[segments.directory]
+# 在此添加其他 segment 特定选项
+```
 
 ### 可用段落
 

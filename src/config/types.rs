@@ -75,6 +75,24 @@ pub enum SegmentId {
     Update,
 }
 
+impl SegmentId {
+    /// Returns a stable config key for matching in project-level configuration.
+    /// This matches the serde snake_case serialization format.
+    pub fn config_key(&self) -> &'static str {
+        match self {
+            SegmentId::Model => "model",
+            SegmentId::Directory => "directory",
+            SegmentId::Git => "git",
+            SegmentId::ContextWindow => "context_window",
+            SegmentId::Usage => "usage",
+            SegmentId::Cost => "cost",
+            SegmentId::Session => "session",
+            SegmentId::OutputStyle => "output_style",
+            SegmentId::Update => "update",
+        }
+    }
+}
+
 // Legacy compatibility structure
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct SegmentsConfig {

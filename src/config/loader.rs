@@ -1,6 +1,17 @@
 use super::types::Config;
+use serde::Deserialize;
+use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
+
+/// Project-level configuration (partial override)
+/// Only contains options that can be overridden per-project
+#[derive(Debug, Deserialize)]
+pub struct ProjectConfig {
+    /// Segment-specific options override
+    /// Key is segment id (e.g., "git"), value is options map
+    pub segments: Option<HashMap<String, HashMap<String, serde_json::Value>>>,
+}
 
 /// Result of config initialization
 #[derive(Debug)]
@@ -126,6 +137,68 @@ impl Config {
         let content = fs::read_to_string(config_path)?;
         let config: Config = toml::from_str(&content)?;
         Ok(config)
+    }
+
+    /// Load configuration with project-level override
+    /// Project config path: <project_dir>/.ccline.toml
+    ///
+    /// Error handling:
+    /// - Global config failure: falls back to default config
+    /// - Project config failure: logs warning but keeps global config
+    pub fn load_with_project(project_dir: &str) -> Result<Config, Box<dyn std::error::Error>> {
+        // Load global config first
+        let mut config = Self::load()?;
+
+        // Check for project-level config
+        let project_config_path = Path::new(project_dir).join(".ccline.toml");
+
+        if project_config_path.exists() {
+            match fs::read_to_string(&project_config_path) {
+                Ok(content) => match toml::from_str::<ProjectConfig>(&content) {
+                    Ok(project_config) => {
+                        config.merge_project_config(project_config);
+                    }
+                    Err(e) => {
+                        eprintln!(
+                            "Warning: Failed to parse project config at {}: {}",
+                            project_config_path.display(),
+                            e
+                        );
+                        // Continue with global config only
+                    }
+                },
+                Err(e) => {
+                    eprintln!(
+                        "Warning: Failed to read project config at {}: {}",
+                        project_config_path.display(),
+                        e
+                    );
+                    // Continue with global config only
+                }
+            }
+        }
+
+        Ok(config)
+    }
+
+    /// Merge project-level configuration into this config
+    fn merge_project_config(&mut self, project_config: ProjectConfig) {
+        // Merge segment options
+        if let Some(segment_options) = project_config.segments {
+            for (segment_id, options) in segment_options {
+                // Find the matching segment in config
+                // Use stable config_key() instead of Debug formatting
+                for segment in &mut self.segments {
+                    if segment.id.config_key() == segment_id {
+                        // Merge options
+                        for (key, value) in options {
+                            segment.options.insert(key, value);
+                        }
+                        break;
+                    }
+                }
+            }
+        }
     }
 
     /// Save configuration to default location
