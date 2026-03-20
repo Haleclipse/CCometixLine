@@ -401,6 +401,7 @@ pub type Usage = RawUsage;
 #[derive(Deserialize)]
 pub struct Message {
     pub usage: Option<Usage>,
+    pub stop_reason: Option<String>,
 }
 
 #[derive(Deserialize)]

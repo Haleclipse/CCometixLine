@@ -299,9 +299,19 @@ impl Default for ModelConfig {
             // Claude models (Sonnet, Opus, Haiku) are handled by built-in regex families.
             model_entries: vec![
                 ModelEntry {
+                    pattern: "glm-5".to_string(),
+                    display_name: "GLM-5".to_string(),
+                    context_limit: 200_000,
+                },
+                ModelEntry {
                     pattern: "glm-4.5".to_string(),
                     display_name: "GLM-4.5".to_string(),
                     context_limit: 128_000,
+                },
+                ModelEntry {
+                    pattern: "kimi-k2.5".to_string(),
+                    display_name: "Kimi K2.5".to_string(),
+                    context_limit: 256_000,
                 },
                 ModelEntry {
                     pattern: "kimi-k2-turbo".to_string(),
