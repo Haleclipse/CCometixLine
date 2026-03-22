@@ -183,6 +183,16 @@ impl PreviewComponent {
                         map
                     },
                 },
+                SegmentId::MiniMaxTokenPlan => SegmentData {
+                    primary: "◉ 97% · ◐ 94% 5h".to_string(),
+                    secondary: "".to_string(),
+                    metadata: {
+                        let mut map = HashMap::new();
+                        map.insert("weekly_remaining_pct".to_string(), "97".to_string());
+                        map.insert("interval_remaining_pct".to_string(), "94".to_string());
+                        map
+                    },
+                },
             };
 
             segments_data.push((segment_config.clone(), mock_data));

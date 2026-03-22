@@ -57,6 +57,7 @@ impl SegmentListComponent {
                     SegmentId::Session => "Session",
                     SegmentId::OutputStyle => "Output Style",
                     SegmentId::Update => "Update",
+                    SegmentId::MiniMaxTokenPlan => "MiniMax Token Plan",
                 };
 
                 if is_selected {

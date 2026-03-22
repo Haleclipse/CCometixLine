@@ -509,6 +509,10 @@ pub fn collect_all_segments(
                 let segment = UpdateSegment::new();
                 segment.collect(input)
             }
+            crate::config::SegmentId::MiniMaxTokenPlan => {
+                let segment = MiniMaxTokenPlanSegment::new();
+                segment.collect(input)
+            }
         };
 
         if let Some(data) = segment_data {

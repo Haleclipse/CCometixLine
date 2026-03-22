@@ -258,3 +258,41 @@ pub fn usage_segment() -> SegmentConfig {
         },
     }
 }
+
+pub fn minimax_token_plan_segment() -> SegmentConfig {
+    SegmentConfig {
+        id: SegmentId::MiniMaxTokenPlan,
+        enabled: false,
+        icon: IconConfig {
+            plain: "💰".to_string(),
+            nerd_font: "\u{eec1}".to_string(),
+        },
+        colors: ColorConfig {
+            icon: Some(AnsiColor::Rgb {
+                r: 224,
+                g: 175,
+                b: 104,
+            }),
+            text: Some(AnsiColor::Rgb {
+                r: 224,
+                g: 175,
+                b: 104,
+            }),
+            background: Some(AnsiColor::Rgb {
+                r: 36,
+                g: 40,
+                b: 59,
+            }), // Tokyo Night dark background
+        },
+        styles: TextStyleConfig::default(),
+        options: {
+            let mut opts = HashMap::new();
+            opts.insert(
+                "cache_duration".to_string(),
+                serde_json::Value::Number(300.into()),
+            );
+            opts.insert("timeout".to_string(), serde_json::Value::Number(10.into()));
+            opts
+        },
+    }
+}
