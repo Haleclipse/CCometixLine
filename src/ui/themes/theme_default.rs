@@ -79,36 +79,6 @@ pub fn context_window_segment() -> SegmentConfig {
     }
 }
 
-pub fn usage_segment() -> SegmentConfig {
-    SegmentConfig {
-        id: SegmentId::Usage,
-        enabled: false,
-        icon: IconConfig {
-            plain: "📊".to_string(),
-            nerd_font: "\u{f0a9e}".to_string(), // circle_slice_1
-        },
-        colors: ColorConfig {
-            icon: Some(AnsiColor::Color16 { c16: 14 }), // Cyan
-            text: Some(AnsiColor::Color16 { c16: 14 }),
-            background: None,
-        },
-        styles: TextStyleConfig::default(),
-        options: {
-            let mut opts = HashMap::new();
-            opts.insert(
-                "api_base_url".to_string(),
-                serde_json::Value::String("https://api.anthropic.com".to_string()),
-            );
-            opts.insert(
-                "cache_duration".to_string(),
-                serde_json::Value::Number(180.into()),
-            );
-            opts.insert("timeout".to_string(), serde_json::Value::Number(2.into()));
-            opts
-        },
-    }
-}
-
 pub fn cost_segment() -> SegmentConfig {
     SegmentConfig {
         id: SegmentId::Cost,
@@ -161,4 +131,46 @@ pub fn output_style_segment() -> SegmentConfig {
         styles: TextStyleConfig::default(),
         options: HashMap::new(),
     }
+}
+
+fn usage_segment_base(id: SegmentId) -> SegmentConfig {
+    SegmentConfig {
+        id,
+        enabled: false,
+        icon: IconConfig {
+            plain: "📊".to_string(),
+            nerd_font: "\u{f0a9e}".to_string(), // circle_slice_1
+        },
+        colors: ColorConfig {
+            icon: Some(AnsiColor::Color16 { c16: 14 }), // Cyan
+            text: Some(AnsiColor::Color16 { c16: 14 }),
+            background: None,
+        },
+        styles: TextStyleConfig::default(),
+        options: {
+            let mut opts = HashMap::new();
+            opts.insert(
+                "api_base_url".to_string(),
+                serde_json::Value::String("https://api.anthropic.com".to_string()),
+            );
+            opts.insert(
+                "cache_duration".to_string(),
+                serde_json::Value::Number(180.into()),
+            );
+            opts.insert("timeout".to_string(), serde_json::Value::Number(2.into()));
+            opts
+        },
+    }
+}
+
+pub fn usage_segment() -> SegmentConfig {
+    usage_segment_base(SegmentId::Usage)
+}
+
+pub fn usage_5h_segment() -> SegmentConfig {
+    usage_segment_base(SegmentId::Usage5h)
+}
+
+pub fn usage_7d_segment() -> SegmentConfig {
+    usage_segment_base(SegmentId::Usage7d)
 }

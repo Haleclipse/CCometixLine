@@ -31,11 +31,13 @@ impl SettingsComponent {
                 SegmentId::Directory => "Directory",
                 SegmentId::Git => "Git",
                 SegmentId::ContextWindow => "Context Window",
-                SegmentId::Usage => "Usage",
+                SegmentId::Usage => "Usage (deprecated)",
                 SegmentId::Cost => "Cost",
                 SegmentId::Session => "Session",
                 SegmentId::OutputStyle => "Output Style",
                 SegmentId::Update => "Update",
+                SegmentId::Usage5h => "Usage 5h",
+                SegmentId::Usage7d => "Usage 7d",
             };
             let current_icon = match config.style.mode {
                 StyleMode::Plain => &segment.icon.plain,

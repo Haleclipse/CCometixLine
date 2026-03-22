@@ -69,6 +69,10 @@ pub enum SegmentId {
     Git,
     ContextWindow,
     Usage,
+    #[serde(rename = "usage_5h")]
+    Usage5h,
+    #[serde(rename = "usage_7d")]
+    Usage7d,
     Cost,
     Session,
     OutputStyle,
@@ -111,12 +115,25 @@ pub struct OutputStyle {
 }
 
 #[derive(Deserialize)]
+pub struct RateLimitPeriod {
+    pub used_percentage: f64,
+    pub resets_at: Option<i64>, // Unix timestamp from Claude Code
+}
+
+#[derive(Deserialize)]
+pub struct RateLimits {
+    pub five_hour: Option<RateLimitPeriod>,
+    pub seven_day: Option<RateLimitPeriod>,
+}
+
+#[derive(Deserialize)]
 pub struct InputData {
     pub model: Model,
     pub workspace: Workspace,
     pub transcript_path: String,
     pub cost: Option<Cost>,
     pub output_style: Option<OutputStyle>,
+    pub rate_limits: Option<RateLimits>,
 }
 
 // OpenAI-style nested token details
@@ -269,6 +286,46 @@ impl Config {
     /// Check if current config has been modified from the selected theme
     pub fn is_modified_from_theme(&self) -> bool {
         !self.matches_theme(&self.theme)
+    }
+
+    /// Migrate old config: if usage exists but usage_5h/usage_7d don't, add them
+    pub fn migrate(&mut self) {
+        let has_usage = self.segments.iter().any(|s| s.id == SegmentId::Usage);
+        let has_5h = self.segments.iter().any(|s| s.id == SegmentId::Usage5h);
+        let has_7d = self.segments.iter().any(|s| s.id == SegmentId::Usage7d);
+
+        if has_usage && !has_5h && !has_7d {
+            // Find the old usage segment to copy its colors
+            let usage_seg = self.segments.iter().find(|s| s.id == SegmentId::Usage).cloned();
+            if let Some(old) = usage_seg {
+                // Find position of old usage to insert after it
+                let pos = self.segments.iter().position(|s| s.id == SegmentId::Usage).unwrap();
+
+                let seg_5h = SegmentConfig {
+                    id: SegmentId::Usage5h,
+                    enabled: old.enabled,
+                    icon: old.icon.clone(),
+                    colors: old.colors.clone(),
+                    styles: old.styles.clone(),
+                    options: old.options.clone(),
+                };
+                let seg_7d = SegmentConfig {
+                    id: SegmentId::Usage7d,
+                    enabled: old.enabled,
+                    icon: old.icon.clone(),
+                    colors: old.colors.clone(),
+                    styles: old.styles.clone(),
+                    options: old.options.clone(),
+                };
+
+                // Disable old usage
+                self.segments[pos].enabled = false;
+
+                // Insert new ones after old usage
+                self.segments.insert(pos + 1, seg_5h);
+                self.segments.insert(pos + 2, seg_7d);
+            }
+        }
     }
 
     /// Compare two segment configs for equality

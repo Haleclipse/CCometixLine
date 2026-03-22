@@ -33,4 +33,4 @@ pub use model::ModelSegment;
 pub use output_style::OutputStyleSegment;
 pub use session::SessionSegment;
 pub use update::UpdateSegment;
-pub use usage::UsageSegment;
+pub use usage::{Usage5hSegment, Usage7dSegment, UsageSegment};

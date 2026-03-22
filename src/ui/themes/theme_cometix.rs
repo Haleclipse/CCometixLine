@@ -133,9 +133,9 @@ pub fn output_style_segment() -> SegmentConfig {
     }
 }
 
-pub fn usage_segment() -> SegmentConfig {
+fn usage_segment_base(id: SegmentId) -> SegmentConfig {
     SegmentConfig {
-        id: SegmentId::Usage,
+        id,
         enabled: false,
         icon: IconConfig {
             plain: "📊".to_string(),
@@ -161,4 +161,16 @@ pub fn usage_segment() -> SegmentConfig {
             opts
         },
     }
+}
+
+pub fn usage_segment() -> SegmentConfig {
+    usage_segment_base(SegmentId::Usage)
+}
+
+pub fn usage_5h_segment() -> SegmentConfig {
+    usage_segment_base(SegmentId::Usage5h)
+}
+
+pub fn usage_7d_segment() -> SegmentConfig {
+    usage_segment_base(SegmentId::Usage7d)
 }

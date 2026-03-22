@@ -124,7 +124,8 @@ impl Config {
         }
 
         let content = fs::read_to_string(config_path)?;
-        let config: Config = toml::from_str(&content)?;
+        let mut config: Config = toml::from_str(&content)?;
+        config.migrate();
         Ok(config)
     }
 

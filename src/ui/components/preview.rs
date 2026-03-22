@@ -183,6 +183,24 @@ impl PreviewComponent {
                         map
                     },
                 },
+                SegmentId::Usage5h => SegmentData {
+                    primary: "18%".to_string(),
+                    secondary: "· 3-17-15".to_string(),
+                    metadata: {
+                        let mut map = HashMap::new();
+                        map.insert("dynamic_icon".to_string(), "\u{f0a9f}".to_string());
+                        map
+                    },
+                },
+                SegmentId::Usage7d => SegmentData {
+                    primary: "26%".to_string(),
+                    secondary: "· 3-28-0".to_string(),
+                    metadata: {
+                        let mut map = HashMap::new();
+                        map.insert("dynamic_icon".to_string(), "\u{f0aa0}".to_string());
+                        map
+                    },
+                },
             };
 
             segments_data.push((segment_config.clone(), mock_data));
