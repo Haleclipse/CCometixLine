@@ -42,6 +42,7 @@ pub struct MiniMaxTokenPlanSegment {
 struct CachedSegmentConfig {
     cache_duration: u64,
     timeout: u64,
+    preferred_model: String,
 }
 
 impl MiniMaxTokenPlanSegment {
@@ -63,16 +64,25 @@ impl MiniMaxTokenPlanSegment {
                 c.segments
                     .iter()
                     .find(|s| s.id == SegmentId::MiniMaxTokenPlan)
-                    .map(|sc| (sc.options.get("cache_duration").and_then(|v| v.as_u64()).unwrap_or(300),
-                             sc.options.get("timeout").and_then(|v| v.as_u64()).unwrap_or(10)))
+                    .map(|sc| {
+                        let cache_duration = sc.options.get("cache_duration").and_then(|v| v.as_u64()).unwrap_or(300);
+                        let timeout = sc.options.get("timeout").and_then(|v| v.as_u64()).unwrap_or(10);
+                        let preferred_model = sc.options.get("preferred_model")
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.to_string())
+                            .unwrap_or_else(|| "MiniMax-M2.7".to_string());
+                        (cache_duration, timeout, preferred_model)
+                    })
             })
-            .map(|(cache_duration, timeout)| CachedSegmentConfig {
+            .map(|(cache_duration, timeout, preferred_model)| CachedSegmentConfig {
                 cache_duration,
                 timeout,
+                preferred_model,
             })
             .unwrap_or_else(|| CachedSegmentConfig {
                 cache_duration: 300,
                 timeout: 10,
+                preferred_model: "MiniMax-M2.7".to_string(),
             });
 
         *cached = Some(config.clone());
@@ -160,6 +170,7 @@ impl Segment for MiniMaxTokenPlanSegment {
         let config = self.get_cached_config();
         let cache_duration = config.cache_duration;
         let timeout = config.timeout;
+        let preferred_model = &config.preferred_model;
 
         let cached_data = self.load_cache();
         let use_cached = cached_data
@@ -176,7 +187,8 @@ impl Segment for MiniMaxTokenPlanSegment {
                     let model = response
                         .model_remains
                         .iter()
-                        .find(|m| m.model_name == "MiniMax-M2.7")?;
+                        .find(|m| m.model_name == *preferred_model)
+                        .or_else(|| response.model_remains.iter().next())?;
 
                     let weekly_remaining_pct = if model.current_weekly_total_count > 0 {
                         let usage_pct = (model.current_weekly_usage_count as f64

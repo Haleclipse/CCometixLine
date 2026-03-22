@@ -324,6 +324,10 @@ impl ThemePresets {
             "timeout".to_string(),
             serde_json::Value::Number(10.into()),
         );
+        opts.insert(
+            "preferred_model".to_string(),
+            serde_json::Value::String("MiniMax-M2.7".to_string()),
+        );
         opts
     }
 }
