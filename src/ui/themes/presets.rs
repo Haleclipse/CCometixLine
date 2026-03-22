@@ -1,6 +1,8 @@
 // Theme presets for TUI configuration
 
 use crate::config::{Config, StyleConfig, StyleMode};
+use std::collections::HashMap;
+use serde_json;
 
 // Import all theme modules
 use super::{
@@ -309,5 +311,19 @@ impl ThemePresets {
             ],
             theme: "powerline-tokyo-night".to_string(),
         }
+    }
+
+    /// Build shared options map for MiniMaxTokenPlan segment.
+    pub fn minimax_token_plan_options() -> HashMap<String, serde_json::Value> {
+        let mut opts = HashMap::new();
+        opts.insert(
+            "cache_duration".to_string(),
+            serde_json::Value::Number(300.into()),
+        );
+        opts.insert(
+            "timeout".to_string(),
+            serde_json::Value::Number(10.into()),
+        );
+        opts
     }
 }

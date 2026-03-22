@@ -3,6 +3,8 @@ use crate::config::{InputData, SegmentId};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::time::Duration;
+use std::sync::Mutex;
 
 #[derive(Debug, Deserialize)]
 struct ApiResponse {
@@ -32,11 +34,49 @@ struct CacheData {
 }
 
 #[derive(Default)]
-pub struct MiniMaxTokenPlanSegment;
+pub struct MiniMaxTokenPlanSegment {
+    cached_config: Mutex<Option<CachedSegmentConfig>>,
+}
+
+#[derive(Clone)]
+struct CachedSegmentConfig {
+    cache_duration: u64,
+    timeout: u64,
+}
 
 impl MiniMaxTokenPlanSegment {
     pub fn new() -> Self {
-        Self
+        Self {
+            cached_config: Mutex::new(None),
+        }
+    }
+
+    fn get_cached_config(&self) -> CachedSegmentConfig {
+        let mut cached = self.cached_config.lock().unwrap();
+        if let Some(ref config) = *cached {
+            return config.clone();
+        }
+
+        let config = crate::config::Config::load()
+            .ok()
+            .and_then(|c| {
+                c.segments
+                    .iter()
+                    .find(|s| s.id == SegmentId::MiniMaxTokenPlan)
+                    .map(|sc| (sc.options.get("cache_duration").and_then(|v| v.as_u64()).unwrap_or(300),
+                             sc.options.get("timeout").and_then(|v| v.as_u64()).unwrap_or(10)))
+            })
+            .map(|(cache_duration, timeout)| CachedSegmentConfig {
+                cache_duration,
+                timeout,
+            })
+            .unwrap_or_else(|| CachedSegmentConfig {
+                cache_duration: 300,
+                timeout: 10,
+            });
+
+        *cached = Some(config.clone());
+        config
     }
 
     fn get_circle_icon(remaining_pct: u32) -> String {
@@ -91,10 +131,13 @@ impl MiniMaxTokenPlanSegment {
         }
     }
 
-    fn fetch_api(&self, api_key: &str, _timeout_secs: u64) -> Option<ApiResponse> {
+    fn fetch_api(&self, api_key: &str, timeout_secs: u64) -> Option<ApiResponse> {
         let url = "https://www.minimaxi.com/v1/api/openplatform/coding_plan/remains";
 
-        let agent = ureq::Agent::new_with_defaults();
+        let agent = ureq::Agent::config_builder()
+            .timeout_global(Some(Duration::from_secs(timeout_secs)))
+            .build()
+            .new_agent();
 
         let response = agent
             .get(url)
@@ -114,22 +157,9 @@ impl Segment for MiniMaxTokenPlanSegment {
             return None;
         }
 
-        // Load config from file to get segment options
-        let config = crate::config::Config::load().ok()?;
-        let segment_config = config
-            .segments
-            .iter()
-            .find(|s| s.id == SegmentId::MiniMaxTokenPlan);
-
-        let cache_duration = segment_config
-            .and_then(|sc| sc.options.get("cache_duration"))
-            .and_then(|v| v.as_u64())
-            .unwrap_or(300);
-
-        let timeout = segment_config
-            .and_then(|sc| sc.options.get("timeout"))
-            .and_then(|v| v.as_u64())
-            .unwrap_or(10);
+        let config = self.get_cached_config();
+        let cache_duration = config.cache_duration;
+        let timeout = config.timeout;
 
         let cached_data = self.load_cache();
         let use_cached = cached_data
