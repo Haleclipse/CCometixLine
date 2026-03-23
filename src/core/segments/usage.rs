@@ -1,3 +1,12 @@
+//! UsageSegment displays Claude Code rate limit utilization (5-hour and 7-day windows).
+//!
+//! Data source priority:
+//! 1. `rate_limits` field in stdin — provided directly by Claude Code, zero latency,
+//!    no credentials required, always current. Available in Claude Code >= 2.x.
+//! 2. Anthropic API (`/api/oauth/usage`) — legacy fallback for older Claude Code versions
+//!    that do not include `rate_limits` in stdin. Uses a file-based cache to reduce
+//!    network calls.
+
 use super::{Segment, SegmentData};
 use crate::config::{InputData, RateLimitPeriod, SegmentId};
 use chrono::{DateTime, Datelike, Duration, Local, TimeZone, Timelike, Utc};
@@ -208,10 +217,16 @@ impl UsageSegment {
     }
 
     /// Collect from stdin rate_limits — no network, no credentials, always fresh.
+    ///
+    /// Prefers five_hour data for the primary display value. If only seven_day is
+    /// available, falls back to that so the segment is still shown.
     fn collect_from_stdin(&self, input: &InputData) -> Option<SegmentData> {
         let rate_limits = input.rate_limits.as_ref()?;
-        let five_hour = rate_limits.five_hour.as_ref()?;
-        let five_hour_util = Self::parse_utilization(five_hour)?;
+
+        let five_hour_util = rate_limits
+            .five_hour
+            .as_ref()
+            .and_then(|p| Self::parse_utilization(p));
 
         let seven_day_util = rate_limits
             .seven_day
@@ -219,14 +234,18 @@ impl UsageSegment {
             .and_then(|p| Self::parse_utilization(p))
             .unwrap_or(0.0);
 
+        // Require at least one valid utilization value to show the segment
+        let display_util = five_hour_util.or(if seven_day_util > 0.0 { Some(seven_day_util) } else { None })?;
+
         let reset_str = rate_limits
             .five_hour
             .as_ref()
             .and_then(|p| p.resets_at)
+            .or_else(|| rate_limits.seven_day.as_ref().and_then(|p| p.resets_at))
             .map(Self::format_reset_time_unix)
             .unwrap_or_else(|| "?".to_string());
 
-        Some(self.build_segment_data(five_hour_util, seven_day_util, reset_str))
+        Some(self.build_segment_data(display_util, seven_day_util, reset_str))
     }
 
     /// Fallback: collect via Anthropic API (for older Claude Code versions
@@ -371,6 +390,31 @@ mod tests {
         let seg = UsageSegment::new();
         let mut input = make_input(Some(50.0), None, None);
         input.rate_limits = None;
+        assert!(seg.collect_from_stdin(&input).is_none());
+    }
+
+    #[test]
+    fn test_collect_from_stdin_only_seven_day() {
+        // If only seven_day is present, segment should still render using it
+        let seg = UsageSegment::new();
+        let mut input = make_input(None, None, Some(60.0));
+        // Remove five_hour
+        if let Some(ref mut rl) = input.rate_limits {
+            rl.five_hour = None;
+        }
+        let data = seg.collect_from_stdin(&input).unwrap();
+        assert_eq!(data.primary, "60%");
+    }
+
+    #[test]
+    fn test_collect_from_stdin_both_missing() {
+        // Both periods missing -> None
+        let seg = UsageSegment::new();
+        let mut input = make_input(None, None, None);
+        if let Some(ref mut rl) = input.rate_limits {
+            rl.five_hour = None;
+            rl.seven_day = None;
+        }
         assert!(seg.collect_from_stdin(&input).is_none());
     }
 
