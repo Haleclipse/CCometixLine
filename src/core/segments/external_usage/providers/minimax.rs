@@ -102,3 +102,38 @@ fn remaining_pct(usage: u64, total: u64) -> u32 {
     let used_pct = (usage as f64 / total as f64 * 100.0) as u32;
     100u32.saturating_sub(used_pct)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_remaining_pct_normal() {
+        // 用了 30%，剩余 70%
+        assert_eq!(remaining_pct(30, 100), 70);
+    }
+
+    #[test]
+    fn test_remaining_pct_full() {
+        // 一点没用，剩余 100%
+        assert_eq!(remaining_pct(0, 100), 100);
+    }
+
+    #[test]
+    fn test_remaining_pct_exhausted() {
+        // 全用完，剩余 0%
+        assert_eq!(remaining_pct(100, 100), 0);
+    }
+
+    #[test]
+    fn test_remaining_pct_zero_total() {
+        // total 为 0（未知配额），默认返回 100%
+        assert_eq!(remaining_pct(0, 0), 100);
+    }
+
+    #[test]
+    fn test_remaining_pct_over_used() {
+        // 超用场景（usage > total），saturating_sub 保证不溢出为 0
+        assert_eq!(remaining_pct(150, 100), 0);
+    }
+}
