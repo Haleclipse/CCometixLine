@@ -99,7 +99,7 @@ fn remaining_pct(usage: u64, total: u64) -> u32 {
     if total == 0 {
         return 100;
     }
-    let used_pct = (usage as f64 / total as f64 * 100.0) as u32;
+    let used_pct = (usage.saturating_mul(100) / total) as u32;
     100u32.saturating_sub(used_pct)
 }
 
