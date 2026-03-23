@@ -128,28 +128,7 @@ pub fn cost_segment() -> SegmentConfig {
 }
 
 pub fn external_usage_segment() -> SegmentConfig {
-    SegmentConfig {
-        id: SegmentId::ExternalUsage,
-        enabled: false,
-        icon: IconConfig {
-            plain: "📡".to_string(),
-            nerd_font: "\u{f0a9e}".to_string(),
-        },
-        colors: ColorConfig {
-            icon: Some(AnsiColor::Color16 { c16: 14 }), // Cyan
-            text: Some(AnsiColor::Color16 { c16: 14 }),
-            background: None,
-        },
-        styles: TextStyleConfig::default(),
-        options: {
-            let mut opts = HashMap::new();
-            opts.insert("provider".to_string(), serde_json::Value::String("minimax".to_string()));
-            opts.insert("auth_env".to_string(), serde_json::Value::String("MINIMAX_API_KEY".to_string()));
-            opts.insert("cache_duration".to_string(), serde_json::Value::Number(300.into()));
-            opts.insert("timeout".to_string(), serde_json::Value::Number(10.into()));
-            opts
-        },
-    }
+    super::presets::default_external_usage_segment()
 }
 
 pub fn session_segment() -> SegmentConfig {

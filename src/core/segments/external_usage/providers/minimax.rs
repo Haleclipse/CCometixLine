@@ -45,7 +45,7 @@ impl UsageProvider for MinimaxProvider {
 
         let response = Self::fetch_api(&api_key, timeout_secs)?;
 
-        // 优先匹配指定模型，回退到第一个可用模型
+        // Prefer the configured model, fall back to the first available model
         let model = response
             .model_remains
             .iter()
@@ -109,31 +109,31 @@ mod tests {
 
     #[test]
     fn test_remaining_pct_normal() {
-        // 用了 30%，剩余 70%
+        // 30% used -> 70% remaining
         assert_eq!(remaining_pct(30, 100), 70);
     }
 
     #[test]
     fn test_remaining_pct_full() {
-        // 一点没用，剩余 100%
+        // nothing used -> 100% remaining
         assert_eq!(remaining_pct(0, 100), 100);
     }
 
     #[test]
     fn test_remaining_pct_exhausted() {
-        // 全用完，剩余 0%
+        // fully consumed -> 0% remaining
         assert_eq!(remaining_pct(100, 100), 0);
     }
 
     #[test]
     fn test_remaining_pct_zero_total() {
-        // total 为 0（未知配额），默认返回 100%
+        // unknown quota (total = 0) -> treat as 100% remaining
         assert_eq!(remaining_pct(0, 0), 100);
     }
 
     #[test]
     fn test_remaining_pct_over_used() {
-        // 超用场景（usage > total），saturating_sub 保证不溢出为 0
+        // over-consumed (usage > total) -> saturating_sub clamps to 0
         assert_eq!(remaining_pct(150, 100), 0);
     }
 }

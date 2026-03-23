@@ -1,6 +1,10 @@
 // Theme presets for TUI configuration
 
-use crate::config::{Config, StyleConfig, StyleMode};
+use crate::config::{
+    AnsiColor, ColorConfig, Config, IconConfig, SegmentConfig, SegmentId, StyleConfig, StyleMode,
+    TextStyleConfig,
+};
+use std::collections::HashMap;
 
 // Import all theme modules
 use super::{
@@ -9,6 +13,34 @@ use super::{
 };
 
 pub struct ThemePresets;
+
+/// Default ExternalUsage segment config shared across all built-in themes.
+/// Options (provider, auth_env, cache_duration, timeout) are defined once here
+/// so they stay in sync when defaults change.
+pub fn default_external_usage_segment() -> SegmentConfig {
+    SegmentConfig {
+        id: SegmentId::ExternalUsage,
+        enabled: false,
+        icon: IconConfig {
+            plain: "📡".to_string(),
+            nerd_font: "\u{f0a9e}".to_string(),
+        },
+        colors: ColorConfig {
+            icon: Some(AnsiColor::Color16 { c16: 14 }),
+            text: Some(AnsiColor::Color16 { c16: 14 }),
+            background: None,
+        },
+        styles: TextStyleConfig::default(),
+        options: {
+            let mut opts = HashMap::new();
+            opts.insert("provider".to_string(), serde_json::Value::String("minimax".to_string()));
+            opts.insert("auth_env".to_string(), serde_json::Value::String("MINIMAX_API_KEY".to_string()));
+            opts.insert("cache_duration".to_string(), serde_json::Value::Number(300.into()));
+            opts.insert("timeout".to_string(), serde_json::Value::Number(10.into()));
+            opts
+        },
+    }
+}
 
 impl ThemePresets {
     pub fn get_theme(theme_name: &str) -> Config {

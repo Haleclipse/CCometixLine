@@ -69,13 +69,12 @@ mod tests {
 
     #[test]
     fn test_cache_expired() {
-        // 设置一个 10 分钟前的缓存时间戳
+        // Timestamp from 10 minutes ago, cache_duration = 300s -> expired
         let old_time = chrono::Utc::now() - chrono::Duration::seconds(600);
         let entry = CacheEntry {
             metrics: vec![],
             cached_at: old_time.to_rfc3339(),
         };
-        // cache_duration = 300 秒，已过期
         assert!(!Cache::is_valid(&entry, 300));
     }
 
