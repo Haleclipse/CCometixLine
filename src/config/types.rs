@@ -111,12 +111,28 @@ pub struct OutputStyle {
 }
 
 #[derive(Deserialize)]
+pub struct RateLimitPeriod {
+    /// Usage as a percentage (0-100). Provided directly by Claude Code via stdin.
+    pub used_percentage: Option<f64>,
+    /// Unix timestamp (seconds) when this window resets.
+    pub resets_at: Option<i64>,
+}
+
+#[derive(Deserialize)]
+pub struct RateLimits {
+    pub five_hour: Option<RateLimitPeriod>,
+    pub seven_day: Option<RateLimitPeriod>,
+}
+
+#[derive(Deserialize)]
 pub struct InputData {
     pub model: Model,
     pub workspace: Workspace,
     pub transcript_path: String,
     pub cost: Option<Cost>,
     pub output_style: Option<OutputStyle>,
+    /// Rate limit data passed directly by Claude Code — no API call needed.
+    pub rate_limits: Option<RateLimits>,
 }
 
 // OpenAI-style nested token details
