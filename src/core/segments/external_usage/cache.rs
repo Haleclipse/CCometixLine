@@ -53,3 +53,38 @@ impl Cache {
             .unwrap_or(false)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_cache_valid_within_duration() {
+        let entry = CacheEntry {
+            metrics: vec![CachedMetric { label: "7d".to_string(), remaining_pct: 80 }],
+            cached_at: chrono::Utc::now().to_rfc3339(),
+        };
+        assert!(Cache::is_valid(&entry, 300));
+    }
+
+    #[test]
+    fn test_cache_expired() {
+        // 设置一个 10 分钟前的缓存时间戳
+        let old_time = chrono::Utc::now() - chrono::Duration::seconds(600);
+        let entry = CacheEntry {
+            metrics: vec![],
+            cached_at: old_time.to_rfc3339(),
+        };
+        // cache_duration = 300 秒，已过期
+        assert!(!Cache::is_valid(&entry, 300));
+    }
+
+    #[test]
+    fn test_cache_invalid_timestamp() {
+        let entry = CacheEntry {
+            metrics: vec![],
+            cached_at: "not-a-timestamp".to_string(),
+        };
+        assert!(!Cache::is_valid(&entry, 300));
+    }
+}

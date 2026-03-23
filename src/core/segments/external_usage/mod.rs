@@ -128,3 +128,36 @@ impl Segment for ExternalUsageSegment {
         SegmentId::ExternalUsage
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_circle_icon_full() {
+        // 88-100% → 最满的图标
+        assert_eq!(ExternalUsageSegment::get_circle_icon(100), "\u{f0aa5}");
+        assert_eq!(ExternalUsageSegment::get_circle_icon(88), "\u{f0aa5}");
+    }
+
+    #[test]
+    fn test_circle_icon_empty() {
+        // 0-11% → 最空的图标
+        assert_eq!(ExternalUsageSegment::get_circle_icon(0), "\u{f0a9e}");
+        assert_eq!(ExternalUsageSegment::get_circle_icon(11), "\u{f0a9e}");
+    }
+
+    #[test]
+    fn test_circle_icon_mid() {
+        // 50-61% → circle_slice_5
+        assert_eq!(ExternalUsageSegment::get_circle_icon(50), "\u{f0aa2}");
+        assert_eq!(ExternalUsageSegment::get_circle_icon(60), "\u{f0aa2}");
+    }
+
+    #[test]
+    fn test_circle_icon_boundary() {
+        // 边界值：87% → slice_7，88% → slice_8
+        assert_eq!(ExternalUsageSegment::get_circle_icon(87), "\u{f0aa4}");
+        assert_eq!(ExternalUsageSegment::get_circle_icon(88), "\u{f0aa5}");
+    }
+}
