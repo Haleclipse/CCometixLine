@@ -183,6 +183,16 @@ impl PreviewComponent {
                         map
                     },
                 },
+                SegmentId::ExternalUsage => SegmentData {
+                    primary: "\u{f0aa5} 97% 7d · \u{f0aa2} 54% 5h".to_string(),
+                    secondary: "".to_string(),
+                    metadata: {
+                        let mut map = HashMap::new();
+                        map.insert("7d_remaining_pct".to_string(), "97".to_string());
+                        map.insert("5h_remaining_pct".to_string(), "54".to_string());
+                        map
+                    },
+                },
             };
 
             segments_data.push((segment_config.clone(), mock_data));

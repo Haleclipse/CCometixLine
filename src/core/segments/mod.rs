@@ -1,6 +1,7 @@
 pub mod context_window;
 pub mod cost;
 pub mod directory;
+pub mod external_usage;
 pub mod git;
 pub mod model;
 pub mod output_style;
@@ -28,6 +29,7 @@ pub struct SegmentData {
 pub use context_window::ContextWindowSegment;
 pub use cost::CostSegment;
 pub use directory::DirectorySegment;
+pub use external_usage::ExternalUsageSegment;
 pub use git::GitSegment;
 pub use model::ModelSegment;
 pub use output_style::OutputStyleSegment;
