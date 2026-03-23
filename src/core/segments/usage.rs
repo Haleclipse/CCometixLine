@@ -177,8 +177,6 @@ impl UsageSegment {
         token: &str,
         timeout_secs: u64,
     ) -> Option<ApiUsageResponse> {
-        use crate::utils::credentials;
-        let _ = credentials::get_oauth_token(); // ensure token is accessible
         let url = format!("{}/api/oauth/usage", api_base_url);
         let user_agent = Self::get_claude_code_version();
 
@@ -233,7 +231,7 @@ impl UsageSegment {
 
     /// Fallback: collect via Anthropic API (for older Claude Code versions
     /// that do not include rate_limits in stdin).
-    fn collect_from_api(&self, input: &InputData) -> Option<SegmentData> {
+    fn collect_from_api(&self) -> Option<SegmentData> {
         use crate::utils::credentials;
         let token = credentials::get_oauth_token()?;
 
@@ -317,7 +315,7 @@ impl Segment for UsageSegment {
         // Fall back to the API path for older Claude Code versions that do not
         // include rate_limits in stdin.
         self.collect_from_stdin(input)
-            .or_else(|| self.collect_from_api(input))
+            .or_else(|| self.collect_from_api())
     }
 
     fn id(&self) -> SegmentId {
