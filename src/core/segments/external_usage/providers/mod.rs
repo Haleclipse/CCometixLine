@@ -3,22 +3,24 @@ pub mod minimax;
 use serde_json::Value;
 use std::collections::HashMap;
 
-/// 单条用量指标
+/// A single usage metric returned by a provider.
 #[derive(Debug, Clone)]
 pub struct UsageMetric {
-    /// 显示标签，如 "7d"、"5h"
+    /// Display label, e.g. "7d" or "5h".
+    /// Should contain only ASCII alphanumeric characters and hyphens
+    /// so it is safe to use as a metadata key.
     pub label: String,
-    /// 剩余百分比 0-100
+    /// Remaining quota as a percentage (0-100).
     pub remaining_pct: u32,
 }
 
-/// 外部用量数据提供者 trait
+/// Trait for external usage data providers.
 pub trait UsageProvider: Send + Sync {
     fn name(&self) -> &str;
     fn fetch(&self, options: &HashMap<String, Value>) -> Option<Vec<UsageMetric>>;
 }
 
-/// 根据 provider 名称构建对应实现
+/// Build a provider implementation by name.
 pub fn build(provider_name: &str) -> Option<Box<dyn UsageProvider>> {
     match provider_name {
         "minimax" => Some(Box::new(minimax::MinimaxProvider)),

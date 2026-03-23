@@ -115,8 +115,13 @@ impl Segment for ExternalUsageSegment {
 
         let mut metadata = HashMap::new();
         for m in &metrics {
+            // Normalize label to a safe ASCII key (replace non-alphanumeric with '_')
+            let safe_key: String = m.label
+                .chars()
+                .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
+                .collect();
             metadata.insert(
-                format!("{}_remaining_pct", m.label),
+                format!("{}_remaining_pct", safe_key),
                 m.remaining_pct.to_string(),
             );
         }

@@ -48,7 +48,9 @@ impl Cache {
         DateTime::parse_from_rfc3339(&entry.cached_at)
             .map(|cached_at| {
                 let elapsed = Utc::now().signed_duration_since(cached_at.with_timezone(&Utc));
-                elapsed.num_seconds() < cache_duration_secs as i64
+                // Reject future-dated entries (e.g. from clock skew) to avoid never-expiring cache
+                let secs = elapsed.num_seconds();
+                secs >= 0 && secs < cache_duration_secs as i64
             })
             .unwrap_or(false)
     }
@@ -83,6 +85,17 @@ mod tests {
         let entry = CacheEntry {
             metrics: vec![],
             cached_at: "not-a-timestamp".to_string(),
+        };
+        assert!(!Cache::is_valid(&entry, 300));
+    }
+
+    #[test]
+    fn test_cache_future_timestamp() {
+        // Future-dated entries (e.g. from clock skew) should be treated as invalid
+        let future = chrono::Utc::now() + chrono::Duration::seconds(3600);
+        let entry = CacheEntry {
+            metrics: vec![],
+            cached_at: future.to_rfc3339(),
         };
         assert!(!Cache::is_valid(&entry, 300));
     }
