@@ -14,16 +14,16 @@ impl ExternalUsageSegment {
     }
 
     // Higher remaining_pct = fuller icon (opposite of UsageSegment which shows consumed amount)
-    fn get_circle_icon(remaining_pct: u32) -> String {
+    fn get_circle_icon(remaining_pct: u32) -> &'static str {
         match remaining_pct {
-            88..=100 => "\u{f0aa5}".to_string(), // circle_slice_8 (fullest)
-            75..=87  => "\u{f0aa4}".to_string(), // circle_slice_7
-            62..=74  => "\u{f0aa3}".to_string(), // circle_slice_6
-            50..=61  => "\u{f0aa2}".to_string(), // circle_slice_5
-            38..=49  => "\u{f0aa1}".to_string(), // circle_slice_4
-            25..=37  => "\u{f0aa0}".to_string(), // circle_slice_3
-            12..=24  => "\u{f0a9f}".to_string(), // circle_slice_2
-            _        => "\u{f0a9e}".to_string(), // circle_slice_1 (emptiest)
+            88..=100 => "\u{f0aa5}", // circle_slice_8 (fullest)
+            75..=87  => "\u{f0aa4}", // circle_slice_7
+            62..=74  => "\u{f0aa3}", // circle_slice_6
+            50..=61  => "\u{f0aa2}", // circle_slice_5
+            38..=49  => "\u{f0aa1}", // circle_slice_4
+            25..=37  => "\u{f0aa0}", // circle_slice_3
+            12..=24  => "\u{f0a9f}", // circle_slice_2
+            _        => "\u{f0a9e}", // circle_slice_1 (emptiest)
         }
     }
 }
