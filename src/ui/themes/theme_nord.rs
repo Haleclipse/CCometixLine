@@ -254,6 +254,10 @@ pub fn usage_segment() -> SegmentConfig {
                 serde_json::Value::Number(180.into()),
             );
             opts.insert("timeout".to_string(), serde_json::Value::Number(2.into()));
+            opts.insert(
+                "display_format".to_string(),
+                serde_json::Value::String("default".to_string()),
+            );
             opts
         },
     }

@@ -268,10 +268,32 @@ impl SettingsComponent {
                 ),
                 create_field_line(
                     FieldSelection::Options,
-                    vec![Span::raw(format!(
-                        "└─ Options: {} items",
-                        segment.options.len()
-                    ))],
+                    if segment.id == SegmentId::Usage {
+                        let format_value = segment
+                            .options
+                            .get("display_format")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("default");
+                        vec![Span::raw(format!(
+                            "└─ Display Format: {} [Enter to cycle]",
+                            format_value
+                        ))]
+                    } else if segment.id == SegmentId::Git {
+                        let show_sha = segment
+                            .options
+                            .get("show_sha")
+                            .and_then(|v| v.as_bool())
+                            .unwrap_or(false);
+                        vec![Span::raw(format!(
+                            "└─ Show SHA: {} [Enter to toggle]",
+                            if show_sha { "✓" } else { "✗" }
+                        ))]
+                    } else {
+                        vec![Span::raw(format!(
+                            "└─ Options: {} items",
+                            segment.options.len()
+                        ))]
+                    },
                 ),
             ];
             let text = Text::from(lines);

@@ -22,6 +22,8 @@ struct ApiUsageCache {
     five_hour_utilization: f64,
     seven_day_utilization: f64,
     resets_at: Option<String>,
+    #[serde(default)]
+    five_hour_resets_at: Option<String>,
     cached_at: String,
 }
 
@@ -45,6 +47,41 @@ impl UsageSegment {
             76..=87 => "\u{f0aa4}".to_string(), // circle_slice_7
             _ => "\u{f0aa5}".to_string(),       // circle_slice_8
         }
+    }
+
+    /// Compute time remaining from now until the given RFC3339 reset time.
+    /// Returns a compact string like "2h30" or "45m" or "0m".
+    fn format_time_remaining(reset_time_str: Option<&str>) -> String {
+        if let Some(time_str) = reset_time_str {
+            if let Ok(dt) = DateTime::parse_from_rfc3339(time_str) {
+                let now = Local::now();
+                let reset_local = dt.with_timezone(&Local);
+                let remaining = reset_local.signed_duration_since(now);
+                let total_minutes = remaining.num_minutes();
+                if total_minutes <= 0 {
+                    return "0m".to_string();
+                }
+                let hours = total_minutes / 60;
+                let minutes = total_minutes % 60;
+                if hours > 0 {
+                    return format!("{}h{:02}", hours, minutes);
+                } else {
+                    return format!("{}m", minutes);
+                }
+            }
+        }
+        "?".to_string()
+    }
+
+    /// Format a reset time as a local clock time like "14:37".
+    fn format_reset_clock_time(reset_time_str: Option<&str>) -> String {
+        if let Some(time_str) = reset_time_str {
+            if let Ok(dt) = DateTime::parse_from_rfc3339(time_str) {
+                let local_dt = dt.with_timezone(&Local);
+                return format!("{}:{:02}", local_dt.hour(), local_dt.minute());
+            }
+        }
+        "?".to_string()
     }
 
     fn format_reset_time(reset_time_str: Option<&str>) -> String {
@@ -209,12 +246,18 @@ impl Segment for UsageSegment {
             .map(|cache| self.is_cache_valid(cache, cache_duration))
             .unwrap_or(false);
 
-        let (five_hour_util, seven_day_util, resets_at) = if use_cached {
+        let display_format = segment_config
+            .and_then(|sc| sc.options.get("display_format"))
+            .and_then(|v| v.as_str())
+            .unwrap_or("default");
+
+        let (five_hour_util, seven_day_util, resets_at, five_hour_resets_at) = if use_cached {
             let cache = cached_data.unwrap();
             (
                 cache.five_hour_utilization,
                 cache.seven_day_utilization,
                 cache.resets_at,
+                cache.five_hour_resets_at,
             )
         } else {
             match self.fetch_api_usage(api_base_url, &token, timeout) {
@@ -223,6 +266,7 @@ impl Segment for UsageSegment {
                         five_hour_utilization: response.five_hour.utilization,
                         seven_day_utilization: response.seven_day.utilization,
                         resets_at: response.seven_day.resets_at.clone(),
+                        five_hour_resets_at: response.five_hour.resets_at.clone(),
                         cached_at: Utc::now().to_rfc3339(),
                     };
                     self.save_cache(&cache);
@@ -230,6 +274,7 @@ impl Segment for UsageSegment {
                         response.five_hour.utilization,
                         response.seven_day.utilization,
                         response.seven_day.resets_at,
+                        response.five_hour.resets_at,
                     )
                 }
                 None => {
@@ -238,6 +283,7 @@ impl Segment for UsageSegment {
                             cache.five_hour_utilization,
                             cache.seven_day_utilization,
                             cache.resets_at,
+                            cache.five_hour_resets_at,
                         )
                     } else {
                         return None;
@@ -248,8 +294,43 @@ impl Segment for UsageSegment {
 
         let dynamic_icon = Self::get_circle_icon(seven_day_util / 100.0);
         let five_hour_percent = five_hour_util.round() as u8;
-        let primary = format!("{}%", five_hour_percent);
-        let secondary = format!("· {}", Self::format_reset_time(resets_at.as_deref()));
+
+        let (primary, secondary) = match display_format {
+            "session-percent" => (format!("{}%", five_hour_percent), String::new()),
+            "session-remaining" => {
+                let remaining =
+                    Self::format_time_remaining(five_hour_resets_at.as_deref());
+                (
+                    format!("{}%", five_hour_percent),
+                    format!("· {}", remaining),
+                )
+            }
+            "session-full" => {
+                let remaining =
+                    Self::format_time_remaining(five_hour_resets_at.as_deref());
+                let clock =
+                    Self::format_reset_clock_time(five_hour_resets_at.as_deref());
+                (
+                    format!("{}%", five_hour_percent),
+                    format!("· {} {}", remaining, clock),
+                )
+            }
+            "weekly" => {
+                // 7-day utilization + 7-day reset date (same layout as old default but with weekly data)
+                let seven_day_percent = seven_day_util.round() as u8;
+                (
+                    format!("{}%", seven_day_percent),
+                    format!("· {}", Self::format_reset_time(resets_at.as_deref())),
+                )
+            }
+            _ => {
+                // "default": existing behavior
+                (
+                    format!("{}%", five_hour_percent),
+                    format!("· {}", Self::format_reset_time(resets_at.as_deref())),
+                )
+            }
+        };
 
         let mut metadata = HashMap::new();
         metadata.insert("dynamic_icon".to_string(), dynamic_icon);

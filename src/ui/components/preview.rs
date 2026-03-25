@@ -136,11 +136,25 @@ impl PreviewComponent {
                         map
                     },
                 },
-                SegmentId::Usage => SegmentData {
-                    primary: "24%".to_string(),
-                    secondary: "· 10-7-2".to_string(),
-                    metadata: HashMap::new(),
-                },
+                SegmentId::Usage => {
+                    let display_format = segment_config
+                        .options
+                        .get("display_format")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("default");
+                    let (primary, secondary) = match display_format {
+                        "session-percent" => ("24%".to_string(), String::new()),
+                        "session-remaining" => ("24%".to_string(), "· 3h12".to_string()),
+                        "session-full" => ("24%".to_string(), "· 3h12 20:19".to_string()),
+                        "weekly" => ("15%".to_string(), "· 3-27-9".to_string()),
+                        _ => ("24%".to_string(), "· 10-7-2".to_string()),
+                    };
+                    SegmentData {
+                        primary,
+                        secondary,
+                        metadata: HashMap::new(),
+                    }
+                }
                 SegmentId::Cost => SegmentData {
                     primary: "$0.02".to_string(),
                     secondary: "".to_string(),
