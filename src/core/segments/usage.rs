@@ -65,6 +65,28 @@ impl UsageSegment {
         "?".to_string()
     }
 
+    fn format_reset_time_epoch(epoch: Option<u64>) -> String {
+        if let Some(ts) = epoch {
+            if ts == 0 {
+                return "?".to_string();
+            }
+            let now = Utc::now().timestamp() as u64;
+            if ts <= now {
+                return "?".to_string();
+            }
+            let remaining_mins = (ts - now) / 60;
+            if remaining_mins >= 1440 {
+                format!("{}d", remaining_mins / 1440)
+            } else if remaining_mins >= 60 {
+                format!("{}h", remaining_mins / 60)
+            } else {
+                format!("{}m", remaining_mins)
+            }
+        } else {
+            "?".to_string()
+        }
+    }
+
     fn get_cache_path() -> Option<std::path::PathBuf> {
         let home = dirs::home_dir()?;
         Some(
@@ -181,10 +203,53 @@ impl UsageSegment {
 }
 
 impl Segment for UsageSegment {
-    fn collect(&self, _input: &InputData) -> Option<SegmentData> {
+    fn collect(&self, input: &InputData) -> Option<SegmentData> {
+        // Priority 1: Use rate_limits from stdin (Claude Code >= 2.1.80, zero network)
+        if let Some(rate_limits) = &input.rate_limits {
+            let five_hour_util = rate_limits
+                .five_hour
+                .as_ref()
+                .and_then(|w| w.used_percentage)
+                .unwrap_or(0.0);
+            let seven_day_util = rate_limits
+                .seven_day
+                .as_ref()
+                .and_then(|w| w.used_percentage)
+                .unwrap_or(0.0);
+            let resets_at_epoch = rate_limits
+                .five_hour
+                .as_ref()
+                .and_then(|w| w.resets_at);
+
+            let dynamic_icon = Self::get_circle_icon(seven_day_util / 100.0);
+            let five_hour_percent = five_hour_util.round() as u8;
+            let primary = format!("{}%", five_hour_percent);
+            let secondary = format!(
+                "· {}",
+                Self::format_reset_time_epoch(resets_at_epoch)
+            );
+
+            let mut metadata = HashMap::new();
+            metadata.insert("dynamic_icon".to_string(), dynamic_icon);
+            metadata.insert(
+                "five_hour_utilization".to_string(),
+                five_hour_util.to_string(),
+            );
+            metadata.insert(
+                "seven_day_utilization".to_string(),
+                seven_day_util.to_string(),
+            );
+
+            return Some(SegmentData {
+                primary,
+                secondary,
+                metadata,
+            });
+        }
+
+        // Priority 2: API fallback (for older Claude Code versions)
         let token = credentials::get_oauth_token()?;
 
-        // Load config from file to get segment options
         let config = crate::config::Config::load().ok()?;
         let segment_config = config.segments.iter().find(|s| s.id == SegmentId::Usage);
 
