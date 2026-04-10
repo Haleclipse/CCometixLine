@@ -1,7 +1,7 @@
 use super::{Segment, SegmentData};
 use crate::config::{InputData, SegmentId};
 use crate::utils::credentials;
-use chrono::{DateTime, Datelike, Duration, Local, Timelike, Utc};
+use chrono::{DateTime, Local, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -21,7 +21,9 @@ struct UsagePeriod {
 struct ApiUsageCache {
     five_hour_utilization: f64,
     seven_day_utilization: f64,
-    resets_at: Option<String>,
+    #[serde(default)]
+    five_hour_resets_at: Option<String>,
+    seven_day_resets_at: Option<String>,
     cached_at: String,
 }
 
@@ -50,16 +52,8 @@ impl UsageSegment {
     fn format_reset_time(reset_time_str: Option<&str>) -> String {
         if let Some(time_str) = reset_time_str {
             if let Ok(dt) = DateTime::parse_from_rfc3339(time_str) {
-                let mut local_dt = dt.with_timezone(&Local);
-                if local_dt.minute() > 45 {
-                    local_dt += Duration::hours(1);
-                }
-                return format!(
-                    "{}-{}-{}",
-                    local_dt.month(),
-                    local_dt.day(),
-                    local_dt.hour()
-                );
+                let local_dt = dt.with_timezone(&Local);
+                return local_dt.format("%b %e %H:%M %Z").to_string();
             }
         }
         "?".to_string()
@@ -209,47 +203,56 @@ impl Segment for UsageSegment {
             .map(|cache| self.is_cache_valid(cache, cache_duration))
             .unwrap_or(false);
 
-        let (five_hour_util, seven_day_util, resets_at) = if use_cached {
-            let cache = cached_data.unwrap();
-            (
-                cache.five_hour_utilization,
-                cache.seven_day_utilization,
-                cache.resets_at,
-            )
-        } else {
-            match self.fetch_api_usage(api_base_url, &token, timeout) {
-                Some(response) => {
-                    let cache = ApiUsageCache {
-                        five_hour_utilization: response.five_hour.utilization,
-                        seven_day_utilization: response.seven_day.utilization,
-                        resets_at: response.seven_day.resets_at.clone(),
-                        cached_at: Utc::now().to_rfc3339(),
-                    };
-                    self.save_cache(&cache);
-                    (
-                        response.five_hour.utilization,
-                        response.seven_day.utilization,
-                        response.seven_day.resets_at,
-                    )
-                }
-                None => {
-                    if let Some(cache) = cached_data {
+        let (five_hour_util, seven_day_util, five_hour_resets_at, seven_day_resets_at) =
+            if use_cached {
+                let cache = cached_data.unwrap();
+                (
+                    cache.five_hour_utilization,
+                    cache.seven_day_utilization,
+                    cache.five_hour_resets_at,
+                    cache.seven_day_resets_at,
+                )
+            } else {
+                match self.fetch_api_usage(api_base_url, &token, timeout) {
+                    Some(response) => {
+                        let cache = ApiUsageCache {
+                            five_hour_utilization: response.five_hour.utilization,
+                            seven_day_utilization: response.seven_day.utilization,
+                            five_hour_resets_at: response.five_hour.resets_at.clone(),
+                            seven_day_resets_at: response.seven_day.resets_at.clone(),
+                            cached_at: Utc::now().to_rfc3339(),
+                        };
+                        self.save_cache(&cache);
                         (
-                            cache.five_hour_utilization,
-                            cache.seven_day_utilization,
-                            cache.resets_at,
+                            response.five_hour.utilization,
+                            response.seven_day.utilization,
+                            response.five_hour.resets_at,
+                            response.seven_day.resets_at,
                         )
-                    } else {
-                        return None;
+                    }
+                    None => {
+                        if let Some(cache) = cached_data {
+                            (
+                                cache.five_hour_utilization,
+                                cache.seven_day_utilization,
+                                cache.five_hour_resets_at,
+                                cache.seven_day_resets_at,
+                            )
+                        } else {
+                            return None;
+                        }
                     }
                 }
-            }
-        };
+            };
 
+        let _ = five_hour_resets_at; // available for future use
         let dynamic_icon = Self::get_circle_icon(seven_day_util / 100.0);
         let five_hour_percent = five_hour_util.round() as u8;
-        let primary = format!("{}%", five_hour_percent);
-        let secondary = format!("· {}", Self::format_reset_time(resets_at.as_deref()));
+        let primary = format!("{}% (5h)", five_hour_percent);
+        let secondary = format!(
+            "· {} (7d)",
+            Self::format_reset_time(seven_day_resets_at.as_deref())
+        );
 
         let mut metadata = HashMap::new();
         metadata.insert("dynamic_icon".to_string(), dynamic_icon);
