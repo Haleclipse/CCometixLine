@@ -222,6 +222,7 @@ dependencies = [
  "toml",
  "tree-sitter",
  "tree-sitter-javascript",
+ "unicode-width",
  "ureq",
 ]
 

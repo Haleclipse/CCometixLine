@@ -20,6 +20,7 @@ The statusline shows: Model | Directory | Git Branch Status | Context Window Inf
 - **Model display** with simplified Claude model names
 - **Usage tracking** based on transcript analysis
 - **Directory display** showing current workspace
+- **Responsive wrapping** that flows the statusline onto multiple rows on narrow terminals instead of truncating to `...`
 - **Minimal design** using Nerd Font icons
 
 ### Interactive TUI Features

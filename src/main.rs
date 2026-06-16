@@ -67,11 +67,25 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Collect segment data
     let segments_data = collect_all_segments(&config, &input);
 
-    // Render statusline
+    // Render statusline, wrapping onto multiple rows on narrow terminals so the
+    // content stays visible instead of being truncated to `...` by Claude Code.
     let generator = StatusLineGenerator::new(config);
-    let statusline = generator.generate(segments_data);
+    let statusline = generator.generate_responsive(segments_data, detect_terminal_width());
 
     println!("{}", statusline);
 
     Ok(())
+}
+
+/// Detect the terminal width in columns.
+///
+/// Claude Code captures the statusline command's stdout (so it isn't a TTY) but sets the
+/// `COLUMNS` environment variable to the current terminal width before running the script.
+/// Returns `None` when the width is unknown, in which case the statusline is left on a
+/// single line (unchanged behavior on older Claude Code versions).
+fn detect_terminal_width() -> Option<usize> {
+    std::env::var("COLUMNS")
+        .ok()
+        .and_then(|cols| cols.trim().parse::<usize>().ok())
+        .filter(|&width| width > 0)
 }

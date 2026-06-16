@@ -1,7 +1,12 @@
 use crate::config::{AnsiColor, Config, SegmentConfig, StyleMode};
 use crate::core::segments::SegmentData;
+use unicode_width::UnicodeWidthStr;
 
-/// Strip ANSI escape sequences and return visible text length
+/// Strip ANSI escape sequences and return the visible terminal width in columns.
+///
+/// Uses Unicode display width (not the character count) so wide glyphs such as
+/// emoji and CJK characters count as the two columns they actually occupy. This
+/// keeps wrapping decisions aligned with what the terminal renders.
 fn visible_width(text: &str) -> usize {
     let mut visible = String::new();
     let mut in_escape = false;
@@ -26,7 +31,7 @@ fn visible_width(text: &str) -> usize {
         }
     }
 
-    visible.chars().count()
+    UnicodeWidthStr::width(visible.as_str())
 }
 
 pub struct StatusLineGenerator {
@@ -39,11 +44,53 @@ impl StatusLineGenerator {
     }
 
     pub fn generate(&self, segments: Vec<(SegmentConfig, SegmentData)>) -> String {
-        let mut output = Vec::new();
         let enabled_segments: Vec<_> = segments
             .into_iter()
             .filter(|(config, _)| config.enabled)
             .collect();
+
+        self.join_segments(&enabled_segments)
+    }
+
+    /// Generate the statusline, wrapping it onto multiple lines when the single-line
+    /// render would exceed `max_width` visible columns.
+    ///
+    /// Claude Code renders each stdout line as a separate status row, so wrapping lets
+    /// the full statusline stay visible on narrow terminals instead of being truncated
+    /// to `...`. When `max_width` is `None` (terminal width unknown) or the content fits,
+    /// this behaves exactly like [`generate`].
+    pub fn generate_responsive(
+        &self,
+        segments: Vec<(SegmentConfig, SegmentData)>,
+        max_width: Option<usize>,
+    ) -> String {
+        let enabled_segments: Vec<_> = segments
+            .into_iter()
+            .filter(|(config, _)| config.enabled)
+            .collect();
+
+        let single_line = self.join_segments(&enabled_segments);
+
+        match max_width {
+            Some(width) if width > 0 => {
+                // Reserve one column as a safety margin. Emoji rendered with a
+                // variation selector (e.g. "⚡️") occupy two terminal columns but are
+                // reported as one by the Unicode width tables, so without this margin a
+                // packed line could still be one column too wide and get truncated.
+                let budget = width.saturating_sub(1).max(1);
+                if visible_width(&single_line) > budget {
+                    self.wrap_segments(&enabled_segments, budget)
+                } else {
+                    single_line
+                }
+            }
+            _ => single_line,
+        }
+    }
+
+    /// Join all enabled segments into a single line using the configured separator.
+    fn join_segments(&self, enabled_segments: &[(SegmentConfig, SegmentData)]) -> String {
+        let mut output = Vec::new();
 
         for (config, data) in enabled_segments.iter() {
             let rendered = self.render_segment(config, data);
@@ -58,11 +105,102 @@ impl StatusLineGenerator {
 
         // Handle Powerline arrow separators with color transition
         if self.config.style.separator == "\u{e0b0}" {
-            self.join_with_powerline_arrows(&output, &enabled_segments)
+            self.join_with_powerline_arrows(&output, enabled_segments)
         } else {
             // For all other separators, use white color and simple join
             self.join_with_white_separators(&output)
         }
+    }
+
+    /// Wrap segments onto multiple lines so the full content fits within `max_width`
+    /// visible columns per line. A segment that is individually wider than `max_width`
+    /// is placed on its own line (and may still be truncated by Claude Code, which is
+    /// unavoidable without dropping content).
+    fn wrap_segments(
+        &self,
+        enabled_segments: &[(SegmentConfig, SegmentData)],
+        max_width: usize,
+    ) -> String {
+        // Render each segment individually, keeping configs aligned for separators.
+        let mut rendered_segments = Vec::new();
+        let mut segment_configs = Vec::new();
+
+        for (config, data) in enabled_segments {
+            let rendered = self.render_segment(config, data);
+            if !rendered.is_empty() {
+                rendered_segments.push(rendered);
+                segment_configs.push(config.clone());
+            }
+        }
+
+        if rendered_segments.is_empty() {
+            return String::new();
+        }
+
+        // Pre-calculate separators between segments.
+        let mut separators = Vec::new();
+        for i in 0..rendered_segments.len().saturating_sub(1) {
+            let separator = if self.config.style.separator == "\u{e0b0}" {
+                let prev_bg = segment_configs
+                    .get(i)
+                    .and_then(|config| config.colors.background.as_ref());
+                let curr_bg = segment_configs
+                    .get(i + 1)
+                    .and_then(|config| config.colors.background.as_ref());
+                self.create_powerline_arrow(prev_bg, curr_bg)
+            } else {
+                format!("\x1b[37m{}\x1b[0m", self.config.style.separator)
+            };
+            separators.push(separator);
+        }
+
+        // Greedily pack segments onto lines, breaking before a segment that overflows.
+        let mut lines: Vec<String> = Vec::new();
+        let mut current_line = String::new();
+        let mut current_width = 0usize;
+
+        for i in 0..rendered_segments.len() {
+            let segment = &rendered_segments[i];
+            let segment_width = visible_width(segment);
+
+            // If this segment overflows the current line, wrap first.
+            if current_width > 0 && current_width + segment_width > max_width {
+                lines.push(current_line.clone());
+                current_line.clear();
+                current_width = 0;
+            }
+
+            current_line.push_str(segment);
+            current_width += segment_width;
+
+            // Decide whether the following separator stays on this line.
+            if i < separators.len() && i + 1 < rendered_segments.len() {
+                let separator = &separators[i];
+                let separator_width = visible_width(separator);
+                let next_width = visible_width(&rendered_segments[i + 1]);
+
+                if current_width + separator_width + next_width <= max_width {
+                    current_line.push_str(separator);
+                    current_width += separator_width;
+                } else {
+                    // Next segment will start a new line; drop the trailing separator.
+                    lines.push(current_line.clone());
+                    current_line.clear();
+                    current_width = 0;
+                }
+            }
+        }
+
+        if !current_line.is_empty() {
+            lines.push(current_line);
+        }
+
+        // Reset styling at the end of every row so colors never bleed across lines.
+        lines
+            .into_iter()
+            .map(|line| format!("{}\x1b[0m", line))
+            .collect::<Vec<_>>()
+            .join("\n")
     }
 
     /// Generate statusline for TUI preview with proper width calculation
@@ -517,4 +655,71 @@ pub fn collect_all_segments(
     }
 
     results
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::Config;
+    use std::collections::HashMap;
+
+    /// Build the default theme's enabled segments with predictable placeholder text
+    /// so width-dependent behavior is deterministic.
+    fn sample_segments() -> Vec<(SegmentConfig, SegmentData)> {
+        Config::default()
+            .segments
+            .into_iter()
+            .filter(|segment| segment.enabled)
+            .map(|segment| {
+                (
+                    segment,
+                    SegmentData {
+                        primary: "placeholder".to_string(),
+                        secondary: String::new(),
+                        metadata: HashMap::new(),
+                    },
+                )
+            })
+            .collect()
+    }
+
+    #[test]
+    fn unknown_width_stays_single_line() {
+        let generator = StatusLineGenerator::new(Config::default());
+        let output = generator.generate_responsive(sample_segments(), None);
+        assert!(!output.contains('\n'));
+    }
+
+    #[test]
+    fn wide_terminal_stays_single_line() {
+        let generator = StatusLineGenerator::new(Config::default());
+        let output = generator.generate_responsive(sample_segments(), Some(500));
+        assert!(!output.contains('\n'));
+    }
+
+    #[test]
+    fn narrow_terminal_wraps_onto_multiple_lines() {
+        let generator = StatusLineGenerator::new(Config::default());
+        let output = generator.generate_responsive(sample_segments(), Some(12));
+        assert!(output.contains('\n'));
+
+        // No wrapped line may exceed the width budget, except a single segment that is
+        // itself wider than the budget (which is placed alone and cannot be split).
+        for line in output.lines() {
+            let width = visible_width(line);
+            let single_segment = !line.trim().contains(" | ");
+            assert!(
+                width <= 12 || single_segment,
+                "line exceeds width budget: {width} cols"
+            );
+        }
+    }
+
+    #[test]
+    fn responsive_equals_generate_when_it_fits() {
+        let generator = StatusLineGenerator::new(Config::default());
+        let baseline = generator.generate(sample_segments());
+        let responsive = generator.generate_responsive(sample_segments(), Some(500));
+        assert_eq!(baseline, responsive);
+    }
 }
