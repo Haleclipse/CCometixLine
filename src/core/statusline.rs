@@ -49,7 +49,8 @@ impl StatusLineGenerator {
             .filter(|(config, _)| config.enabled)
             .collect();
 
-        self.join_segments(&enabled_segments)
+        let (rendered, configs) = self.render_enabled(&enabled_segments);
+        self.join_rendered(&rendered, &configs)
     }
 
     /// Generate the statusline, wrapping it onto multiple lines when the single-line
@@ -69,7 +70,10 @@ impl StatusLineGenerator {
             .filter(|(config, _)| config.enabled)
             .collect();
 
-        let single_line = self.join_segments(&enabled_segments);
+        // Render every segment once and reuse it for the single-line join and, if the
+        // content overflows, the wrapped layout.
+        let (rendered, configs) = self.render_enabled(&enabled_segments);
+        let single_line = self.join_rendered(&rendered, &configs);
 
         match max_width {
             Some(width) if width > 0 => {
@@ -79,7 +83,7 @@ impl StatusLineGenerator {
                 // packed line could still be one column too wide and get truncated.
                 let budget = width.saturating_sub(1).max(1);
                 if visible_width(&single_line) > budget {
-                    self.wrap_segments(&enabled_segments, budget)
+                    self.wrap_rendered(&rendered, &configs, budget)
                 } else {
                     single_line
                 }
@@ -88,51 +92,51 @@ impl StatusLineGenerator {
         }
     }
 
-    /// Join all enabled segments into a single line using the configured separator.
-    fn join_segments(&self, enabled_segments: &[(SegmentConfig, SegmentData)]) -> String {
-        let mut output = Vec::new();
+    /// Render every enabled segment once, dropping empty renders and keeping the
+    /// matching configs aligned (the configs drive Powerline separator colors).
+    fn render_enabled(
+        &self,
+        enabled_segments: &[(SegmentConfig, SegmentData)],
+    ) -> (Vec<String>, Vec<SegmentConfig>) {
+        let mut rendered = Vec::new();
+        let mut configs = Vec::new();
 
-        for (config, data) in enabled_segments.iter() {
-            let rendered = self.render_segment(config, data);
-            if !rendered.is_empty() {
-                output.push(rendered);
+        for (config, data) in enabled_segments {
+            let segment = self.render_segment(config, data);
+            if !segment.is_empty() {
+                rendered.push(segment);
+                configs.push(config.clone());
             }
         }
 
-        if output.is_empty() {
+        (rendered, configs)
+    }
+
+    /// Join pre-rendered segments into a single line using the configured separator.
+    fn join_rendered(&self, rendered: &[String], configs: &[SegmentConfig]) -> String {
+        if rendered.is_empty() {
             return String::new();
         }
 
         // Handle Powerline arrow separators with color transition
         if self.config.style.separator == "\u{e0b0}" {
-            self.join_with_powerline_arrows(&output, enabled_segments)
+            self.join_with_powerline_arrows(rendered, configs)
         } else {
             // For all other separators, use white color and simple join
-            self.join_with_white_separators(&output)
+            self.join_with_white_separators(rendered)
         }
     }
 
-    /// Wrap segments onto multiple lines so the full content fits within `max_width`
-    /// visible columns per line. A segment that is individually wider than `max_width`
-    /// is placed on its own line (and may still be truncated by Claude Code, which is
-    /// unavoidable without dropping content).
-    fn wrap_segments(
+    /// Wrap pre-rendered segments onto multiple lines so the full content fits within
+    /// `max_width` visible columns per line. A segment that is individually wider than
+    /// `max_width` is placed on its own line (and may still be truncated by Claude Code,
+    /// which is unavoidable without dropping content).
+    fn wrap_rendered(
         &self,
-        enabled_segments: &[(SegmentConfig, SegmentData)],
+        rendered_segments: &[String],
+        segment_configs: &[SegmentConfig],
         max_width: usize,
     ) -> String {
-        // Render each segment individually, keeping configs aligned for separators.
-        let mut rendered_segments = Vec::new();
-        let mut segment_configs = Vec::new();
-
-        for (config, data) in enabled_segments {
-            let rendered = self.render_segment(config, data);
-            if !rendered.is_empty() {
-                rendered_segments.push(rendered);
-                segment_configs.push(config.clone());
-            }
-        }
-
         if rendered_segments.is_empty() {
             return String::new();
         }
@@ -165,8 +169,7 @@ impl StatusLineGenerator {
 
             // If this segment overflows the current line, wrap first.
             if current_width > 0 && current_width + segment_width > max_width {
-                lines.push(current_line.clone());
-                current_line.clear();
+                lines.push(std::mem::take(&mut current_line));
                 current_width = 0;
             }
 
@@ -184,8 +187,7 @@ impl StatusLineGenerator {
                     current_width += separator_width;
                 } else {
                     // Next segment will start a new line; drop the trailing separator.
-                    lines.push(current_line.clone());
-                    current_line.clear();
+                    lines.push(std::mem::take(&mut current_line));
                     current_width = 0;
                 }
             }
@@ -509,7 +511,7 @@ impl StatusLineGenerator {
     fn join_with_powerline_arrows(
         &self,
         rendered_segments: &[String],
-        segment_configs: &[(SegmentConfig, SegmentData)],
+        segment_configs: &[SegmentConfig],
     ) -> String {
         if rendered_segments.is_empty() {
             return String::new();
@@ -524,10 +526,10 @@ impl StatusLineGenerator {
         for (i, _) in rendered_segments.iter().enumerate().skip(1) {
             let prev_bg = segment_configs
                 .get(i - 1)
-                .and_then(|(config, _)| config.colors.background.as_ref());
+                .and_then(|config| config.colors.background.as_ref());
             let curr_bg = segment_configs
                 .get(i)
-                .and_then(|(config, _)| config.colors.background.as_ref());
+                .and_then(|config| config.colors.background.as_ref());
 
             // Create Powerline arrow with color transition
             let arrow = self.create_powerline_arrow(prev_bg, curr_bg);
