@@ -304,6 +304,7 @@ Contributions are welcome! Please feel free to submit issues or pull requests.
 
 ## Related Projects
 
+- [ccsidekick](https://ccsidekick.krayong.com/) - A Claude Code status-line with a reactive character plus cost, git, and usage widgets.
 - [tweakcc](https://github.com/Piebald-AI/tweakcc) - Command-line tool to customize your Claude Code themes, thinking verbs, and more.
 
 ## License
