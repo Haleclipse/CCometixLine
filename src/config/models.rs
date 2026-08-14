@@ -102,8 +102,8 @@ impl ModelConfig {
                 BuiltinModelFamily::new("sonnet", "Sonnet", 200_000),
                 BuiltinModelFamily::new("opus", "Opus", 200_000),
                 BuiltinModelFamily::new("haiku", "Haiku", 200_000),
-                // Mythos-class models (Fable 5 / Mythos 5) ship with a 1M-token
-                // context window by default (no beta header / [1m] suffix required)
+                // Fable 5 and Mythos 5 models ship with a 1M-token context
+                // window by default (no beta header / [1m] suffix required)
                 BuiltinModelFamily::new("fable", "Fable", 1_000_000),
                 BuiltinModelFamily::new("mythos", "Mythos", 1_000_000),
             ]
