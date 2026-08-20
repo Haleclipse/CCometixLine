@@ -34,6 +34,27 @@ fn visible_width(text: &str) -> usize {
     UnicodeWidthStr::width(visible.as_str())
 }
 
+/// Columns Claude Code consumes around the statusline itself.
+///
+/// `COLUMNS` is the full terminal width, but Claude Code does not render the statusline
+/// edge to edge: it draws it inside the input box, indented by two columns, and truncates
+/// at the box's right edge. Measured on Claude Code 2.1.x at a 68-column input box, the
+/// usable region was columns 2..=66 — three columns narrower than the box, and a few more
+/// than that narrower than `COLUMNS`. Budgeting the full width makes a line that lands
+/// within a couple of columns of the limit get truncated to `…` instead of wrapping.
+///
+/// Over-reserving only costs an earlier wrap, so the default errs on the safe side.
+const DEFAULT_WIDTH_RESERVE: usize = 4;
+
+/// Columns to hold back from `COLUMNS`, overridable via `CCLINE_WIDTH_RESERVE` for
+/// Claude Code versions whose layout reserves a different amount.
+fn width_reserve() -> usize {
+    std::env::var("CCLINE_WIDTH_RESERVE")
+        .ok()
+        .and_then(|value| value.trim().parse::<usize>().ok())
+        .unwrap_or(DEFAULT_WIDTH_RESERVE)
+}
+
 pub struct StatusLineGenerator {
     config: Config,
 }
@@ -77,11 +98,9 @@ impl StatusLineGenerator {
 
         match max_width {
             Some(width) if width > 0 => {
-                // Reserve one column as a safety margin. Emoji rendered with a
-                // variation selector (e.g. "⚡️") occupy two terminal columns but are
-                // reported as one by the Unicode width tables, so without this margin a
-                // packed line could still be one column too wide and get truncated.
-                let budget = width.saturating_sub(1).max(1);
+                // Budget against the region Claude Code actually paints into, not the
+                // whole terminal — see DEFAULT_WIDTH_RESERVE.
+                let budget = width.saturating_sub(width_reserve()).max(1);
                 if visible_width(&single_line) > budget {
                     self.wrap_rendered(&rendered, &configs, budget)
                 } else {
@@ -715,6 +734,26 @@ mod tests {
                 "line exceeds width budget: {width} cols"
             );
         }
+    }
+
+    /// Claude Code paints the statusline into a region narrower than `COLUMNS`, so a line
+    /// that only fits when the full width is budgeted must still wrap.
+    #[test]
+    fn reserved_columns_are_held_back_from_the_budget() {
+        let generator = StatusLineGenerator::new(Config::default());
+        let content_width = visible_width(&generator.generate(sample_segments()));
+
+        let exact_fit = generator.generate_responsive(
+            sample_segments(),
+            Some(content_width + DEFAULT_WIDTH_RESERVE),
+        );
+        assert!(!exact_fit.contains('\n'));
+
+        let one_too_narrow = generator.generate_responsive(
+            sample_segments(),
+            Some(content_width + DEFAULT_WIDTH_RESERVE - 1),
+        );
+        assert!(one_too_narrow.contains('\n'));
     }
 
     #[test]
