@@ -802,7 +802,7 @@ impl ClaudeCodePatcher {
         }
 
         // Sort patches by position descending (apply from end to start to avoid offset issues)
-        patches.sort_by(|a, b| b.location.start_index.cmp(&a.location.start_index));
+        patches.sort_by_key(|patch| std::cmp::Reverse(patch.location.start_index));
 
         // Apply all patches in one pass
         for patch in patches {
