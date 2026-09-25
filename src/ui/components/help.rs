@@ -41,6 +41,7 @@ impl HelpComponent {
             vec![
                 ("[Tab]", "Switch Panel"),
                 ("[Enter]", "Toggle/Edit"),
+                ("[←→]", "Option value"),
                 ("[Shift+↑↓]", "Reorder"),
                 ("[1-4]", "Theme"),
                 ("[P]", "Switch Theme"),

@@ -69,6 +69,7 @@ pub enum SegmentId {
     Git,
     ContextWindow,
     Usage,
+    Credits,
     Cost,
     Session,
     OutputStyle,
@@ -110,6 +111,84 @@ pub struct OutputStyle {
     pub name: String,
 }
 
+/// Effort level reported by Claude Code for the current turn
+/// (e.g. "low", "medium", "high", "xhigh", "max").
+#[derive(Deserialize)]
+pub struct Effort {
+    pub level: Option<String>,
+}
+
+/// Reset timestamp as reported by Claude Code: epoch seconds (integer or
+/// fractional) or an RFC 3339 string. Any other shape is treated as absent so
+/// this optional field can never fail the whole statusline input.
+#[derive(Debug, Clone)]
+pub struct ResetsAt(String);
+
+impl ResetsAt {
+    fn from_json(value: &serde_json::Value) -> Option<Self> {
+        match value {
+            serde_json::Value::String(s) => chrono::DateTime::parse_from_rfc3339(s.trim())
+                .ok()
+                .map(|dt| Self(dt.to_rfc3339())),
+            serde_json::Value::Number(n) => {
+                let secs = n
+                    .as_i64()
+                    .or_else(|| n.as_f64().map(|f| f.trunc() as i64))?;
+                chrono::DateTime::from_timestamp(secs, 0).map(|dt| Self(dt.to_rfc3339()))
+            }
+            _ => None,
+        }
+    }
+
+    /// Normalized RFC 3339 string so downstream code handles one format
+    pub fn to_rfc3339(&self) -> String {
+        self.0.clone()
+    }
+}
+
+/// Lenient deserializer: unrecognised values become `None` instead of an error
+fn deserialize_resets_at<'de, D>(deserializer: D) -> Result<Option<ResetsAt>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = Option::<serde_json::Value>::deserialize(deserializer)?;
+    Ok(value.as_ref().and_then(ResetsAt::from_json))
+}
+
+/// Rate-limit window as reported by Claude Code in the statusline input
+#[derive(Debug, Clone, Deserialize)]
+pub struct RateLimitWindow {
+    #[serde(default)]
+    pub used_percentage: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_resets_at")]
+    pub resets_at: Option<ResetsAt>,
+}
+
+/// Rate limits reported by Claude Code (five-hour session, seven-day week)
+#[derive(Debug, Clone, Deserialize)]
+pub struct RateLimits {
+    #[serde(default)]
+    pub five_hour: Option<RateLimitWindow>,
+    #[serde(default)]
+    pub seven_day: Option<RateLimitWindow>,
+}
+
+/// Context window info reported by Claude Code for the current session.
+/// `context_window_size` is the authoritative limit for the active model
+/// (e.g. 1,000,000 for models with a native 1M window), so it takes priority
+/// over any limit derived from the model ID.
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct ContextWindow {
+    #[serde(default)]
+    pub context_window_size: Option<u32>,
+    #[serde(default)]
+    pub total_input_tokens: Option<u32>,
+    #[serde(default)]
+    pub total_output_tokens: Option<u32>,
+    #[serde(default)]
+    pub used_percentage: Option<f64>,
+}
+
 #[derive(Deserialize)]
 pub struct InputData {
     pub model: Model,
@@ -117,6 +196,12 @@ pub struct InputData {
     pub transcript_path: String,
     pub cost: Option<Cost>,
     pub output_style: Option<OutputStyle>,
+    #[serde(default)]
+    pub effort: Option<Effort>,
+    #[serde(default)]
+    pub rate_limits: Option<RateLimits>,
+    #[serde(default)]
+    pub context_window: Option<ContextWindow>,
 }
 
 // OpenAI-style nested token details
@@ -413,4 +498,52 @@ pub struct TranscriptEntry {
     #[serde(rename = "parentUuid")]
     pub parent_uuid: Option<String>,
     pub summary: Option<String>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn window(json: &str) -> RateLimitWindow {
+        serde_json::from_str(json).expect("window should deserialize")
+    }
+
+    #[test]
+    fn resets_at_accepts_integer_and_fractional_epoch() {
+        let w = window(r#"{"resets_at": 1758750000}"#);
+        assert_eq!(
+            w.resets_at.map(|r| r.to_rfc3339()).as_deref(),
+            Some("2025-09-24T21:40:00+00:00")
+        );
+        let w = window(r#"{"resets_at": 1758750000.5}"#);
+        assert_eq!(
+            w.resets_at.map(|r| r.to_rfc3339()).as_deref(),
+            Some("2025-09-24T21:40:00+00:00")
+        );
+    }
+
+    #[test]
+    fn resets_at_normalizes_rfc3339_and_rejects_other_strings() {
+        let w = window(r#"{"resets_at": "2025-09-24T23:40:00+02:00"}"#);
+        assert_eq!(
+            w.resets_at.map(|r| r.to_rfc3339()).as_deref(),
+            Some("2025-09-24T23:40:00+02:00")
+        );
+        let w = window(r#"{"resets_at": "tomorrow"}"#);
+        assert!(w.resets_at.is_none());
+        let w = window(r#"{"resets_at": ""}"#);
+        assert!(w.resets_at.is_none());
+        let w = window(r#"{"resets_at": true}"#);
+        assert!(w.resets_at.is_none());
+    }
+
+    #[test]
+    fn rate_limits_accept_a_single_window() {
+        let limits: RateLimits =
+            serde_json::from_str(r#"{"seven_day": {"used_percentage": 17}}"#).unwrap();
+        assert!(limits.five_hour.is_none());
+        assert_eq!(limits.seven_day.and_then(|w| w.used_percentage), Some(17.0));
+        let limits: RateLimits = serde_json::from_str("{}").unwrap();
+        assert!(limits.five_hour.is_none() && limits.seven_day.is_none());
+    }
 }

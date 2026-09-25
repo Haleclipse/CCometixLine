@@ -461,15 +461,31 @@ pub fn collect_all_segments(
 
     let mut results = Vec::new();
 
+    // API / cache settings live on the `usage` segment and are shared with `credits`
+    let usage_options = config
+        .segments
+        .iter()
+        .find(|s| s.id == crate::config::SegmentId::Usage)
+        .map(|s| UsageOptions::from_map(&s.options))
+        .unwrap_or_default();
+
     for segment_config in &config.segments {
         // Skip disabled segments to avoid unnecessary API requests
         if !segment_config.enabled {
             continue;
         }
 
+        let opt_bool = |key: &str, default: bool| {
+            segment_config
+                .options
+                .get(key)
+                .and_then(|v| v.as_bool())
+                .unwrap_or(default)
+        };
+
         let segment_data = match segment_config.id {
             crate::config::SegmentId::Model => {
-                let segment = ModelSegment::new();
+                let segment = ModelSegment::new().with_show_effort(opt_bool("show_effort", true));
                 segment.collect(input)
             }
             crate::config::SegmentId::Directory => {
@@ -477,12 +493,7 @@ pub fn collect_all_segments(
                 segment.collect(input)
             }
             crate::config::SegmentId::Git => {
-                let show_sha = segment_config
-                    .options
-                    .get("show_sha")
-                    .and_then(|v| v.as_bool())
-                    .unwrap_or(false);
-                let segment = GitSegment::new().with_sha(show_sha);
+                let segment = GitSegment::new().with_sha(opt_bool("show_sha", false));
                 segment.collect(input)
             }
             crate::config::SegmentId::ContextWindow => {
@@ -490,7 +501,13 @@ pub fn collect_all_segments(
                 segment.collect(input)
             }
             crate::config::SegmentId::Usage => {
-                let segment = UsageSegment::new();
+                let segment = UsageSegment::new().with_options(usage_options.clone());
+                segment.collect(input)
+            }
+            crate::config::SegmentId::Credits => {
+                let segment = CreditsSegment::new()
+                    .with_show_percent(opt_bool("show_percent", true))
+                    .with_usage_options(usage_options.clone());
                 segment.collect(input)
             }
             crate::config::SegmentId::Cost => {

@@ -3,7 +3,7 @@ use ratatui::{
     layout::Rect,
     style::{Color, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, List, ListItem},
+    widgets::{Block, Borders, List, ListItem, ListState},
     Frame,
 };
 
@@ -21,7 +21,8 @@ pub enum FieldSelection {
     TextColor,
     BackgroundColor,
     TextStyle,
-    Options,
+    /// One row per segment option (index into `options::option_keys`)
+    Option(usize),
 }
 
 #[derive(Default)]
@@ -53,6 +54,7 @@ impl SegmentListComponent {
                     SegmentId::Git => "Git",
                     SegmentId::ContextWindow => "Context Window",
                     SegmentId::Usage => "Usage",
+                    SegmentId::Credits => "Credits",
                     SegmentId::Cost => "Cost",
                     SegmentId::Session => "Session",
                     SegmentId::OutputStyle => "Output Style",
@@ -79,7 +81,10 @@ impl SegmentListComponent {
             } else {
                 Style::default()
             });
+        // Stateful list so the selected segment stays visible on short terminals
         let segments_list = List::new(items).block(segments_block);
-        f.render_widget(segments_list, area);
+        let mut state = ListState::default();
+        state.select(Some(selected_segment));
+        f.render_stateful_widget(segments_list, area, &mut state);
     }
 }

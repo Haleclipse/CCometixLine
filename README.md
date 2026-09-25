@@ -17,8 +17,9 @@ The statusline shows: Model | Directory | Git Branch Status | Context Window Inf
 
 ### Core Functionality
 - **Git integration** with branch, status, and tracking info  
-- **Model display** with simplified Claude model names
-- **Usage tracking** based on transcript analysis
+- **Model display** with simplified Claude model names and the active effort level
+- **Usage tracking** with five-hour and weekly limits, reset times and extra-usage credits
+- **Context window tracking** based on transcript analysis
 - **Directory display** showing current workspace
 - **Minimal design** using Nerd Font icons
 
@@ -26,8 +27,9 @@ The statusline shows: Model | Directory | Git Branch Status | Context Window Inf
 - **Interactive main menu** when executed without input
 - **TUI configuration interface** with real-time preview
 - **Theme system** with multiple built-in presets
-- **Segment customization** with granular control
-- **Configuration management** (init, check, edit)
+- **Segment customization** with granular control, including per-segment options
+- **Unsaved-changes prompt** when quitting the TUI
+- **Configuration management** (init, check, edit, `--options` / `--set` / `--unset`)
 
 ### Claude Code Enhancement
 - **Context warning disabler** - Remove annoying "Context low" messages
@@ -37,7 +39,25 @@ The statusline shows: Model | Directory | Git Branch Status | Context Window Inf
 
 ## Installation
 
-### Quick Install (Recommended)
+### Install from source
+
+```bash
+git clone https://github.com/Haleclipse/CCometixLine.git
+cd CCometixLine
+scripts/install.sh
+```
+
+The script builds the release binary, installs it to `~/.claude/ccline/ccline`
+(the path Claude Code runs, backing up the previous binary as `ccline.bak`) and
+links `~/.local/bin/ccline` to it so the `ccline` command works from a shell.
+Re-run it after pulling changes. Pass `--no-build` to reuse an existing
+`target/release` build.
+
+If `@cometix/ccline` is also installed from npm, its postinstall hard-links the
+npm binary over `~/.claude/ccline/ccline`. Remove it with
+`npm uninstall -g @cometix/ccline` to keep the source build.
+
+### Quick Install (npm)
 
 Install via npm (works on all platforms):
 
@@ -191,6 +211,38 @@ ccline --theme powerline-dark
 ccline --theme my-custom-theme
 ```
 
+### Segment Options from the CLI
+
+Segment options live under `[segments.options]` in `config.toml`. In the TUI
+(`ccline -c`) each option is a row under **Options** in the Settings panel:
+booleans render as a checkbox and enumerations (e.g. `reset_format`) as an
+inline select with the active choice highlighted. `Enter` toggles or cycles,
+`←`/`→` step through choices, numbers and strings open a value prompt (empty
+value resets to the default), and `S` saves. Quitting with `Esc` while there
+are unsaved changes asks whether to save, discard or keep editing. Options can
+also be listed and edited without opening the TUI:
+
+```bash
+# List every option with its current value, default and description
+ccline --options
+
+# Set one or more options (values are typed: true/false, numbers, strings)
+ccline --set usage.reset_format=countdown --set model.show_effort=false
+
+# Remove an option so the segment falls back to its default
+ccline --unset usage.reset_format
+```
+
+Targets are `SEGMENT.KEY`, where `SEGMENT` is the id used in `config.toml`
+(`model`, `directory`, `git`, `context_window`, `usage`, `credits`, `cost`,
+`session`, `output_style`, `update`). Unknown keys are saved with a warning.
+
+The TUI starts from `config.toml`, the file the statusline renders. Theme
+files under `~/.claude/ccline/themes/` are applied only when you switch
+themes (number keys, `P`, `R` or `--theme`), so edits made by hand to a theme
+file do not show up until you re-select that theme. Upstream reloaded the
+active theme file on startup, which discarded `config.toml` edits on save.
+
 ### Claude Code Enhancement
 
 ```bash
@@ -217,9 +269,82 @@ Shows simplified Claude model names:
 - `claude-3-5-sonnet` → `Sonnet 3.5`
 - `claude-4-sonnet` → `Sonnet 4`
 
+When Claude Code reports the active effort level (`effort.level` in the
+statusline input, Claude Code 2.1.28x+), it is appended to the model name,
+e.g. `Fable 5.1 · high`. Disable it with the `show_effort` option:
+
+```toml
+[[segments]]
+id = "model"
+enabled = true
+
+[segments.options]
+show_effort = false
+```
+
+### Usage Display
+
+Shows plan usage from the Claude OAuth usage API (subscription accounts only):
+
+```
+󰪟 24% · 03:20 │ 7d 15% · Thu 00h
+```
+
+- `24%` and `03:20`: five-hour session usage and the local time it resets.
+- `7d 15% · Thu 00h`: weekly usage and the local weekday/hour it resets.
+  The circle icon fills according to the weekly usage.
+
+If the API is unreachable (or no OAuth token is found), the segment falls back
+to the `rate_limits` block Claude Code passes in the statusline input.
+
+Options:
+
+```toml
+[[segments]]
+id = "usage"
+enabled = true
+
+[segments.options]
+api_base_url = "https://api.anthropic.com" # override for proxies
+cache_duration = 300                       # seconds to cache API responses
+timeout = 2                                # API request timeout in seconds
+show_weekly = true                         # set to false to hide the weekly part
+reset_format = "time"                      # "time" (03:20 / Thu 00h) or "countdown" (4h 52m / 6d 3h)
+```
+
+### Credits Display
+
+Extra-usage credits spent this month against the seat's monthly spend limit,
+as its own segment (`credits`) with the same colors as the usage segment:
+
+```
+󰄐 $23.75/$50 · 48%
+```
+
+It reads the same usage API response as the Usage segment (one request per
+render, shared) and is only rendered when the organization has usage credits
+enabled. Existing configs get the segment added automatically after `usage`,
+enabled if `usage` is enabled. Options:
+
+```toml
+[[segments]]
+id = "credits"
+enabled = true
+
+[segments.options]
+show_percent = true                        # set to false to hide the "· 48%" suffix
+```
+
 ### Context Window Display
 
 Token usage percentage based on transcript analysis with context limit tracking.
+
+The context limit is resolved in this order:
+
+1. `context_window.context_window_size` from the statusline JSON that Claude Code sends (authoritative for the active model, e.g. 1M for Fable / Mythos).
+2. A `[[context_modifiers]]` match (e.g. `[1m]`) or a `[[models]]` entry in `models.toml`.
+3. Built-in families: Sonnet / Opus / Haiku default to 200k, Fable / Mythos default to 1M.
+4. 200k when nothing matches.
 
 ## Configuration
 
@@ -238,13 +363,13 @@ All segments are configurable with:
 - Color customization
 - Format options
 
-Supported segments: Directory, Git, Model, Usage, Time, Cost, OutputStyle
+Supported segments: Model, Directory, Git, Context Window, Usage, Credits, Cost, Session, OutputStyle, Update
 
 ### Model Configuration (`models.toml`)
 
 Location: `~/.claude/ccline/models.toml` (auto-created on first run)
 
-This file configures how model IDs are displayed and their context window limits. Claude models (Sonnet, Opus, Haiku) are automatically recognized with version extraction — you only need this file for overrides or third-party models.
+This file configures how model IDs are displayed and their context window limits. Claude models (Sonnet, Opus, Haiku, Fable, Mythos) are automatically recognized with version extraction — you only need this file for overrides or third-party models.
 
 ```toml
 # Model entries: simple substring matching on the model ID

@@ -94,10 +94,31 @@ impl PreviewComponent {
                 continue;
             }
 
+            // Mock data honours the segment options so edits show up in the preview
+            let opt_bool = |key: &str, default: bool| {
+                segment_config
+                    .options
+                    .get(key)
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(default)
+            };
+            let opt_str = |key: &str, default: &str| {
+                segment_config
+                    .options
+                    .get(key)
+                    .and_then(|v| v.as_str())
+                    .unwrap_or(default)
+                    .to_string()
+            };
+
             let mock_data = match segment_config.id {
                 SegmentId::Model => SegmentData {
                     primary: "Sonnet 4".to_string(),
-                    secondary: "".to_string(),
+                    secondary: if opt_bool("show_effort", true) {
+                        "· high".to_string()
+                    } else {
+                        String::new()
+                    },
                     metadata: {
                         let mut map = HashMap::new();
                         map.insert("model".to_string(), "claude-4-sonnet-20250512".to_string());
@@ -114,7 +135,11 @@ impl PreviewComponent {
                     },
                 },
                 SegmentId::Git => SegmentData {
-                    primary: "master".to_string(),
+                    primary: if opt_bool("show_sha", false) {
+                        "master (a1b2c3d)".to_string()
+                    } else {
+                        "master".to_string()
+                    },
                     secondary: "✓".to_string(),
                     metadata: {
                         let mut map = HashMap::new();
@@ -136,9 +161,30 @@ impl PreviewComponent {
                         map
                     },
                 },
-                SegmentId::Usage => SegmentData {
-                    primary: "24%".to_string(),
-                    secondary: "· 10-7-2".to_string(),
+                SegmentId::Usage => {
+                    let countdown = opt_str("reset_format", "time") == "countdown";
+                    let (session_reset, weekly_reset) = if countdown {
+                        ("4h 52m", "6d 3h")
+                    } else {
+                        ("03:20", "Thu 00h")
+                    };
+                    let mut secondary = format!("· {}", session_reset);
+                    if opt_bool("show_weekly", true) {
+                        secondary.push_str(&format!(" \u{2502} 7d 15% · {}", weekly_reset));
+                    }
+                    SegmentData {
+                        primary: "24%".to_string(),
+                        secondary,
+                        metadata: HashMap::new(),
+                    }
+                }
+                SegmentId::Credits => SegmentData {
+                    primary: "$23.75/$50".to_string(),
+                    secondary: if opt_bool("show_percent", true) {
+                        "· 48%".to_string()
+                    } else {
+                        String::new()
+                    },
                     metadata: HashMap::new(),
                 },
                 SegmentId::Cost => SegmentData {

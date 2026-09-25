@@ -102,6 +102,9 @@ impl ModelConfig {
                 BuiltinModelFamily::new("sonnet", "Sonnet", 200_000),
                 BuiltinModelFamily::new("opus", "Opus", 200_000),
                 BuiltinModelFamily::new("haiku", "Haiku", 200_000),
+                // Claude 5 Mythos-class models ship with a native 1M context window
+                BuiltinModelFamily::new("fable", "Fable", 1_000_000),
+                BuiltinModelFamily::new("mythos", "Mythos", 1_000_000),
             ]
         })
     }
@@ -257,7 +260,7 @@ impl ModelConfig {
              # This file defines model display names and context limits for different LLM models\n\
              # File location: ~/.claude/ccline/models.toml\n\
              #\n\
-             # Claude models are automatically recognized (Sonnet, Opus, Haiku) with\n\
+             # Claude models are automatically recognized (Sonnet, Opus, Haiku, Fable, Mythos) with\n\
              # version extraction. You only need to add entries here for overrides or\n\
              # third-party models.\n\
              \n\
@@ -296,7 +299,7 @@ impl Default for ModelConfig {
     fn default() -> Self {
         Self {
             // Only third-party models need explicit entries.
-            // Claude models (Sonnet, Opus, Haiku) are handled by built-in regex families.
+            // Claude models (Sonnet, Opus, Haiku, Fable, Mythos) are handled by built-in regex families.
             model_entries: vec![
                 ModelEntry {
                     pattern: "glm-4.5".to_string(),
@@ -325,5 +328,36 @@ impl Default for ModelConfig {
                 context_limit: 1_000_000,
             }],
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn builtin_only() -> ModelConfig {
+        ModelConfig {
+            model_entries: Vec::new(),
+            context_modifiers: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn fable_and_mythos_default_to_1m_context() {
+        let config = builtin_only();
+        assert_eq!(config.get_context_limit("claude-fable-5-1"), 1_000_000);
+        assert_eq!(config.get_context_limit("claude-mythos-5-1"), 1_000_000);
+        assert_eq!(
+            config.get_display_name("claude-fable-5-1").as_deref(),
+            Some("Fable 5.1")
+        );
+    }
+
+    #[test]
+    fn classic_families_keep_200k_context() {
+        let config = builtin_only();
+        assert_eq!(config.get_context_limit("claude-opus-5-5"), 200_000);
+        assert_eq!(config.get_context_limit("claude-sonnet-5"), 200_000);
+        assert_eq!(config.get_context_limit("unknown-model"), 200_000);
     }
 }

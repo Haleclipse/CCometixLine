@@ -79,6 +79,18 @@ pub fn context_window_segment() -> SegmentConfig {
     }
 }
 
+/// Extra-usage credits: same colors as the usage segment, credit-card icon
+pub fn credits_segment() -> SegmentConfig {
+    let mut segment = usage_segment();
+    segment.id = SegmentId::Credits;
+    segment.icon = IconConfig {
+        plain: "\u{1f4b3}".to_string(),
+        nerd_font: "\u{f0110}".to_string(), // credit_card
+    };
+    segment.options = HashMap::new();
+    segment
+}
+
 pub fn cost_segment() -> SegmentConfig {
     SegmentConfig {
         id: SegmentId::Cost,

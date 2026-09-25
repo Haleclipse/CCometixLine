@@ -11,6 +11,8 @@ pub struct NameInputComponent {
     pub input: String,
     pub title: String,
     pub placeholder: String,
+    /// Accept any printable character (option values), not only name characters
+    pub allow_any: bool,
 }
 
 impl Default for NameInputComponent {
@@ -26,11 +28,22 @@ impl NameInputComponent {
             input: String::new(),
             title: "Input Name".to_string(),
             placeholder: "Enter name...".to_string(),
+            allow_any: false,
         }
+    }
+
+    /// Open as a free-form value editor pre-filled with the current value
+    pub fn open_value(&mut self, title: &str, initial: &str) {
+        self.is_open = true;
+        self.input = initial.to_string();
+        self.title = title.to_string();
+        self.placeholder = "Enter value...".to_string();
+        self.allow_any = true;
     }
 
     pub fn open(&mut self, title: &str, placeholder: &str) {
         self.is_open = true;
+        self.allow_any = false;
         self.input.clear();
         self.title = title.to_string();
         self.placeholder = placeholder.to_string();
@@ -42,6 +55,12 @@ impl NameInputComponent {
     }
 
     pub fn input_char(&mut self, c: char) {
+        if self.allow_any {
+            if !c.is_control() {
+                self.input.push(c);
+            }
+            return;
+        }
         if c.is_ascii_alphanumeric() || c == '_' || c == '-' {
             self.input.push(c);
         }

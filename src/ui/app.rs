@@ -1,6 +1,7 @@
 use crate::config::{Config, SegmentId, StyleMode};
 use crate::ui::components::{
     color_picker::{ColorPickerComponent, NavDirection},
+    confirm::QuitConfirmComponent,
     help::HelpComponent,
     icon_selector::IconSelectorComponent,
     name_input::NameInputComponent,
@@ -24,7 +25,16 @@ use ratatui::{
 };
 use std::io;
 
+/// What the text input popup is collecting
+#[derive(Debug, Clone, PartialEq)]
+enum InputPurpose {
+    ThemeName,
+    /// Free-form value for an option of the selected segment
+    OptionValue(String),
+}
+
 pub struct App {
+    input_purpose: InputPurpose,
     config: Config,
     selected_segment: usize,
     selected_panel: Panel,
@@ -40,6 +50,9 @@ pub struct App {
     theme_selector: ThemeSelectorComponent,
     help: HelpComponent,
     status_message: Option<String>,
+    /// Config as last loaded or saved, to detect unsaved changes on quit
+    saved_snapshot: String,
+    quit_confirm: QuitConfirmComponent,
 }
 
 impl App {
@@ -50,9 +63,12 @@ impl App {
             selected_panel: Panel::SegmentList,
             selected_field: FieldSelection::Enabled,
             should_quit: false,
+            saved_snapshot: Self::snapshot(&config),
+            quit_confirm: QuitConfirmComponent::new(),
             color_picker: ColorPickerComponent::new(),
             icon_selector: IconSelectorComponent::new(),
             name_input: NameInputComponent::new(),
+            input_purpose: InputPurpose::ThemeName,
             preview: PreviewComponent::new(),
             segment_list: SegmentListComponent::new(),
             separator_editor: SeparatorEditorComponent::new(),
@@ -71,17 +87,10 @@ impl App {
             eprintln!("Warning: Failed to initialize themes: {}", e);
         }
 
-        // Load config
-        let mut config = Config::load().unwrap_or_else(|_| Config::default());
-
-        // If a theme is specified, reload it to get the latest changes
-        if !config.theme.is_empty() && config.theme != "default" {
-            if let Ok(theme_config) =
-                crate::ui::themes::ThemePresets::load_theme_from_file(&config.theme)
-            {
-                config = theme_config;
-            }
-        }
+        // Load config.toml: what the statusline actually renders. Upstream reloaded
+        // the theme file here instead, which silently discarded edits made to
+        // config.toml (e.g. via `ccline --set`) the next time the TUI saved.
+        let config = Config::load().unwrap_or_else(|_| Config::default());
 
         // Terminal setup
         enable_raw_mode()?;
@@ -103,12 +112,42 @@ impl App {
                 }
 
                 // Handle popup events first
-                if app.name_input.is_open {
+                if app.quit_confirm.is_open {
+                    match key.code {
+                        KeyCode::Char('s') | KeyCode::Char('S') | KeyCode::Enter => {
+                            match app.save_config() {
+                                Ok(()) => app.should_quit = true,
+                                Err(e) => {
+                                    app.status_message =
+                                        Some(format!("Failed to save config: {}", e));
+                                }
+                            }
+                            app.quit_confirm.close();
+                        }
+                        KeyCode::Char('q') | KeyCode::Char('Q') => {
+                            app.quit_confirm.close();
+                            app.should_quit = true;
+                        }
+                        KeyCode::Esc | KeyCode::Char('n') | KeyCode::Char('N') => {
+                            app.quit_confirm.close();
+                            app.status_message = Some("Press S to save your changes".to_string());
+                        }
+                        _ => {}
+                    }
+                } else if app.name_input.is_open {
                     match key.code {
                         KeyCode::Esc => app.name_input.close(),
                         KeyCode::Enter => {
-                            if let Some(name) = app.name_input.get_input() {
-                                app.save_as_new_theme(&name);
+                            match app.input_purpose.clone() {
+                                InputPurpose::ThemeName => {
+                                    if let Some(name) = app.name_input.get_input() {
+                                        app.save_as_new_theme(&name);
+                                    }
+                                }
+                                InputPurpose::OptionValue(key) => {
+                                    let value = app.name_input.input.trim().to_string();
+                                    app.apply_option_value(&key, &value);
+                                }
                             }
                             app.name_input.close();
                         }
@@ -186,10 +225,17 @@ impl App {
                 } else {
                     // Handle main app events
                     match key.code {
-                        KeyCode::Esc => app.should_quit = true,
+                        KeyCode::Esc => {
+                            if app.has_unsaved_changes() {
+                                app.quit_confirm.open();
+                            } else {
+                                app.should_quit = true;
+                            }
+                        }
                         KeyCode::Char('s') => {
                             if key.modifiers.contains(KeyModifiers::CONTROL) {
                                 // Ctrl+S: Save as new theme with name input
+                                app.input_purpose = InputPurpose::ThemeName;
                                 app.name_input.open("Save as New Theme", "Enter theme name");
                             } else {
                                 // s: Save config to config.toml
@@ -221,6 +267,8 @@ impl App {
                             }
                         }
                         KeyCode::Enter => app.toggle_current(),
+                        KeyCode::Left => app.step_option(-1),
+                        KeyCode::Right => app.step_option(1),
                         KeyCode::Tab => app.switch_panel(),
                         KeyCode::Char('1') => app.switch_to_theme("default"),
                         KeyCode::Char('2') => app.switch_to_theme("minimal"),
@@ -450,6 +498,9 @@ impl App {
         if self.name_input.is_open {
             self.name_input.render(f, f.area());
         }
+        if self.quit_confirm.is_open {
+            self.quit_confirm.render(f, f.area());
+        }
         if self.separator_editor.is_open {
             self.separator_editor.render(f, f.area());
         }
@@ -463,17 +514,35 @@ impl App {
                     .min((self.config.segments.len() - 1) as i32)
                     as usize;
                 self.selected_segment = new_selection;
+                // Option rows differ per segment: keep the field selection in range
+                if let FieldSelection::Option(i) = self.selected_field {
+                    let rows = self
+                        .config
+                        .segments
+                        .get(self.selected_segment)
+                        .map(|seg| crate::config::options::option_keys(seg).len())
+                        .unwrap_or(0);
+                    if i >= rows {
+                        self.selected_field = FieldSelection::TextStyle;
+                    }
+                }
             }
             Panel::Settings => {
-                let field_count = 7; // Enabled, Icon, IconColor, TextColor, TextStyle, BackgroundColor, Options
+                let option_rows = self
+                    .config
+                    .segments
+                    .get(self.selected_segment)
+                    .map(|seg| crate::config::options::option_keys(seg).len())
+                    .unwrap_or(0);
+                let field_count = 6 + option_rows as i32;
                 let current_field = match self.selected_field {
                     FieldSelection::Enabled => 0i32,
                     FieldSelection::Icon => 1,
-                    FieldSelection::IconColor => 2,
                     FieldSelection::TextColor => 3,
+                    FieldSelection::IconColor => 2,
                     FieldSelection::BackgroundColor => 4,
                     FieldSelection::TextStyle => 5,
-                    FieldSelection::Options => 6,
+                    FieldSelection::Option(i) => 6 + i as i32,
                 };
                 let new_field = (current_field + delta).clamp(0, field_count - 1) as usize;
                 self.selected_field = match new_field {
@@ -483,8 +552,7 @@ impl App {
                     3 => FieldSelection::TextColor,
                     4 => FieldSelection::BackgroundColor,
                     5 => FieldSelection::TextStyle,
-                    6 => FieldSelection::Options,
-                    _ => FieldSelection::Enabled,
+                    n => FieldSelection::Option(n - 6),
                 };
             }
         }
@@ -502,6 +570,7 @@ impl App {
                         SegmentId::Git => "Git",
                         SegmentId::ContextWindow => "Context Window",
                         SegmentId::Usage => "Usage",
+                        SegmentId::Credits => "Credits",
                         SegmentId::Cost => "Cost",
                         SegmentId::Session => "Session",
                         SegmentId::OutputStyle => "Output Style",
@@ -529,6 +598,7 @@ impl App {
                                 SegmentId::Git => "Git",
                                 SegmentId::ContextWindow => "Context Window",
                                 SegmentId::Usage => "Usage",
+                                SegmentId::Credits => "Credits",
                                 SegmentId::Cost => "Cost",
                                 SegmentId::Session => "Session",
                                 SegmentId::OutputStyle => "Output Style",
@@ -562,14 +632,65 @@ impl App {
                             self.preview.update_preview(&self.config);
                         }
                     }
-                    FieldSelection::Options => {
-                        // TODO: Implement options editor
-                        self.status_message =
-                            Some("Options editor not implemented yet".to_string());
-                    }
+                    FieldSelection::Option(i) => self.edit_option(i),
                 }
             }
         }
+    }
+
+    /// Enter on an option row: toggle/cycle in place, or open a value prompt
+    fn edit_option(&mut self, index: usize) {
+        self.edit_option_with(index, 1, true);
+    }
+
+    /// Left/Right on an option row: step through choices without opening a prompt
+    fn step_option(&mut self, delta: i32) {
+        if self.selected_panel != Panel::Settings {
+            return;
+        }
+        if let FieldSelection::Option(i) = self.selected_field {
+            self.edit_option_with(i, delta, false);
+        }
+    }
+
+    fn edit_option_with(&mut self, index: usize, delta: i32, allow_prompt: bool) {
+        use crate::config::options::{cycle_option, option_keys, OptionEdit};
+
+        let Some(segment) = self.config.segments.get_mut(self.selected_segment) else {
+            return;
+        };
+        let Some(key) = option_keys(segment).get(index).cloned() else {
+            return;
+        };
+        match cycle_option(segment, &key, delta) {
+            OptionEdit::Cycled(value) => {
+                self.status_message = Some(format!("{} = {} (press S to save)", key, value));
+                self.preview.update_preview(&self.config);
+            }
+            OptionEdit::Prompt(_) if !allow_prompt => {}
+            OptionEdit::Prompt(current) => {
+                self.input_purpose = InputPurpose::OptionValue(key.clone());
+                self.name_input
+                    .open_value(&format!("Edit option: {}", key), &current);
+            }
+        }
+    }
+
+    /// Store a free-form option value typed in the popup (empty resets to default)
+    fn apply_option_value(&mut self, key: &str, value: &str) {
+        let Some(segment) = self.config.segments.get_mut(self.selected_segment) else {
+            return;
+        };
+        if value.is_empty() {
+            segment.options.remove(key);
+            self.status_message = Some(format!("{} reset to default (press S to save)", key));
+        } else {
+            segment
+                .options
+                .insert(key.to_string(), crate::config::options::parse_value(value));
+            self.status_message = Some(format!("{} = {} (press S to save)", key, value));
+        }
+        self.preview.update_preview(&self.config);
     }
 
     fn switch_panel(&mut self) {
@@ -646,7 +767,21 @@ impl App {
 
     fn save_config(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         self.config.save()?;
+        self.mark_saved();
         Ok(())
+    }
+
+    /// Serialized form used to compare against the last saved state
+    fn snapshot(config: &Config) -> String {
+        toml::to_string(config).unwrap_or_default()
+    }
+
+    fn mark_saved(&mut self) {
+        self.saved_snapshot = Self::snapshot(&self.config);
+    }
+
+    fn has_unsaved_changes(&self) -> bool {
+        Self::snapshot(&self.config) != self.saved_snapshot
     }
 
     /// Move the currently selected segment up in the list
@@ -679,6 +814,7 @@ impl App {
         match crate::ui::themes::ThemePresets::save_theme(current_theme, &self.config) {
             Ok(_) => {
                 self.status_message = Some(format!("Wrote config to theme: {}", current_theme));
+                self.mark_saved();
             }
             Err(e) => {
                 self.status_message =
@@ -694,6 +830,7 @@ impl App {
                 // Update current theme to the new one
                 self.config.theme = theme_name.to_string();
                 self.status_message = Some(format!("Saved as new theme: {}", theme_name));
+                self.mark_saved();
             }
             Err(e) => {
                 self.status_message = Some(format!("Failed to save theme {}: {}", theme_name, e));

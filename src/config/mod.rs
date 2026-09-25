@@ -1,6 +1,7 @@
 pub mod defaults;
 pub mod loader;
 pub mod models;
+pub mod options;
 pub mod types;
 
 pub use loader::{ConfigLoader, InitResult};

@@ -2,7 +2,7 @@ use super::segment_list::{FieldSelection, Panel};
 use crate::config::{Config, SegmentId, StyleMode};
 use ratatui::{
     layout::Rect,
-    style::{Color, Style},
+    style::{Color, Modifier, Style},
     text::{Line, Span, Text},
     widgets::{Block, Borders, Paragraph},
     Frame,
@@ -32,6 +32,7 @@ impl SettingsComponent {
                 SegmentId::Git => "Git",
                 SegmentId::ContextWindow => "Context Window",
                 SegmentId::Usage => "Usage",
+                SegmentId::Credits => "Credits",
                 SegmentId::Cost => "Cost",
                 SegmentId::Session => "Session",
                 SegmentId::OutputStyle => "Output Style",
@@ -208,7 +209,7 @@ impl SettingsComponent {
                 spans.extend(content);
                 Line::from(spans)
             };
-            let lines = vec![
+            let mut lines = vec![
                 Line::from(format!("{} Segment", segment_name)),
                 create_field_line(
                     FieldSelection::Enabled,
@@ -266,14 +267,73 @@ impl SettingsComponent {
                         }
                     ))],
                 ),
-                create_field_line(
-                    FieldSelection::Options,
-                    vec![Span::raw(format!(
-                        "└─ Options: {} items",
-                        segment.options.len()
-                    ))],
-                ),
+                Line::from("├─ Options:"),
             ];
+            let keys = crate::config::options::option_keys(segment);
+            if keys.is_empty() {
+                lines.push(Line::from("│  └─ (none)"));
+            }
+            for (i, key) in keys.iter().enumerate() {
+                let (value, is_default) = crate::config::options::current_value(segment, key);
+                let spec = crate::config::options::known_options(segment.id)
+                    .iter()
+                    .find(|o| o.key == key.as_str());
+                let branch = if i + 1 == keys.len() {
+                    "└─"
+                } else {
+                    "├─"
+                };
+                let mut spans = vec![Span::raw(format!("│  {} {}: ", branch, key))];
+                let value_style = if is_default {
+                    Style::default().fg(Color::DarkGray)
+                } else {
+                    Style::default().fg(Color::Yellow)
+                };
+                match spec {
+                    // Enumeration: inline select, current choice highlighted
+                    Some(spec) if !spec.choices.is_empty() => {
+                        for (ci, choice) in spec.choices.iter().enumerate() {
+                            if ci > 0 {
+                                spans.push(Span::raw(" "));
+                            }
+                            if *choice == value {
+                                spans.push(Span::styled(
+                                    format!("[{}]", choice),
+                                    Style::default()
+                                        .fg(Color::Cyan)
+                                        .add_modifier(Modifier::BOLD),
+                                ));
+                            } else {
+                                spans.push(Span::styled(
+                                    format!(" {} ", choice),
+                                    Style::default().fg(Color::DarkGray),
+                                ));
+                            }
+                        }
+                    }
+                    // Boolean: checkbox like "Text Style: Bold [✓]"
+                    Some(spec) if spec.is_bool() => {
+                        spans.push(Span::styled(
+                            if value == "true" { "[✓]" } else { "[ ]" },
+                            value_style,
+                        ));
+                    }
+                    _ => spans.push(Span::styled(value, value_style)),
+                }
+                if is_default {
+                    spans.push(Span::styled(
+                        " (default)",
+                        Style::default().fg(Color::DarkGray),
+                    ));
+                }
+                if let Some(spec) = spec {
+                    spans.push(Span::styled(
+                        format!("  {}", spec.description),
+                        Style::default().fg(Color::DarkGray),
+                    ));
+                }
+                lines.push(create_field_line(FieldSelection::Option(i), spans));
+            }
             let text = Text::from(lines);
             let settings_block = Block::default()
                 .borders(Borders::ALL)
@@ -283,7 +343,26 @@ impl SettingsComponent {
                 } else {
                     Style::default()
                 });
-            let settings_panel = Paragraph::new(text).block(settings_block);
+            // Scroll so the selected field stays visible on short terminals.
+            // Line layout: 0 header, 1..=6 fixed fields, 7 "Options:" header, 8.. option rows.
+            let selected_line: u16 = match selected_field {
+                FieldSelection::Enabled => 1,
+                FieldSelection::Icon => 2,
+                FieldSelection::IconColor => 3,
+                FieldSelection::TextColor => 4,
+                FieldSelection::BackgroundColor => 5,
+                FieldSelection::TextStyle => 6,
+                FieldSelection::Option(i) => 8 + *i as u16,
+            };
+            let visible = area.height.saturating_sub(2).max(1);
+            let scroll = if *selected_panel == Panel::Settings {
+                selected_line.saturating_sub(visible - 1)
+            } else {
+                0
+            };
+            let settings_panel = Paragraph::new(text)
+                .block(settings_block)
+                .scroll((scroll, 0));
             f.render_widget(settings_panel, area);
         } else {
             let settings_block = Block::default()

@@ -38,6 +38,47 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
 
+    // Edit segment options from the CLI
+    if !cli.set.is_empty() || !cli.unset.is_empty() {
+        use ccometixline::config::options;
+
+        let mut config = Config::load()?;
+        let mut failed = false;
+        for assignment in &cli.set {
+            match options::set_option(&mut config, assignment) {
+                Ok(msg) => println!("{}", msg),
+                Err(err) => {
+                    eprintln!("error: {}", err);
+                    failed = true;
+                }
+            }
+        }
+        for target in &cli.unset {
+            match options::unset_option(&mut config, target) {
+                Ok(msg) => println!("{}", msg),
+                Err(err) => {
+                    eprintln!("error: {}", err);
+                    failed = true;
+                }
+            }
+        }
+        if failed {
+            std::process::exit(1);
+        }
+        config.save()?;
+        println!("Saved config");
+        if cli.options {
+            print!("{}", options::render_options(&config));
+        }
+        return Ok(());
+    }
+
+    if cli.options {
+        let config = Config::load().unwrap_or_else(|_| Config::default());
+        print!("{}", ccometixline::config::options::render_options(&config));
+        return Ok(());
+    }
+
     // Load configuration
     let mut config = Config::load().unwrap_or_else(|_| Config::default());
 

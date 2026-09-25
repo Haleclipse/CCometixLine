@@ -1,4 +1,5 @@
-use super::types::Config;
+use super::types::{Config, IconConfig, SegmentConfig, SegmentId};
+use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -20,7 +21,8 @@ impl ConfigLoader {
 
     pub fn load_from_path<P: AsRef<Path>>(path: P) -> Result<Config, Box<dyn std::error::Error>> {
         let content = fs::read_to_string(path)?;
-        let config: Config = toml::from_str(&content)?;
+        let mut config: Config = toml::from_str(&content)?;
+        config.migrate();
         Ok(config)
     }
 
@@ -124,8 +126,35 @@ impl Config {
         }
 
         let content = fs::read_to_string(config_path)?;
-        let config: Config = toml::from_str(&content)?;
+        let mut config: Config = toml::from_str(&content)?;
+        config.migrate();
         Ok(config)
+    }
+
+    /// Add segments introduced after the config was written, so existing
+    /// configs (and theme files on disk) pick them up without a manual edit.
+    pub fn migrate(&mut self) {
+        if self.segments.iter().any(|s| s.id == SegmentId::Credits) {
+            return;
+        }
+        // Credits share the usage API and colors, so derive it from the usage segment
+        let usage_pos = self.segments.iter().position(|s| s.id == SegmentId::Usage);
+        let Some(usage_pos) = usage_pos else {
+            return;
+        };
+        let usage = &self.segments[usage_pos];
+        let credits = SegmentConfig {
+            id: SegmentId::Credits,
+            enabled: usage.enabled,
+            icon: IconConfig {
+                plain: "\u{1f4b3}".to_string(),
+                nerd_font: "\u{f0110}".to_string(), // credit_card
+            },
+            colors: usage.colors.clone(),
+            styles: usage.styles.clone(),
+            options: HashMap::new(),
+        };
+        self.segments.insert(usage_pos + 1, credits);
     }
 
     /// Save configuration to default location

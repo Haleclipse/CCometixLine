@@ -18,12 +18,24 @@ impl ContextWindowSegment {
         let model_config = ModelConfig::load();
         model_config.get_context_limit(model_id)
     }
+
+    /// Resolve the context limit: prefer the size Claude Code reports in the
+    /// statusline payload (authoritative for the active model), fall back to
+    /// the limit derived from the model ID via models.toml / built-in families.
+    fn resolve_context_limit(input: &InputData) -> u32 {
+        input
+            .context_window
+            .as_ref()
+            .and_then(|cw| cw.context_window_size)
+            .filter(|&size| size > 0)
+            .unwrap_or_else(|| Self::get_context_limit_for_model(&input.model.id))
+    }
 }
 
 impl Segment for ContextWindowSegment {
     fn collect(&self, input: &InputData) -> Option<SegmentData> {
-        // Dynamically determine context limit based on current model ID
-        let context_limit = Self::get_context_limit_for_model(&input.model.id);
+        // Prefer the window size reported by Claude Code, else derive it from the model ID
+        let context_limit = Self::resolve_context_limit(input);
 
         let context_used_token_opt = parse_transcript_usage(&input.transcript_path);
 
@@ -269,4 +281,56 @@ fn try_find_usage_from_project_history(transcript_path: &Path) -> Option<u32> {
     }
 
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::{ContextWindow, Model, Workspace};
+
+    fn input(model_id: &str, context_window: Option<ContextWindow>) -> InputData {
+        InputData {
+            model: Model {
+                id: model_id.to_string(),
+                display_name: model_id.to_string(),
+            },
+            workspace: Workspace {
+                current_dir: "/tmp".to_string(),
+            },
+            transcript_path: "/nonexistent/transcript.jsonl".to_string(),
+            cost: None,
+            output_style: None,
+            effort: None,
+            rate_limits: None,
+            context_window,
+        }
+    }
+
+    #[test]
+    fn reported_window_size_takes_priority_over_model_id() {
+        let cw = ContextWindow {
+            context_window_size: Some(1_000_000),
+            ..Default::default()
+        };
+        assert_eq!(
+            ContextWindowSegment::resolve_context_limit(&input("claude-opus-5-5", Some(cw))),
+            1_000_000
+        );
+    }
+
+    #[test]
+    fn missing_or_zero_window_size_falls_back_to_model_id() {
+        assert_eq!(
+            ContextWindowSegment::resolve_context_limit(&input("claude-opus-5-5", None)),
+            200_000
+        );
+        let zero = ContextWindow {
+            context_window_size: Some(0),
+            ..Default::default()
+        };
+        assert_eq!(
+            ContextWindowSegment::resolve_context_limit(&input("claude-fable-5-1", Some(zero))),
+            1_000_000
+        );
+    }
 }
