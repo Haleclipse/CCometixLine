@@ -305,6 +305,7 @@ Contributions are welcome! Please feel free to submit issues or pull requests.
 ## Related Projects
 
 - [tweakcc](https://github.com/Piebald-AI/tweakcc) - Command-line tool to customize your Claude Code themes, thinking verbs, and more.
+- [statuslin.es](https://statuslin.es) - Community gallery of Claude Code status lines with sandbox-rendered previews you can copy.
 
 ## License
 
