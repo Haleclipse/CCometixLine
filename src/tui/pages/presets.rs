@@ -85,8 +85,6 @@ impl Presets {
                 if on { ui::accent() } else { Style::default() },
             ));
         }
-        spans.push(Span::styled("tab", ui::accent()));
-        spans.push(Span::raw(" next filter"));
         Line::from(spans)
     }
 
