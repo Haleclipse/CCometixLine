@@ -14,6 +14,3 @@ pub mod statusline;
 pub mod style;
 pub mod version;
 pub mod widgets;
-
-#[cfg(test)]
-mod snapshot_tests;

@@ -1,12 +1,12 @@
-//! Snapshot tests: every preset against every built-in scenario at three widths, as plain
+//! Every preset against every built-in scenario at three widths, as plain
 //! text. Run with `INSTA_UPDATE=always` (or `cargo insta review`) after an
 //! intended rendering change.
 
-use crate::metrics::GitSource;
-use crate::models::Registry;
-use crate::render::ansi::{EmitOptions, emit};
-use crate::statusline::{Frame, lines};
-use crate::{presets, scenarios};
+use ccometixline::metrics::GitSource;
+use ccometixline::models::Registry;
+use ccometixline::render::ansi::{EmitOptions, emit};
+use ccometixline::statusline::{Frame, lines};
+use ccometixline::{presets, scenarios};
 use chrono::FixedOffset;
 
 const WIDTHS: [usize; 3] = [60, 100, 140];

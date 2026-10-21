@@ -1,5 +1,5 @@
 ---
-source: src/snapshot_tests.rs
+source: tests/snapshots.rs
 expression: render_preset(preset.name)
 ---
 ── normal @ 60
