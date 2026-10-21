@@ -41,11 +41,7 @@ impl Segment for SessionSegment {
         let cost_data = input.cost.as_ref()?;
 
         // Primary display: total duration
-        let primary = if let Some(duration) = cost_data.total_duration_ms {
-            Self::format_duration(duration)
-        } else {
-            return None;
-        };
+        let primary = Self::format_duration(cost_data.total_duration_ms?);
 
         // Secondary display: line changes if available (green for +, red for -)
         let secondary = match (cost_data.total_lines_added, cost_data.total_lines_removed) {

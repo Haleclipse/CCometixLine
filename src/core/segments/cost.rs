@@ -16,14 +16,11 @@ impl Segment for CostSegment {
         let cost_data = input.cost.as_ref()?;
 
         // Primary display: total cost
-        let primary = if let Some(cost) = cost_data.total_cost_usd {
-            if cost == 0.0 || cost < 0.01 {
-                "$0".to_string()
-            } else {
-                format!("${:.2}", cost)
-            }
+        let cost = cost_data.total_cost_usd?;
+        let primary = if cost == 0.0 || cost < 0.01 {
+            "$0".to_string()
         } else {
-            return None;
+            format!("${:.2}", cost)
         };
 
         // Secondary display: empty for cost segment
