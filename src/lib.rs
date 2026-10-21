@@ -10,6 +10,7 @@ pub mod paths;
 pub mod presets;
 pub mod render;
 pub mod scenarios;
+pub mod state;
 pub mod statusline;
 pub mod style;
 pub mod version;

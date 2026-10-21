@@ -7,7 +7,7 @@ use std::time::{Duration, Instant};
 
 const TIMEOUT: Duration = Duration::from_millis(800);
 
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct GitInfo {
     /// `None` when HEAD is detached.
     pub branch: Option<String>,

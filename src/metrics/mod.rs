@@ -10,6 +10,7 @@ mod usage;
 use crate::git::GitInfo;
 use crate::input::Input;
 use crate::models::{Registry, Resolved};
+use crate::state::StateView;
 use crate::style::{Category, GlyphTier, IconKey, Role, Severity};
 use crate::version::Version;
 use crate::widgets::WidgetKind;
@@ -115,6 +116,8 @@ pub struct Metric {
 pub enum GitSource {
     /// Run git in the working directory, once per render.
     Live,
+    /// Run git, reusing a cached result younger than this many milliseconds.
+    Cached(u64),
     /// Fixed data, for previews and tests.
     Fixed(Option<GitInfo>),
 }
@@ -128,6 +131,8 @@ pub struct Ctx<'a> {
     pub tz: FixedOffset,
     pub glyphs: GlyphTier,
     pub cc: Option<Version>,
+    /// History and cross-session data; empty when state is unavailable.
+    pub state: StateView,
     git: GitSource,
     git_cache: OnceCell<Option<GitInfo>>,
     model_cache: OnceCell<Option<Resolved>>,
@@ -148,6 +153,7 @@ impl<'a> Ctx<'a> {
             tz,
             glyphs,
             cc: input.cc_version(),
+            state: StateView::default(),
             git: GitSource::Live,
             git_cache: OnceCell::new(),
             model_cache: OnceCell::new(),
@@ -159,14 +165,20 @@ impl<'a> Ctx<'a> {
         self
     }
 
+    pub fn with_state(mut self, state: StateView) -> Self {
+        self.state = state;
+        self
+    }
+
     pub fn git(&self) -> Option<&GitInfo> {
         self.git_cache
-            .get_or_init(|| match &self.git {
-                GitSource::Fixed(info) => info.clone(),
-                GitSource::Live => self
-                    .input
-                    .current_dir()
-                    .and_then(|d| crate::git::status(Path::new(d))),
+            .get_or_init(|| {
+                let dir = || self.input.current_dir().map(Path::new);
+                match &self.git {
+                    GitSource::Fixed(info) => info.clone(),
+                    GitSource::Live => crate::git::status(dir()?),
+                    GitSource::Cached(ttl) => crate::state::git_cache::status(dir()?, *ttl),
+                }
             })
             .as_ref()
     }
