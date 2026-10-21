@@ -8,3 +8,6 @@ PRD.md
 
 # insta snapshots pending review
 *.snap.new
+
+# Design notes stay local
+/docs/
