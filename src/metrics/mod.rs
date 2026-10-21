@@ -3,6 +3,7 @@
 //! numbers for graphs — without knowing how it will be displayed.
 
 mod code;
+mod custom;
 pub mod fmt;
 mod identity;
 mod projection;
@@ -124,6 +125,16 @@ pub enum GitSource {
     Fixed(Option<GitInfo>),
 }
 
+/// How `cmd` items get their output.
+#[derive(Clone, Debug, Default)]
+pub enum Commands {
+    /// Run them (through the cache), passing this payload on stdin.
+    Run { stdin: String },
+    /// Show the command line instead of running it, for previews and tests.
+    #[default]
+    Show,
+}
+
 /// Everything metrics may read during one render.
 pub struct Ctx<'a> {
     pub input: &'a Input,
@@ -136,6 +147,7 @@ pub struct Ctx<'a> {
     /// History and cross-session data; empty when state is unavailable.
     pub state: StateView,
     pub compact: AutoCompact,
+    pub commands: Commands,
     git: GitSource,
     git_cache: OnceCell<Option<GitInfo>>,
     model_cache: OnceCell<Option<Resolved>>,
@@ -158,6 +170,7 @@ impl<'a> Ctx<'a> {
             cc: input.cc_version(),
             state: StateView::default(),
             compact: AutoCompact::default(),
+            commands: Commands::Show,
             git: GitSource::Live,
             git_cache: OnceCell::new(),
             model_cache: OnceCell::new(),
@@ -176,6 +189,11 @@ impl<'a> Ctx<'a> {
 
     pub fn with_compact(mut self, compact: AutoCompact) -> Self {
         self.compact = compact;
+        self
+    }
+
+    pub fn with_commands(mut self, commands: Commands) -> Self {
+        self.commands = commands;
         self
     }
 
@@ -226,6 +244,7 @@ pub fn catalog() -> &'static [Metric] {
         all.extend(usage::metrics());
         all.extend(projection::metrics());
         all.extend(code::metrics());
+        all.extend(custom::metrics());
         all
     })
 }

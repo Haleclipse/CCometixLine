@@ -17,6 +17,8 @@ pub enum Category {
     Timing,
     Activity,
     System,
+    /// User commands; drawn in the accent color.
+    Custom,
 }
 
 /// A named color slot in a palette.
@@ -113,6 +115,7 @@ impl From<Category> for Token {
             Category::Timing => Token::Timing,
             Category::Activity => Token::Activity,
             Category::System => Token::System,
+            Category::Custom => Token::Accent,
         }
     }
 }

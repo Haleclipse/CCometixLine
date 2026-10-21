@@ -34,6 +34,17 @@ pub enum Command {
     /// background by renders)
     #[command(hide = true)]
     UpdateCheck,
+    /// Run a `cmd` item's command and cache its output (started in the
+    /// background by renders)
+    #[command(hide = true)]
+    RefreshCmd {
+        #[arg(long)]
+        cwd: Option<std::path::PathBuf>,
+        #[arg(long)]
+        timeout_ms: u64,
+        #[arg(last = true)]
+        run: String,
+    },
 }
 
 #[derive(Args, Debug)]

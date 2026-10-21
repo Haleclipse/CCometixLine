@@ -2,7 +2,7 @@ use ccometixline::cli::{Cli, Command, PreviewArgs};
 use ccometixline::config::{self, Config, DepthSetting, LoadNote};
 use ccometixline::env::{AutoCompact, ClaudeSettings};
 use ccometixline::input::{Input, MAX_INPUT_BYTES};
-use ccometixline::metrics::GitSource;
+use ccometixline::metrics::{Commands, GitSource};
 use ccometixline::models::Registry;
 use ccometixline::render::ansi::{self, EmitOptions};
 use ccometixline::render::span::{Span, Style};
@@ -28,6 +28,14 @@ fn main() {
         Some(Command::UpdateCheck) => {
             state::update::check(Utc::now().timestamp());
             return;
+        }
+        Some(Command::RefreshCmd {
+            cwd,
+            timeout_ms,
+            run,
+        }) => {
+            let timeout = std::time::Duration::from_millis(timeout_ms);
+            return state::cmd_cache::refresh(&run, cwd.as_deref(), timeout);
         }
         None => {}
     }
@@ -74,6 +82,9 @@ fn run(theme: Option<&str>) {
         git: GitSource::Cached(config.git.cache_ms),
         state: view,
         compact: settings.auto_compact(),
+        commands: Commands::Run {
+            stdin: text.clone(),
+        },
     };
     let mut lines = statusline::lines(&input, &config, &registry, frame);
     if let LoadNote::Invalid(_) = note {
@@ -154,6 +165,7 @@ fn preview(args: PreviewArgs, theme: Option<&str>) {
             git,
             state,
             compact,
+            commands: Commands::Show,
         };
         ansi::emit(&statusline::lines(input, &config, &registry, frame), opts)
     };

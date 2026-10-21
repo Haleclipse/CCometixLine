@@ -45,6 +45,7 @@ pub enum IconKey {
     Lines,
     Version,
     Update,
+    Command,
 }
 
 /// The icon for `key`; empty when the tier has none.
@@ -78,6 +79,7 @@ pub fn icon(key: IconKey, tier: GlyphTier) -> &'static str {
         IconKey::Lines => ("±", "±"),
         IconKey::Version => ("\u{f05a}", "v"),
         IconKey::Update => ("\u{f06b0}", "↑"),
+        IconKey::Command => ("\u{f120}", "›"),
     };
     match tier {
         GlyphTier::Nerd => nerd,
@@ -209,6 +211,7 @@ mod tests {
             IconKey::Eta,
             IconKey::Rate,
             IconKey::Today,
+            IconKey::Command,
         ];
         for key in keys {
             for tier in [GlyphTier::Nerd, GlyphTier::Unicode] {

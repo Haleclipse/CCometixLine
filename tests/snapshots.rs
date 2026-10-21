@@ -3,7 +3,7 @@
 //! intended rendering change.
 
 use ccometixline::env::AutoCompact;
-use ccometixline::metrics::GitSource;
+use ccometixline::metrics::{Commands, GitSource};
 use ccometixline::models::Registry;
 use ccometixline::render::ansi::{EmitOptions, emit};
 use ccometixline::statusline::{Frame, lines};
@@ -25,6 +25,7 @@ fn render_preset(preset: &str) -> String {
                 git: GitSource::Fixed(s.git()),
                 state: s.state(scenarios::BASE),
                 compact: AutoCompact::default(),
+                commands: Commands::Show,
             };
             let text = emit(
                 &lines(&s.input(scenarios::BASE), &config, &registry, frame),

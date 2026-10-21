@@ -4,7 +4,7 @@ use crate::config::{Config, ItemConfig, ItemSpec};
 use crate::env::{AutoCompact, ClaudeSettings};
 use crate::input::Input;
 use crate::layout::{self, LaidItem, LineSpec};
-use crate::metrics::{self, Ctx, GitSource, Options};
+use crate::metrics::{self, Commands, Ctx, GitSource, Options};
 use crate::models::Registry;
 use crate::render::span::{Line, Span, Style};
 use crate::state::StateView;
@@ -23,6 +23,7 @@ pub struct Frame {
     pub git: GitSource,
     pub state: StateView,
     pub compact: AutoCompact,
+    pub commands: Commands,
 }
 
 pub fn theme(config: &Config) -> Theme {
@@ -79,7 +80,8 @@ pub fn lines(input: &Input, config: &Config, registry: &Registry, frame: Frame) 
     let ctx = Ctx::new(input, registry, frame.now, frame.tz, theme.glyphs)
         .with_git(frame.git)
         .with_state(frame.state)
-        .with_compact(frame.compact);
+        .with_compact(frame.compact)
+        .with_commands(frame.commands);
     config
         .lines
         .iter()
@@ -171,6 +173,7 @@ mod tests {
             git: GitSource::Fixed(s.git()),
             state: s.state(scenarios::BASE),
             compact: AutoCompact::default(),
+            commands: Commands::Show,
         };
         lines(
             &s.input(scenarios::BASE),

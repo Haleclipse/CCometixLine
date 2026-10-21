@@ -4,6 +4,7 @@
 //! read-modify-write with the last writer winning, which the next render
 //! corrects.
 
+pub mod cmd_cache;
 pub mod git_cache;
 pub mod ledger;
 pub mod models_seen;
