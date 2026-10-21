@@ -193,6 +193,44 @@ pub fn get(name: &str) -> Option<Config> {
     Some(config)
 }
 
+/// What applying a preset replaces.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Parts {
+    /// Lines and look.
+    All,
+    /// The `[[line]]` layout only.
+    Layout,
+    /// Skin, palette, glyphs, color depth and separator; palette overrides
+    /// are dropped since they belong to the old palette.
+    Style,
+}
+
+/// `config` with `preset` applied. Settings about the user's setup rather
+/// than the look (width, padding, git, updates, the subagent line) stay.
+pub fn apply(config: &Config, preset: &Config, parts: Parts) -> Config {
+    let mut out = config.clone();
+    if parts != Parts::Style {
+        out.lines = preset.lines.clone();
+    }
+    if parts != Parts::Layout {
+        out.palette = preset.palette.clone();
+        out.skin = preset.skin;
+        out.glyphs = preset.glyphs;
+        out.color_depth = preset.color_depth;
+        out.separator = preset.separator.clone();
+        out.palette_overrides.clear();
+    }
+    if parts == Parts::All {
+        out.preset = preset.preset.clone();
+    }
+    out
+}
+
+/// Whether `config` still looks exactly like `preset`.
+pub fn matches(config: &Config, preset: &Config) -> bool {
+    apply(config, preset, Parts::All) == *config
+}
+
 /// The config used when the user has none.
 pub fn default_config() -> Config {
     get(DEFAULT).expect("default preset exists")
@@ -202,6 +240,34 @@ pub fn default_config() -> Config {
 mod tests {
     use super::*;
     use crate::metrics;
+
+    #[test]
+    fn applies_parts_and_keeps_the_setup() {
+        let mut mine = get("classic").unwrap();
+        mine.layout.reserve = 4;
+        mine.git.cache_ms = 0;
+        mine.palette_overrides
+            .insert("warn".into(), "#ff0000".into());
+        let dash = get("dashboard").unwrap();
+
+        let all = apply(&mine, &dash, Parts::All);
+        assert_eq!((all.lines.len(), all.skin), (3, dash.skin));
+        assert_eq!(all.preset.as_deref(), Some("dashboard"));
+        assert_eq!((all.layout.reserve, all.git.cache_ms), (4, 0));
+        assert!(all.palette_overrides.is_empty());
+        assert!(matches(&all, &dash));
+
+        let layout = apply(&mine, &dash, Parts::Layout);
+        assert_eq!(
+            (&layout.lines, &layout.palette),
+            (&dash.lines, &mine.palette)
+        );
+        assert_eq!(layout.preset.as_deref(), Some("classic"));
+
+        let style = apply(&mine, &dash, Parts::Style);
+        assert_eq!((&style.lines, &style.palette), (&mine.lines, &dash.palette));
+        assert!(!matches(&style, &dash) && !matches(&mine, &dash));
+    }
 
     #[test]
     fn every_preset_parses_and_uses_known_metrics() {

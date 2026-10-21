@@ -3,7 +3,7 @@
 
 use super::dialogs::{self, Action, Dialog, Reply};
 use super::doc::{Doc, SaveError};
-use super::pages::{Cx, Env, Home, Models, Outcome, Page, PageId, Placeholder};
+use super::pages::{Cx, Env, Home, Models, Outcome, Page, PageId, Placeholder, Presets};
 use super::preview::{self, Preview};
 use super::ui;
 use ratatui::Frame;
@@ -44,10 +44,7 @@ impl App {
     pub fn new(doc: Doc, env: Env) -> App {
         let pages: Vec<Box<dyn Page>> = vec![
             Box::new(Home::default()),
-            Box::new(Placeholder::new(
-                "Presets",
-                "The preset gallery arrives in a later step of the v2 TUI.",
-            )),
+            Box::new(Presets::default()),
             Box::new(Placeholder::new(
                 "Layout",
                 "The composer arrives in a later step of the v2 TUI.",
@@ -154,6 +151,7 @@ impl App {
         let cx = Cx {
             doc: &self.doc,
             env: &self.env,
+            preview: &self.preview,
             focused: !self.tabs_focused,
         };
         self.pages[page.index()].render(f, body, &cx);

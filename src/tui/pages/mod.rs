@@ -4,6 +4,7 @@
 mod home;
 mod models;
 mod placeholder;
+mod presets;
 
 use super::dialogs::Dialog;
 use super::doc::Doc;
@@ -19,6 +20,7 @@ use std::collections::BTreeMap;
 pub use home::Home;
 pub use models::Models;
 pub use placeholder::Placeholder;
+pub use presets::Presets;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PageId {
@@ -88,6 +90,8 @@ impl Env {
 pub struct Cx<'a> {
     pub doc: &'a Doc,
     pub env: &'a Env,
+    /// The preview bar's scenario and overrides, for pages that render.
+    pub preview: &'a super::preview::Preview,
     /// Whether the page has the keys (else the tab row does), so it shows
     /// its selection.
     pub focused: bool,

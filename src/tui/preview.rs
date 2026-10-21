@@ -4,6 +4,7 @@
 use super::convert;
 use super::doc::Doc;
 use super::ui;
+use crate::config::Config;
 use crate::env::AutoCompact;
 use crate::metrics::{Commands, GitSource};
 use crate::models::Registry;
@@ -90,10 +91,6 @@ impl Preview {
         DEPTHS[self.depth].unwrap_or_else(|| doc.config.color_depth.resolve())
     }
 
-    fn tier(&self, doc: &Doc) -> GlyphTier {
-        TIERS[self.tier].unwrap_or(doc.config.glyphs)
-    }
-
     fn width(&self, fit: u16) -> u16 {
         self.width.unwrap_or(fit).min(fit)
     }
@@ -106,13 +103,28 @@ impl Preview {
         tz: FixedOffset,
         fit: u16,
     ) -> Vec<Line<'static>> {
-        let mut config = doc.config.clone();
-        config.glyphs = self.tier(doc);
+        self.render(&doc.config, doc, registry, tz, self.width(fit))
+    }
+
+    /// `config` rendered for the current scenario in `width` columns, with
+    /// the bar's depth and glyph overrides; at most `MAX_LINES` lines.
+    pub fn render(
+        &self,
+        config: &Config,
+        doc: &Doc,
+        registry: &Registry,
+        tz: FixedOffset,
+        width: u16,
+    ) -> Vec<Line<'static>> {
+        let mut config = config.clone();
+        if let Some(t) = TIERS[self.tier] {
+            config.glyphs = t;
+        }
         let s = &SCENARIOS[self.scenario];
         let frame = Frame {
             now: BASE,
             tz,
-            width: Some(self.width(fit) as usize),
+            width: Some(width as usize),
             git: GitSource::Fixed(s.git()),
             state: s.state(BASE),
             compact: AutoCompact::default(),
