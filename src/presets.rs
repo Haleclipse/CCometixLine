@@ -1,7 +1,7 @@
 //! Built-in presets: layouts with a look. Applying one copies it into the
 //! user's config.
 
-use crate::config::Config;
+use crate::config::{Config, LineConfig};
 
 pub struct Preset {
     pub name: &'static str,
@@ -132,6 +132,23 @@ right = [{ metric = "quota.5h", widget = "gauge" }, "cost"]
     },
 ];
 
+/// The line drawn for each background task when the config has no
+/// `[subagent]` section: what it is doing on the left, kept longest; its
+/// context, running time, model and token trend on the right.
+const SUBAGENT: &str = r#"
+left = [{ metric = "task.label", icon = "", priority = 4 }]
+right = [
+  { metric = "task.trend", priority = 1 },
+  { metric = "context", widget = "text", format = "{pct}% · {tokens}", compact = "{tokens}", priority = 3 },
+  { metric = "model", compact = "{family}", priority = 2 },
+  { metric = "task.elapsed", priority = 3 },
+]
+"#;
+
+pub fn default_subagent() -> LineConfig {
+    toml::from_str(SUBAGENT).expect("built-in subagent line parses")
+}
+
 /// The preset `name` as a full config, or `None` if there is none.
 pub fn get(name: &str) -> Option<Config> {
     let preset = PRESETS.iter().find(|p| p.name == name)?;
@@ -170,6 +187,10 @@ mod tests {
                 "{}",
                 p.name
             );
+        }
+        let sub = default_subagent();
+        for item in sub.left.iter().chain(&sub.right) {
+            assert!(metrics::find(&item.config().metric).is_some());
         }
     }
 }

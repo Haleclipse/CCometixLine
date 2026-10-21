@@ -1,7 +1,7 @@
 use ccometixline::cli::{Cli, Command, PreviewArgs};
 use ccometixline::config::{self, Config, DepthSetting, LoadNote};
 use ccometixline::env::{AutoCompact, ClaudeSettings};
-use ccometixline::input::{Input, MAX_INPUT_BYTES};
+use ccometixline::input::{Input, MAX_INPUT_BYTES, SubagentInput};
 use ccometixline::metrics::{Commands, GitSource};
 use ccometixline::models::Registry;
 use ccometixline::render::ansi::{self, EmitOptions};
@@ -46,7 +46,7 @@ fn main() {
         return;
     }
 
-    run(cli.theme.as_deref());
+    run(cli.theme.as_deref(), cli.subagent);
 }
 
 fn load_config(theme: Option<&str>) -> (Config, LoadNote) {
@@ -57,11 +57,18 @@ fn load_config(theme: Option<&str>) -> (Config, LoadNote) {
     }
 }
 
-fn run(theme: Option<&str>) {
+fn run(theme: Option<&str>, subagent: bool) {
     let mut text = String::new();
     let _ = io::stdin()
         .take(MAX_INPUT_BYTES as u64)
         .read_to_string(&mut text);
+    let tasks = SubagentInput::detect(&text).or_else(|| {
+        // Asked for explicitly but not a task list: there is nothing to draw.
+        subagent.then(SubagentInput::default)
+    });
+    if let Some(payload) = tasks {
+        return run_subagent(&payload, &text, theme);
+    }
     let input = match Input::parse(&text) {
         Ok(input) => input,
         Err(e) => {
@@ -106,6 +113,35 @@ fn run(theme: Option<&str>) {
         guards: true,
     };
     println!("{}", ansi::emit(&lines, opts));
+}
+
+/// `subagentStatusLine`: one JSON object per task, `{"id", "content"}`.
+/// Tasks whose line comes out empty are left out, so Claude Code keeps its
+/// own text for them (an empty `content` would hide the task).
+fn run_subagent(payload: &SubagentInput, raw: &str, theme: Option<&str>) {
+    let (config, _) = load_config(theme);
+    let registry = Registry::load();
+    let frame = Frame {
+        now: Utc::now().timestamp(),
+        tz: *Local::now().offset(),
+        width: None,
+        git: GitSource::Cached(config.git.cache_ms),
+        state: StateView::default(),
+        compact: AutoCompact::default(),
+        commands: Commands::Run {
+            stdin: raw.to_string(),
+        },
+    };
+    let opts = EmitOptions {
+        depth: config.color_depth.resolve(),
+        guards: false,
+    };
+    for (id, line) in statusline::subagent_lines(payload, &config, &registry, frame) {
+        let content = ansi::emit(&[line], opts);
+        if !content.is_empty() {
+            println!("{}", serde_json::json!({ "id": id, "content": content }));
+        }
+    }
 }
 
 fn update() {
@@ -178,6 +214,23 @@ fn preview(args: PreviewArgs, theme: Option<&str>) {
         )
     };
 
+    if args.subagent {
+        let frame = Frame {
+            now,
+            tz,
+            width: Some(width),
+            git: GitSource::Fixed(None),
+            state: StateView::default(),
+            compact: AutoCompact::default(),
+            commands: Commands::Show,
+        };
+        let mut payload = scenarios::subagent(now);
+        payload.columns = Some(width);
+        for (id, line) in statusline::subagent_lines(&payload, &config, &registry, frame) {
+            println!("\x1b[2m{id:>3} │\x1b[0m {}", ansi::emit(&[line], opts));
+        }
+        return;
+    }
     if args.all {
         for s in scenarios::SCENARIOS {
             println!("\x1b[2m── {} · {}\x1b[0m", s.name, s.summary);

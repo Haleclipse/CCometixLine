@@ -6,7 +6,8 @@ use ccometixline::env::AutoCompact;
 use ccometixline::metrics::{Commands, GitSource};
 use ccometixline::models::Registry;
 use ccometixline::render::ansi::{EmitOptions, emit};
-use ccometixline::statusline::{Frame, lines};
+use ccometixline::state::StateView;
+use ccometixline::statusline::{Frame, lines, subagent_lines};
 use ccometixline::{presets, scenarios};
 use chrono::FixedOffset;
 
@@ -40,6 +41,40 @@ fn render_preset(preset: &str) -> String {
         }
     }
     out
+}
+
+/// The sample background tasks with each preset's look and the default
+/// subagent line.
+fn render_subagent(preset: &str) -> String {
+    let config = presets::get(preset).unwrap();
+    let registry = Registry::default();
+    let mut out = String::new();
+    for width in [40, 60, 100] {
+        let mut payload = scenarios::subagent(scenarios::BASE);
+        payload.columns = Some(width);
+        let frame = Frame {
+            now: scenarios::BASE,
+            tz: FixedOffset::east_opt(0).unwrap(),
+            width: None,
+            git: GitSource::Fixed(None),
+            state: StateView::default(),
+            compact: AutoCompact::default(),
+            commands: Commands::Show,
+        };
+        out.push_str(&format!("── @ {width}\n"));
+        for (id, line) in subagent_lines(&payload, &config, &registry, frame) {
+            let text = emit(&[line], EmitOptions::plain());
+            out.push_str(&format!("{id}: {text}⏎\n"));
+        }
+    }
+    out
+}
+
+#[test]
+fn subagent_lines_render_every_task() {
+    for preset in ["classic", "dashboard"] {
+        insta::assert_snapshot!(format!("subagent_{preset}"), render_subagent(preset));
+    }
 }
 
 #[test]

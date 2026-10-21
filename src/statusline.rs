@@ -2,7 +2,7 @@
 
 use crate::config::{Config, ItemConfig, ItemSpec};
 use crate::env::{AutoCompact, ClaudeSettings};
-use crate::input::Input;
+use crate::input::{Input, SubagentInput};
 use crate::layout::{self, LaidItem, LineSpec};
 use crate::metrics::{self, Commands, Ctx, GitSource, Options};
 use crate::models::Registry;
@@ -77,11 +77,7 @@ pub fn lines(input: &Input, config: &Config, registry: &Registry, frame: Frame) 
             },
         )]];
     }
-    let ctx = Ctx::new(input, registry, frame.now, frame.tz, theme.glyphs)
-        .with_git(frame.git)
-        .with_state(frame.state)
-        .with_compact(frame.compact)
-        .with_commands(frame.commands);
+    let ctx = context(input, registry, &frame, &theme);
     config
         .lines
         .iter()
@@ -91,6 +87,44 @@ pub fn lines(input: &Input, config: &Config, registry: &Registry, frame: Frame) 
                 right: items(&line.right, &ctx, &theme),
             };
             layout::fit(&spec, frame.width, &theme)
+        })
+        .collect()
+}
+
+fn context<'a>(input: &'a Input, registry: &'a Registry, frame: &Frame, theme: &Theme) -> Ctx<'a> {
+    Ctx::new(input, registry, frame.now, frame.tz, theme.glyphs)
+        .with_git(frame.git.clone())
+        .with_state(frame.state.clone())
+        .with_compact(frame.compact)
+        .with_commands(frame.commands.clone())
+}
+
+/// One line per background task, for `subagentStatusLine`, keyed by task
+/// id. The width is the payload's `columns`, which already leaves out
+/// Claude Code's own prefix.
+pub fn subagent_lines(
+    payload: &SubagentInput,
+    config: &Config,
+    registry: &Registry,
+    frame: Frame,
+) -> Vec<(String, Line)> {
+    let theme = theme(config);
+    let line = config
+        .subagent
+        .clone()
+        .unwrap_or_else(crate::presets::default_subagent);
+    let width = payload.columns.or(frame.width);
+    payload
+        .tasks
+        .iter()
+        .map(|task| {
+            let input = task.input(payload);
+            let ctx = context(&input, registry, &frame, &theme).with_task(task);
+            let spec = LineSpec {
+                left: items(&line.left, &ctx, &theme),
+                right: items(&line.right, &ctx, &theme),
+            };
+            (task.id.clone(), layout::fit(&spec, width, &theme))
         })
         .collect()
 }

@@ -5,7 +5,7 @@
 //! the history the state layer would hold.
 
 use crate::git::GitInfo;
-use crate::input::Input;
+use crate::input::{Input, SubagentInput};
 use crate::state::{Sample, StateView, prompt_key};
 
 /// 2026-10-01 00:00:00 UTC.
@@ -346,6 +346,39 @@ pub const SCENARIOS: &[Scenario] = &[
 }"#,
     },
 ];
+
+/// A `subagentStatusLine` payload: two running subagents, a finished one
+/// and a shell command. Start times are milliseconds against `BASE`.
+const SUBAGENT: &str = r#"{
+  "session_id": "s-normal", "cwd": "/home/u/app", "prompt_id": "p-9", "columns": 100,
+  "tasks": [
+    {"id": "a1", "type": "local_agent", "status": "running", "description": "Review the layout code",
+     "label": "Reading src/statusline.rs", "startTime": 1790812608000, "model": "claude-opus-5-5[1m]",
+     "effort": "high", "contextWindowSize": 1000000, "tokenCount": 211265,
+     "tokenSamples": [150000, 168000, 182000, 190000, 206927, 211265], "cwd": "/home/u/app"},
+    {"id": "a2", "type": "local_agent", "status": "running", "description": "Explore test fixtures",
+     "label": "Searching for *.snap files under tests/ and fixtures/", "startTime": 1790812755000,
+     "model": "claude-sonnet-5", "contextWindowSize": 200000, "tokenCount": 48000,
+     "tokenSamples": [12000, 30000, 48000], "cwd": "/home/u/app"},
+    {"id": "a3", "type": "local_agent", "status": "completed", "description": "Find callers of budget()",
+     "label": "Find callers of budget()", "startTime": 1790812200000, "model": "claude-haiku-4-5",
+     "contextWindowSize": 200000, "tokenCount": 31000, "tokenSamples": [31000], "cwd": "/home/u/app"},
+    {"id": "b1", "type": "local_bash", "status": "running", "description": "cargo test",
+     "label": "cargo test", "startTime": 1790812780000, "tokenCount": 0, "tokenSamples": [],
+     "cwd": "/home/u/app"}
+  ]
+}"#;
+
+/// The sample subagent payload with start times moved from `BASE` to `now`.
+pub fn subagent(now: i64) -> SubagentInput {
+    let mut sub = SubagentInput::detect(SUBAGENT).expect("built-in subagent sample parses");
+    for task in &mut sub.tasks {
+        if let Some(t) = task.start_time.as_mut() {
+            *t += ((now - BASE) * 1000) as f64;
+        }
+    }
+    sub
+}
 
 pub fn find(name: &str) -> Option<&'static Scenario> {
     SCENARIOS.iter().find(|s| s.name == name)

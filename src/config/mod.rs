@@ -188,6 +188,10 @@ pub struct Config {
     pub palette_overrides: BTreeMap<String, String>,
     pub git: GitConfig,
     pub update: UpdateConfig,
+    /// The line drawn for each background task (`subagentStatusLine`); a
+    /// built-in line when absent.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub subagent: Option<LineConfig>,
     #[serde(rename = "line")]
     pub lines: Vec<LineConfig>,
 }
@@ -208,6 +212,7 @@ impl Default for Config {
             palette_overrides: BTreeMap::new(),
             git: GitConfig::default(),
             update: UpdateConfig::default(),
+            subagent: None,
             lines: Vec::new(),
         }
     }

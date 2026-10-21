@@ -1,0 +1,19 @@
+---
+source: tests/snapshots.rs
+expression: render_subagent(preset)
+---
+── @ 40
+a1:  Reading src/statusline.rs    211k ⏎
+a2:  Searching for *.snap fil… ⏎
+a3:  Find callers of budget()      31k ⏎
+b1:  cargo test                   󱦻 20s ⏎
+── @ 60
+a1:  Reading src/statusline.rs      21% · 211k   󱦻 3m12s ⏎
+a2:  Searching for *.snap files under tests/ and fixtu… ⏎
+a3:  Find callers of budget()    16% · 31k    Haiku 4.5 ⏎
+b1:  cargo test                                       󱦻 20s ⏎
+── @ 100
+a1:  Reading src/statusline.rs        ▁▃▅▆██ +61.3k    21% · 211k    Opus 5.5 1M   󱦻 3m12s ⏎
+a2:  Searching for *.snap files under tests/ and fixtu…         24% · 48k    Sonnet 5   󱦻 45s ⏎
+a3:  Find callers of budget()                                            16% · 31k    Haiku 4.5 ⏎
+b1:  cargo test                                                                               󱦻 20s ⏎

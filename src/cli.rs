@@ -12,6 +12,11 @@ pub struct Cli {
     #[arg(short = 't', long = "theme", global = true)]
     pub theme: Option<String>,
 
+    /// Render task lines for `subagentStatusLine` (also detected from the
+    /// input)
+    #[arg(long)]
+    pub subagent: bool,
+
     /// Removed in v2; kept so existing invocations exit cleanly
     #[arg(long = "patch", hide = true)]
     pub patch: Option<String>,
@@ -60,6 +65,10 @@ pub struct PreviewArgs {
     /// List the built-in scenarios and presets
     #[arg(long)]
     pub list: bool,
+
+    /// Render the sample background tasks with your subagent line
+    #[arg(long)]
+    pub subagent: bool,
 
     /// Columns available (default: $COLUMNS, else 100)
     #[arg(short, long)]

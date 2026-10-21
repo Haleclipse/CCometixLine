@@ -7,11 +7,12 @@ mod custom;
 pub mod fmt;
 mod identity;
 mod projection;
+mod task;
 mod usage;
 
 use crate::env::AutoCompact;
 use crate::git::GitInfo;
-use crate::input::Input;
+use crate::input::{Input, Task};
 use crate::models::{Registry, Resolved};
 use crate::state::StateView;
 use crate::style::{Category, GlyphTier, IconKey, Role, Severity};
@@ -116,6 +117,7 @@ pub struct Metric {
 }
 
 /// Where git status comes from.
+#[derive(Clone)]
 pub enum GitSource {
     /// Run git in the working directory, once per render.
     Live,
@@ -148,6 +150,8 @@ pub struct Ctx<'a> {
     pub state: StateView,
     pub compact: AutoCompact,
     pub commands: Commands,
+    /// The background task a subagent line describes.
+    pub task: Option<&'a Task>,
     git: GitSource,
     git_cache: OnceCell<Option<GitInfo>>,
     model_cache: OnceCell<Option<Resolved>>,
@@ -171,6 +175,7 @@ impl<'a> Ctx<'a> {
             state: StateView::default(),
             compact: AutoCompact::default(),
             commands: Commands::Show,
+            task: None,
             git: GitSource::Live,
             git_cache: OnceCell::new(),
             model_cache: OnceCell::new(),
@@ -194,6 +199,11 @@ impl<'a> Ctx<'a> {
 
     pub fn with_commands(mut self, commands: Commands) -> Self {
         self.commands = commands;
+        self
+    }
+
+    pub fn with_task(mut self, task: &'a Task) -> Self {
+        self.task = Some(task);
         self
     }
 
@@ -245,6 +255,7 @@ pub fn catalog() -> &'static [Metric] {
         all.extend(projection::metrics());
         all.extend(code::metrics());
         all.extend(custom::metrics());
+        all.extend(task::metrics());
         all
     })
 }

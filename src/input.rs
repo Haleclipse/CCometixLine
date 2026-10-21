@@ -232,6 +232,120 @@ pub struct Worktree {
     pub original_branch: Option<String>,
 }
 
+/// A list whose malformed entries are dropped one by one.
+fn lenient_list<'de, D, T>(d: D) -> Result<Vec<T>, D::Error>
+where
+    D: Deserializer<'de>,
+    T: serde::de::DeserializeOwned,
+{
+    let value = serde_json::Value::deserialize(d)?;
+    Ok(match value {
+        serde_json::Value::Array(items) => items
+            .into_iter()
+            .filter_map(|v| serde_json::from_value(v).ok())
+            .collect(),
+        _ => Vec::new(),
+    })
+}
+
+/// The JSON Claude Code writes to the `subagentStatusLine` command: the
+/// session and the background tasks (subagents, shells, workflows) listed
+/// under the prompt, one line each.
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(default)]
+pub struct SubagentInput {
+    #[serde(deserialize_with = "lenient")]
+    pub session_id: Option<String>,
+    #[serde(deserialize_with = "lenient")]
+    pub cwd: Option<String>,
+    /// Columns left for each task's line after Claude Code's own prefix.
+    #[serde(deserialize_with = "lenient")]
+    pub columns: Option<usize>,
+    #[serde(deserialize_with = "lenient_list")]
+    pub tasks: Vec<Task>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct Task {
+    pub id: String,
+    /// Name the agent was given, if any.
+    #[serde(deserialize_with = "lenient")]
+    pub name: Option<String>,
+    /// `local_agent`, `local_bash`, `local_workflow`, `remote_agent`,
+    /// `in_process_teammate`.
+    #[serde(rename = "type", deserialize_with = "lenient")]
+    pub kind: Option<String>,
+    #[serde(deserialize_with = "lenient")]
+    pub status: Option<String>,
+    #[serde(deserialize_with = "lenient")]
+    pub description: Option<String>,
+    /// What it is doing now.
+    #[serde(deserialize_with = "lenient")]
+    pub label: Option<String>,
+    /// Unix epoch milliseconds.
+    #[serde(deserialize_with = "lenient")]
+    pub start_time: Option<f64>,
+    #[serde(deserialize_with = "lenient")]
+    pub model: Option<String>,
+    #[serde(deserialize_with = "lenient")]
+    pub effort: Option<serde_json::Value>,
+    #[serde(deserialize_with = "lenient")]
+    pub context_window_size: Option<u64>,
+    #[serde(deserialize_with = "lenient")]
+    pub token_count: Option<u64>,
+    /// Recent token counts, oldest first (up to 16).
+    #[serde(deserialize_with = "lenient_list")]
+    pub token_samples: Vec<f64>,
+    #[serde(deserialize_with = "lenient")]
+    pub cwd: Option<String>,
+}
+
+impl SubagentInput {
+    /// Parse `json` if it is a subagent payload (it has a `tasks` list).
+    pub fn detect(json: &str) -> Option<SubagentInput> {
+        if !json.contains("\"tasks\"") {
+            return None;
+        }
+        let value: serde_json::Value = serde_json::from_str(json).ok()?;
+        value.get("tasks")?.as_array()?;
+        serde_json::from_value(value).ok()
+    }
+}
+
+impl Task {
+    /// The task as a status line input, so session metrics (model,
+    /// context, effort, dir, git) can describe it.
+    pub fn input(&self, parent: &SubagentInput) -> Input {
+        let cwd = self.cwd.clone().or_else(|| parent.cwd.clone());
+        let effort = match &self.effort {
+            Some(serde_json::Value::String(level)) => Some(level.clone()),
+            Some(v) => v.get("level").and_then(|l| l.as_str()).map(str::to_string),
+            None => None,
+        };
+        Input {
+            session_id: parent.session_id.clone(),
+            cwd: cwd.clone(),
+            model: self.model.clone().map(|id| Model {
+                id: Some(id),
+                display_name: None,
+            }),
+            workspace: Some(Workspace {
+                current_dir: cwd,
+                project_dir: parent.cwd.clone(),
+                ..Workspace::default()
+            }),
+            context_window: Some(ContextWindow {
+                total_input_tokens: self.token_count,
+                context_window_size: self.context_window_size,
+                ..ContextWindow::default()
+            }),
+            effort: effort.map(|level| Effort { level: Some(level) }),
+            ..Input::default()
+        }
+    }
+}
+
 /// Largest stdin payload accepted; real payloads are a few KiB.
 pub const MAX_INPUT_BYTES: usize = 1024 * 1024;
 
@@ -320,6 +434,28 @@ mod tests {
         let input = Input::parse(r#"{"future_field": {"a": 1}}"#).unwrap();
         assert!(input.model.is_none());
         assert!(input.current_dir().is_none());
+    }
+
+    #[test]
+    fn reads_subagent_payloads() {
+        let json = r#"{"session_id": "s1", "cwd": "/w/app", "columns": 120, "tasks": [
+            {"id": "a1", "type": "local_agent", "status": "running", "label": "Reading files",
+             "startTime": 1790812000000, "model": "claude-opus-5-5[1m]", "effort": "high",
+             "contextWindowSize": 1000000, "tokenCount": 211265, "tokenSamples": [206927, 211265],
+             "cwd": "/w/app"},
+            {"id": "bad", "tokenCount": "many"},
+            {"id": "b1", "type": "local_bash", "status": "completed"}
+        ]}"#;
+        let sub = SubagentInput::detect(json).unwrap();
+        assert_eq!(sub.columns, Some(120));
+        let ids: Vec<&str> = sub.tasks.iter().map(|t| t.id.as_str()).collect();
+        assert_eq!(ids, ["a1", "bad", "b1"]);
+        assert_eq!(sub.tasks[1].token_count, None);
+        let input = sub.tasks[0].input(&sub);
+        assert_eq!(input.model_id(), Some("claude-opus-5-5[1m]"));
+        assert_eq!(input.current_dir(), Some("/w/app"));
+        assert_eq!(input.effort.unwrap().level.as_deref(), Some("high"));
+        assert!(SubagentInput::detect(CAPTURED).is_none());
     }
 
     #[test]
