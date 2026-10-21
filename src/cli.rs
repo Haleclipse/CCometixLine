@@ -8,12 +8,12 @@ pub struct Cli {
     #[arg(short = 'c', long = "config")]
     pub config: bool,
 
-    /// Set theme
+    /// Override the preset, legacy v1 theme or palette for this render
     #[arg(short = 't', long = "theme")]
     pub theme: Option<String>,
 
-    /// Patch Claude Code cli.js to disable context warnings
-    #[arg(long = "patch")]
+    /// Removed in v2; kept so existing invocations exit cleanly
+    #[arg(long = "patch", hide = true)]
     pub patch: Option<String>,
 }
 
