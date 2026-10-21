@@ -1,10 +1,19 @@
 pub mod cli;
+pub mod config;
+pub mod env;
 pub mod git;
 pub mod input;
+pub mod layout;
 pub mod metrics;
 pub mod models;
 pub mod paths;
+pub mod presets;
 pub mod render;
+pub mod scenarios;
+pub mod statusline;
 pub mod style;
 pub mod version;
 pub mod widgets;
+
+#[cfg(test)]
+mod snapshot_tests;

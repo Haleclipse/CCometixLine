@@ -1,4 +1,14 @@
-use ccometixline::cli::Cli;
+use ccometixline::cli::{Cli, Command, PreviewArgs};
+use ccometixline::config::{self, Config, DepthSetting, LoadNote};
+use ccometixline::input::{Input, MAX_INPUT_BYTES};
+use ccometixline::metrics::GitSource;
+use ccometixline::models::Registry;
+use ccometixline::render::ansi::{self, EmitOptions};
+use ccometixline::render::span::{Span, Style};
+use ccometixline::statusline::{self, Frame};
+use ccometixline::style::palette::Token;
+use ccometixline::{presets, scenarios};
+use chrono::{Local, Utc};
 use std::io::{self, IsTerminal, Read};
 
 fn main() {
@@ -9,12 +19,130 @@ fn main() {
         return;
     }
 
-    if cli.config || io::stdin().is_terminal() {
-        println!("ccline v2 is under development: the configuration TUI is not available yet.");
+    if let Some(Command::Preview(args)) = cli.command {
+        preview(args, cli.theme.as_deref());
         return;
     }
 
-    let mut input = String::new();
-    let _ = io::stdin().read_to_string(&mut input);
-    println!("\x1b[0mccline v2 (in development)\x1b[0m");
+    if cli.config || io::stdin().is_terminal() {
+        println!("ccline v2 is under development: the configuration TUI is not available yet.");
+        println!("Try `ccline preview --all` to see your config against sample sessions.");
+        return;
+    }
+
+    run(cli.theme.as_deref());
+}
+
+fn load_config(theme: Option<&str>) -> (Config, LoadNote) {
+    let (config, note) = Config::load();
+    match theme.and_then(|name| config::apply_theme(config.clone(), name)) {
+        Some(themed) => (themed, note),
+        None => (config, note),
+    }
+}
+
+fn run(theme: Option<&str>) {
+    let mut text = String::new();
+    let _ = io::stdin()
+        .take(MAX_INPUT_BYTES as u64)
+        .read_to_string(&mut text);
+    let input = match Input::parse(&text) {
+        Ok(input) => input,
+        Err(e) => {
+            println!("\x1b[0mccline: could not read the status line input ({e})\x1b[0m");
+            return;
+        }
+    };
+    let (config, note) = load_config(theme);
+    let registry = Registry::load();
+    let frame = Frame {
+        now: Utc::now().timestamp(),
+        tz: *Local::now().offset(),
+        width: statusline::budget(&config, &input),
+        git: GitSource::Live,
+    };
+    let mut lines = statusline::lines(&input, &config, &registry, frame);
+    if let LoadNote::Invalid(_) = note {
+        let warn = statusline::theme(&config).palette.color(Token::Warn);
+        let mark = Span::styled(
+            " ! ccline config",
+            Style {
+                fg: warn,
+                ..Style::default()
+            },
+        );
+        match lines.first_mut() {
+            Some(first) => first.push(mark),
+            None => lines.push(vec![mark]),
+        }
+    }
+    let opts = EmitOptions {
+        depth: config.color_depth.resolve(),
+        guards: true,
+    };
+    println!("{}", ansi::emit(&lines, opts));
+}
+
+fn preview(args: PreviewArgs, theme: Option<&str>) {
+    if args.list {
+        println!("Scenarios:");
+        for s in scenarios::SCENARIOS {
+            println!("  {:<12} {}", s.name, s.summary);
+        }
+        println!("Presets (use with --theme):");
+        for p in presets::PRESETS {
+            println!("  {:<12} {}", p.name, p.summary);
+        }
+        return;
+    }
+    let (config, _) = load_config(theme);
+    let depth = match args.color.as_str() {
+        "truecolor" => DepthSetting::TrueColor,
+        "256" => DepthSetting::Ansi256,
+        "16" => DepthSetting::Ansi16,
+        "none" => DepthSetting::None,
+        _ => config.color_depth,
+    }
+    .resolve();
+    let width = args
+        .width
+        .or_else(ccometixline::env::columns)
+        .unwrap_or(100);
+    let registry = Registry::load();
+    let now = Utc::now().timestamp();
+    let tz = *Local::now().offset();
+    let opts = EmitOptions {
+        depth,
+        guards: true,
+    };
+
+    let render = |input: &Input, git: GitSource| {
+        let frame = Frame {
+            now,
+            tz,
+            width: Some(width),
+            git,
+        };
+        ansi::emit(&statusline::lines(input, &config, &registry, frame), opts)
+    };
+
+    if args.all {
+        for s in scenarios::SCENARIOS {
+            println!("\x1b[2m── {} · {}\x1b[0m", s.name, s.summary);
+            println!("{}\n", render(&s.input(now), GitSource::Fixed(s.git())));
+        }
+        return;
+    }
+    if let Some(s) = scenarios::find(&args.scenario) {
+        println!("{}", render(&s.input(now), GitSource::Fixed(s.git())));
+        return;
+    }
+    match std::fs::read_to_string(&args.scenario).map(|t| Input::parse(&t)) {
+        Ok(Ok(input)) => println!("{}", render(&input, GitSource::Live)),
+        Ok(Err(e)) => eprintln!("ccline: {} is not status line JSON: {e}", args.scenario),
+        Err(_) => eprintln!(
+            "ccline: no scenario or file named {:?}; see `ccline preview --list`",
+            args.scenario
+        ),
+    }
 }

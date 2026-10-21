@@ -27,9 +27,20 @@ impl GitInfo {
     }
 }
 
+/// Whether `dir` or a parent has a `.git` entry (a directory, or a file in
+/// linked worktrees and submodules). `GIT_DIR` counts as yes.
+pub fn in_repository(dir: &Path) -> bool {
+    std::env::var_os("GIT_DIR").is_some() || dir.ancestors().any(|d| d.join(".git").exists())
+}
+
 /// Status of the repository containing `dir`, or `None` outside a repository,
 /// when git is missing, or when it doesn't answer within the timeout.
 pub fn status(dir: &Path) -> Option<GitInfo> {
+    // Spawning git costs several milliseconds even when it then finds no
+    // repository, so check for one first.
+    if !in_repository(dir) {
+        return None;
+    }
     let mut child = Command::new("git")
         .args([
             "--no-optional-locks",
@@ -149,6 +160,20 @@ u UU N... 100644 100644 100644 100644 a b c conflict.rs
         assert_eq!(info.branch, None);
         assert_eq!(info.oid, None);
         assert!(!info.dirty());
+    }
+
+    #[test]
+    fn detects_repositories_without_spawning_git() {
+        assert!(in_repository(
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("src").as_path()
+        ));
+        let outside = std::env::temp_dir().join(format!("ccline-norepo-{}", std::process::id()));
+        std::fs::create_dir_all(&outside).unwrap();
+        if std::env::var_os("GIT_DIR").is_none() && !in_repository(&std::env::temp_dir()) {
+            assert!(!in_repository(&outside));
+            assert_eq!(status(&outside), None);
+        }
+        std::fs::remove_dir_all(&outside).unwrap();
     }
 
     #[test]

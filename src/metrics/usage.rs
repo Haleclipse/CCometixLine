@@ -193,10 +193,14 @@ fn context(ctx: &Ctx, _: &Options) -> Option<Reading> {
     };
     let mut r = Reading::default()
         .set("pct", fmt::percent(ratio))
-        .set("tokens", fmt::tokens(tokens))
         .set("window", fmt::tokens(window))
         .set("left", fmt::tokens(window.saturating_sub(tokens)))
         .ratio(ratio);
+    // Before the first response there is nothing to count; leave the field
+    // unset so templates drop it instead of showing "0 tokens".
+    if tokens > 0 {
+        r = r.set("tokens", fmt::tokens(tokens));
+    }
     if corrected && let Some(p) = cw.used_percentage {
         r = r.set("cc_pct", fmt::percent(p / 100.0));
     }

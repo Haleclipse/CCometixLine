@@ -1,0 +1,58 @@
+---
+source: src/snapshot_tests.rs
+expression: render_preset(preset.name)
+---
+── normal @ 60
+◔ ▕████████████▍       ▏ 62% · 124k               ◆ Opus 4.8⏎
+── normal @ 100
+◔ ▕████████████▍       ▏ 62% · 124k                                                       ◆ Opus 4.8⏎
+── normal @ 140
+◔ ▕████████████▍       ▏ 62% · 124k                                                                                               ◆ Opus 4.8⏎
+── fresh @ 60
+◔ ▕                    ▏ 0%                       ◆ Sonnet 5⏎
+── fresh @ 100
+◔ ▕                    ▏ 0%                                                               ◆ Sonnet 5⏎
+── fresh @ 140
+◔ ▕                    ▏ 0%                                                                                                       ◆ Sonnet 5⏎
+── near-full @ 60
+◔ ▕██████████████████▎ ▏ 91% · 182k               ◆ Opus 4.8⏎
+── near-full @ 100
+◔ ▕██████████████████▎ ▏ 91% · 182k                                                       ◆ Opus 4.8⏎
+── near-full @ 140
+◔ ▕██████████████████▎ ▏ 91% · 182k                                                                                               ◆ Opus 4.8⏎
+── big-context @ 60
+◔ ▕█████▍              ▏ 27% · 270k            ◆ Opus 5.5 1M⏎
+── big-context @ 100
+◔ ▕█████▍              ▏ 27% · 270k                                                    ◆ Opus 5.5 1M⏎
+── big-context @ 140
+◔ ▕█████▍              ▏ 27% · 270k                                                                                            ◆ Opus 5.5 1M⏎
+── third-party @ 60
+◔ ▕████████████████▎   ▏ 81% · 104k          ◆ Kimi K2 Turbo⏎
+── third-party @ 100
+◔ ▕████████████████▎   ▏ 81% · 104k                                                  ◆ Kimi K2 Turbo⏎
+── third-party @ 140
+◔ ▕████████████████▎   ▏ 81% · 104k                                                                                          ◆ Kimi K2 Turbo⏎
+── worktree @ 60
+◔ ▕███▊                ▏ 19% · 38k                ◆ Sonnet 5⏎
+── worktree @ 100
+◔ ▕███▊                ▏ 19% · 38k                                                        ◆ Sonnet 5⏎
+── worktree @ 140
+◔ ▕███▊                ▏ 19% · 38k                                                                                                ◆ Sonnet 5⏎
+── non-git @ 60
+◔ ▕█                   ▏ 5% · 9k                 ◆ Haiku 4.5⏎
+── non-git @ 100
+◔ ▕█                   ▏ 5% · 9k                                                         ◆ Haiku 4.5⏎
+── non-git @ 140
+◔ ▕█                   ▏ 5% · 9k                                                                                                 ◆ Haiku 4.5⏎
+── gateway @ 60
+◔ ▕████████            ▏ 40% · 80k                ◆ Sonnet 5⏎
+── gateway @ 100
+◔ ▕████████            ▏ 40% · 80k                                                        ◆ Sonnet 5⏎
+── gateway @ 140
+◔ ▕████████            ▏ 40% · 80k                                                                                                ◆ Sonnet 5⏎
+── old-cc @ 60
+ccline needs Claude Code 2.1.153 or newer (running 2.1.140)⏎
+── old-cc @ 100
+ccline needs Claude Code 2.1.153 or newer (running 2.1.140)⏎
+── old-cc @ 140
+ccline needs Claude Code 2.1.153 or newer (running 2.1.140)⏎
