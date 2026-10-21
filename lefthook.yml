@@ -2,6 +2,8 @@ pre-commit:
   parallel: true
   commands:
     fmt-check:
-      run: cargo fmt --all -- --check
+      glob: "*.rs"
+      run: cargo fmt -- --check
     clippy:
+      glob: "*.{rs,toml}"
       run: cargo clippy -- -D warnings
