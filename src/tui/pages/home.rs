@@ -58,6 +58,10 @@ fn health(cx: &Cx) -> Vec<Line<'static>> {
         LoadNote::Fine => check('✓', "config.toml valid".into()),
         LoadNote::Missing => check('·', "no config.toml yet: using the classic preset".into()),
         LoadNote::Migrated => check('·', "v1 config moved to config.v1.toml".into()),
+        LoadNote::V1 => check(
+            '!',
+            "config.toml is a v1 config: ^S replaces it (kept as config.v1.toml)".into(),
+        ),
         LoadNote::Invalid(e) => check('!', format!("config.toml invalid: {e}")),
     });
     out.push(match &cx.doc.models_error {

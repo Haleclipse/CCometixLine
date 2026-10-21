@@ -226,6 +226,8 @@ pub enum LoadNote {
     Missing,
     /// A v1 config was backed up and replaced.
     Migrated,
+    /// A v1 config, converted in memory only; saving replaces it.
+    V1,
     /// The file couldn't be used; the default preset is used instead.
     Invalid(String),
 }
@@ -246,6 +248,12 @@ impl Config {
             &crate::paths::legacy_config_backup(),
         )
     }
+
+    /// Read the user's config without writing anything, even for a v1
+    /// file (for previews and the TUI, which migrates only on save).
+    pub fn read() -> (Config, LoadNote) {
+        read_from(&crate::paths::config_file())
+    }
 }
 
 fn is_v1(table: &toml::Table) -> bool {
@@ -253,7 +261,23 @@ fn is_v1(table: &toml::Table) -> bool {
         && (table.contains_key("style") || table.contains_key("segments"))
 }
 
+/// Load `path` for rendering: a v1 file is backed up to `backup` and
+/// replaced, so the status line never comes out blank.
 pub fn load_from(path: &Path, backup: &Path) -> (Config, LoadNote) {
+    let (config, note) = read_from(path);
+    if note != LoadNote::V1 {
+        return (config, note);
+    }
+    if !backup.exists() {
+        let _ = std::fs::rename(path, backup);
+    }
+    let _ = config.save(path);
+    (config, LoadNote::Migrated)
+}
+
+/// Read `path` without writing; a v1 file comes back converted, as
+/// `LoadNote::V1`.
+pub fn read_from(path: &Path) -> (Config, LoadNote) {
     let text = match std::fs::read_to_string(path) {
         Ok(t) => t,
         Err(_) => return (presets::default_config(), LoadNote::Missing),
@@ -274,11 +298,7 @@ pub fn load_from(path: &Path, backup: &Path) -> (Config, LoadNote) {
             .unwrap_or("default");
         let config =
             apply_theme(presets::default_config(), theme).unwrap_or_else(presets::default_config);
-        if !backup.exists() {
-            let _ = std::fs::rename(path, backup);
-        }
-        let _ = config.save(path);
-        return (config, LoadNote::Migrated);
+        return (config, LoadNote::V1);
     }
     match Config::deserialize(toml::Value::Table(table)) {
         Ok(config) => (config, LoadNote::Fine),
@@ -394,8 +414,15 @@ mod tests {
         )
         .unwrap();
 
+        // Reading leaves the file alone.
+        let (read, note) = read_from(&path);
+        assert_eq!(note, LoadNote::V1);
+        assert!(!backup.exists());
+        assert!(std::fs::read_to_string(&path).unwrap().contains("[style]"));
+
         let (config, note) = load_from(&path, &backup);
         assert_eq!(note, LoadNote::Migrated);
+        assert_eq!(config, read);
         assert_eq!(
             (config.palette.as_str(), config.skin),
             ("nord", SkinKind::Powerline)

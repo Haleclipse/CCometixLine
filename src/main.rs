@@ -55,8 +55,17 @@ fn main() {
     run(cli.theme.as_deref(), cli.subagent);
 }
 
+/// The config for rendering; a v1 file is migrated (see `read_config`).
 fn load_config(theme: Option<&str>) -> (Config, LoadNote) {
-    let (config, note) = Config::load();
+    themed(Config::load(), theme)
+}
+
+/// The config without writing anything, for previews.
+fn read_config(theme: Option<&str>) -> (Config, LoadNote) {
+    themed(Config::read(), theme)
+}
+
+fn themed((config, note): (Config, LoadNote), theme: Option<&str>) -> (Config, LoadNote) {
     match theme.and_then(|name| config::apply_theme(config.clone(), name)) {
         Some(themed) => (themed, note),
         None => (config, note),
@@ -183,7 +192,7 @@ fn preview(args: PreviewArgs, theme: Option<&str>) {
         }
         return;
     }
-    let (config, _) = load_config(theme);
+    let (config, _) = read_config(theme);
     let depth = match args.color.as_str() {
         "truecolor" => DepthSetting::TrueColor,
         "256" => DepthSetting::Ansi256,
