@@ -150,7 +150,16 @@ pub fn paint(item: &ItemView, theme: &Theme) -> Vec<Span> {
     item.pieces
         .iter()
         .map(|p| {
-            let style = if filled {
+            let style = if let Role::Pace { used, elapsed } = p.role {
+                // Top half: usage. Bottom half: time passed in the window.
+                let track = if filled { on_fill } else { muted };
+                Style {
+                    fg: if used { sev.or(base) } else { track },
+                    bg: if elapsed { muted } else { bg },
+                    dim: !used && filled,
+                    ..Style::default()
+                }
+            } else if filled {
                 let dim = matches!(p.role, Role::Empty | Role::Muted);
                 Style {
                     fg: on_fill,
@@ -166,8 +175,9 @@ pub fn paint(item: &ItemView, theme: &Theme) -> Vec<Span> {
                     Role::Muted | Role::Empty => muted,
                     Role::Fill(s) => severity_token(s).and_then(|t| theme.token(t)).or(base),
                     Role::Gradient(t) => gradient(theme, t),
-                    Role::Up => theme.token(Token::Ok),
-                    Role::Down => theme.token(Token::Crit),
+                    Role::Good => theme.token(Token::Ok),
+                    Role::Bad => theme.token(Token::Crit),
+                    Role::Pace { .. } => unreachable!("handled above"),
                 };
                 Style {
                     fg,

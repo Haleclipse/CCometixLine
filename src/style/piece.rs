@@ -26,10 +26,16 @@ pub enum Role {
     Gradient(f32),
     /// An empty cell of a graph.
     Empty,
-    /// An increase or good delta, e.g. lines added.
-    Up,
-    /// A decrease or bad delta, e.g. lines removed.
-    Down,
+    /// Something good, e.g. lines added or being under budget.
+    Good,
+    /// Something bad, e.g. lines removed or being over budget.
+    Bad,
+    /// One `▀` cell of a pace bar: the top half shows usage, the bottom half
+    /// how much of the window has passed.
+    Pace {
+        used: bool,
+        elapsed: bool,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq)]

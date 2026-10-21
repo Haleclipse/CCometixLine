@@ -1,7 +1,10 @@
 pub mod cli;
+pub mod git;
 pub mod input;
+pub mod metrics;
 pub mod models;
 pub mod paths;
 pub mod render;
 pub mod style;
 pub mod version;
+pub mod widgets;
