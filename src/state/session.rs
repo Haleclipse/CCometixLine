@@ -127,6 +127,17 @@ impl SessionState {
     }
 }
 
+/// The most recently saved session, for replaying in the TUI.
+pub fn latest() -> Option<SessionState> {
+    let newest = std::fs::read_dir(dir().join("sessions"))
+        .ok()?
+        .flatten()
+        .filter_map(|e| Some((e.metadata().ok()?.modified().ok()?, e.path())))
+        .max_by_key(|(modified, _)| *modified)?
+        .1;
+    read_json(&newest)
+}
+
 /// Context size at the end of each turn, oldest first; the last entry is the
 /// current turn so far. A turn is one prompt when samples carry prompt keys,
 /// otherwise each distinct reading.

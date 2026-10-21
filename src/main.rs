@@ -41,8 +41,14 @@ fn main() {
     }
 
     if cli.config || io::stdin().is_terminal() {
-        println!("ccline v2 is under development: the configuration TUI is not available yet.");
-        println!("Try `ccline preview --all` to see your config against sample sessions.");
+        if !io::stdout().is_terminal() {
+            eprintln!("ccline: the configuration TUI needs a terminal.");
+            std::process::exit(1);
+        }
+        if let Err(e) = ccometixline::tui::run() {
+            eprintln!("ccline: {e}");
+            std::process::exit(1);
+        }
         return;
     }
 

@@ -1,0 +1,40 @@
+//! The configuration TUI: `ccline` run from a terminal, or `ccline -c`.
+
+mod app;
+mod convert;
+mod dialogs;
+pub mod doc;
+mod pages;
+mod preview;
+mod ui;
+
+use app::App;
+use doc::{Doc, Paths};
+use pages::Env;
+use ratatui::DefaultTerminal;
+use ratatui::crossterm::event::{self, Event, KeyEventKind};
+use std::time::Duration;
+
+/// How often the screen redraws without input, so messages expire.
+const TICK: Duration = Duration::from_millis(500);
+
+pub fn run() -> std::io::Result<()> {
+    let mut app = App::new(Doc::open(Paths::user()), Env::detect());
+    // `ratatui::run` restores the terminal on return and on panic.
+    ratatui::run(|terminal| event_loop(terminal, &mut app))
+}
+
+fn event_loop(terminal: &mut DefaultTerminal, app: &mut App) -> std::io::Result<()> {
+    while !app.quit {
+        terminal.draw(|f| app.render(f))?;
+        if event::poll(TICK)? {
+            // Resizes only need the redraw at the top of the loop.
+            if let Event::Key(key) = event::read()?
+                && key.kind == KeyEventKind::Press
+            {
+                app.handle_key(key);
+            }
+        }
+    }
+    Ok(())
+}

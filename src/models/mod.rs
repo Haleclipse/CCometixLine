@@ -104,19 +104,31 @@ impl Default for Registry {
     }
 }
 
+impl ModelsFile {
+    /// Read `path`; a missing file is an empty registry.
+    pub fn load(path: &std::path::Path) -> Result<ModelsFile, String> {
+        match std::fs::read_to_string(path) {
+            Ok(text) => toml::from_str(&text).map_err(|e| format!("{}: {e}", path.display())),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(ModelsFile::default()),
+            Err(e) => Err(format!("{}: {e}", path.display())),
+        }
+    }
+
+    /// Write `path` atomically. Comments in a hand-edited file are not kept.
+    pub fn save(&self, path: &std::path::Path) -> std::io::Result<()> {
+        let text = toml::to_string_pretty(self).map_err(std::io::Error::other)?;
+        crate::paths::write_atomic(path, &text)
+    }
+}
+
 impl Registry {
     /// Load `models.toml`; a missing file is fine, a broken one falls back to
     /// the built-ins and records why in `load_error`.
     pub fn load() -> Self {
-        let path = crate::paths::models_file();
-        let text = match std::fs::read_to_string(&path) {
-            Ok(text) => text,
-            Err(_) => return Registry::default(),
-        };
-        match toml::from_str::<ModelsFile>(&text) {
+        match ModelsFile::load(&crate::paths::models_file()) {
             Ok(file) => Registry::from_file(file),
             Err(e) => Registry {
-                load_error: Some(format!("{}: {e}", path.display())),
+                load_error: Some(e),
                 ..Registry::default()
             },
         }
@@ -256,6 +268,32 @@ mod tests {
         assert_eq!(res.source, NameSource::UserRule(0));
         assert_eq!(res.window, Some(256_000));
         assert!(res.window_corrected);
+    }
+
+    #[test]
+    fn saves_in_the_v1_shape() {
+        let dir = std::env::temp_dir().join(format!("ccline-models-{}", std::process::id()));
+        let path = dir.join("models.toml");
+        assert_eq!(ModelsFile::load(&path), Ok(ModelsFile::default()));
+        let file = ModelsFile {
+            rules: vec![Rule {
+                pattern: "kimi-k2-0905".into(),
+                display_name: Some("Kimi K2 0905".into()),
+                context_limit: Some(256_000),
+                match_kind: MatchKind::Contains,
+            }],
+            context_modifiers: Vec::new(),
+        };
+        file.save(&path).unwrap();
+        let text = std::fs::read_to_string(&path).unwrap();
+        assert!(
+            text.contains("[[models]]") && !text.contains("match"),
+            "{text}"
+        );
+        assert_eq!(ModelsFile::load(&path), Ok(file));
+        std::fs::write(&path, "[[models]]\npattern = 3\n").unwrap();
+        assert!(ModelsFile::load(&path).is_err());
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]

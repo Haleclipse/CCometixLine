@@ -14,5 +14,6 @@ pub mod scenarios;
 pub mod state;
 pub mod statusline;
 pub mod style;
+pub mod tui;
 pub mod version;
 pub mod widgets;
