@@ -14,7 +14,7 @@ use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Cell, Paragraph, Row, Table, TableState};
+use ratatui::widgets::{Block, Cell, HighlightSpacing, Paragraph, Row, Table, TableState};
 
 /// What Claude Code assumes for a model it doesn't know.
 const CC_DEFAULT: u64 = 200_000;
@@ -313,7 +313,10 @@ impl Models {
             .block(block)
             .column_spacing(1)
             .row_highlight_style(ui::accent())
-            .highlight_symbol(ui::SELECTED);
+            .highlight_symbol(ui::SELECTED)
+            // Keep the marker's column whether or not the table has focus,
+            // so rows don't shift sideways when focus moves.
+            .highlight_spacing(HighlightSpacing::Always);
         let mut state = TableState::default()
             .with_selected((focused && !rules.is_empty()).then_some(self.rule));
         f.render_stateful_widget(table, area, &mut state);
@@ -744,6 +747,33 @@ mod tests {
         assert!(screen(&mut app, 112, 33).contains("Kimi K2 Turbo"));
         app.handle_key(key(KeyCode::Delete));
         assert_eq!(app.doc.models.rules.len(), 1);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn rows_stay_put_when_focus_moves() {
+        let (dir, paths) = temp_paths("models-steady");
+        let mut doc = Doc::open(paths);
+        doc.edit(|_, m| {
+            m.rules.push(Rule {
+                pattern: "kimi".into(),
+                display_name: Some("Kimi".into()),
+                context_limit: None,
+                match_kind: MatchKind::Contains,
+            })
+        });
+        let mut app = App::new(doc, env());
+        app.handle_key(key(KeyCode::Left));
+        app.handle_key(key(KeyCode::Left));
+        let column = |s: &str| {
+            let row = s.lines().find(|l| l.contains("Kimi")).unwrap();
+            row[..row.find("contains").unwrap()].chars().count()
+        };
+        let on_tabs = column(&screen(&mut app, 112, 33));
+        app.handle_key(key(KeyCode::Down));
+        let in_page = screen(&mut app, 112, 33);
+        assert!(in_page.contains("❯ 1"), "{in_page}");
+        assert_eq!(column(&in_page), on_tabs);
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
