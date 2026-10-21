@@ -118,6 +118,17 @@ pub fn popup(f: &mut Frame, area: Rect, width: u16, height: u16) -> Rect {
     rect
 }
 
+/// A `■` in `color` at `depth`; `□` for the terminal's default color.
+pub fn swatch(
+    color: Option<crate::style::Color>,
+    depth: crate::style::color::ColorDepth,
+) -> Span<'static> {
+    match color.and_then(|c| super::convert::color(c, depth)) {
+        Some(c) => Span::styled("■", Style::default().fg(c)),
+        None => Span::styled("□", muted()),
+    }
+}
+
 /// `‹value›` for a setting cycled with keys.
 pub fn choice(value: &str) -> Span<'static> {
     Span::styled(format!("‹{value}›"), accent())

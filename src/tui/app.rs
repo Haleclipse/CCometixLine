@@ -3,7 +3,7 @@
 
 use super::dialogs::{self, Action, Dialog, Reply};
 use super::doc::{Doc, SaveError};
-use super::pages::{Cx, Env, Home, Models, Outcome, Page, PageId, Placeholder, Presets};
+use super::pages::{Cx, Env, Home, Models, Outcome, Page, PageId, Placeholder, Presets, StylePage};
 use super::preview::{self, Preview};
 use super::ui;
 use ratatui::Frame;
@@ -49,10 +49,7 @@ impl App {
                 "Layout",
                 "The composer arrives in a later step of the v2 TUI.",
             )),
-            Box::new(Placeholder::new(
-                "Style",
-                "Skins, palettes and glyphs arrive in a later step of the v2 TUI.",
-            )),
+            Box::new(StylePage::default()),
             Box::new(Models::default()),
             Box::new(Placeholder::new(
                 "Claude Code",

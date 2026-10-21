@@ -178,6 +178,28 @@ impl PaletteFile {
     }
 }
 
+/// Palettes to offer: the built-ins, then the user's own files in
+/// `palettes/` (a file named like a built-in replaces it, so it isn't
+/// listed twice).
+pub fn available() -> Vec<String> {
+    let mut names: Vec<String> = BUILTIN_NAMES.iter().map(|s| s.to_string()).collect();
+    let dir = crate::paths::home().join("palettes");
+    if let Ok(entries) = std::fs::read_dir(dir) {
+        let mut own: Vec<String> = entries
+            .flatten()
+            .filter_map(|e| {
+                let path = e.path();
+                (path.extension()? == "toml")
+                    .then(|| path.file_stem()?.to_str().map(str::to_string))?
+            })
+            .filter(|n| !names.contains(n))
+            .collect();
+        own.sort();
+        names.extend(own);
+    }
+    names
+}
+
 pub const BUILTIN_NAMES: [&str; 9] = [
     "terminal",
     "catppuccin-mocha",

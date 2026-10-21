@@ -1,6 +1,8 @@
 //! Dialogs stack over the pages; the top one gets every key until it
 //! closes.
 
+mod color;
+mod fonts;
 mod form;
 mod help;
 mod prompts;
@@ -11,6 +13,8 @@ use ratatui::Frame;
 use ratatui::crossterm::event::KeyEvent;
 use ratatui::layout::Rect;
 
+pub use color::{ColorDialog, Target as ColorTarget};
+pub use fonts::FontCheck;
 pub use help::Help;
 pub use prompts::{Conflict, Quit};
 pub use rule::{ModifierDialog, RuleDialog};

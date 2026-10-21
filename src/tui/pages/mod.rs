@@ -5,6 +5,7 @@ mod home;
 mod models;
 mod placeholder;
 mod presets;
+mod style;
 
 use super::dialogs::Dialog;
 use super::doc::Doc;
@@ -21,6 +22,7 @@ pub use home::Home;
 pub use models::Models;
 pub use placeholder::Placeholder;
 pub use presets::Presets;
+pub use style::StylePage;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PageId {
