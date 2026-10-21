@@ -17,12 +17,12 @@ enum Go {
     Quit,
 }
 
-const START: [(&str, &str, Go); 5] = [
-    ("Open composer", "3", Go::Page(PageId::Layout)),
-    ("Browse presets", "2", Go::Page(PageId::Presets)),
-    ("Model registry", "5", Go::Page(PageId::Models)),
-    ("Claude Code integration", "6", Go::Page(PageId::Claude)),
-    ("Quit", "q", Go::Quit),
+const START: [(&str, Go); 5] = [
+    ("Open composer", Go::Page(PageId::Layout)),
+    ("Browse presets", Go::Page(PageId::Presets)),
+    ("Model registry", Go::Page(PageId::Models)),
+    ("Claude Code integration", Go::Page(PageId::Claude)),
+    ("Quit", Go::Quit),
 ];
 
 #[derive(Default)]
@@ -99,18 +99,13 @@ impl Page for Home {
         let start: Vec<Line> = START
             .iter()
             .enumerate()
-            .map(|(i, (label, key, _))| {
-                let marker = if i == self.selected { "> " } else { "  " };
-                let style = if i == self.selected {
-                    ui::accent()
-                } else {
-                    Style::default()
-                };
-                let width = right.width.saturating_sub(6) as usize;
-                let text = format!("{marker}{label:<w$}", w = width.saturating_sub(4));
+            .map(|(i, (label, _))| {
+                let on = cx.focused && i == self.selected;
+                let marker = if on { ui::SELECTED } else { "  " };
+                let style = if on { ui::accent() } else { Style::default() };
                 Line::from(vec![
-                    Span::styled(text, style),
-                    Span::styled(format!("{key:>2}"), ui::muted()),
+                    Span::styled(marker, ui::accent()),
+                    Span::styled(label.to_string(), style),
                 ])
             })
             .collect();
@@ -119,15 +114,17 @@ impl Page for Home {
 
     fn handle(&mut self, key: KeyEvent, _: &mut Doc, _: &Env) -> Outcome {
         match key.code {
+            // Up from the first entry goes to the tab row.
+            KeyCode::Up if self.selected == 0 => Outcome::Ignored,
             KeyCode::Up => {
-                self.selected = self.selected.checked_sub(1).unwrap_or(START.len() - 1);
+                self.selected -= 1;
                 Outcome::Consumed
             }
             KeyCode::Down => {
-                self.selected = (self.selected + 1) % START.len();
+                self.selected = (self.selected + 1).min(START.len() - 1);
                 Outcome::Consumed
             }
-            KeyCode::Enter => match START[self.selected].2 {
+            KeyCode::Enter => match START[self.selected].1 {
                 Go::Page(p) => Outcome::Goto(p),
                 Go::Quit => Outcome::Quit,
             },
@@ -136,6 +133,6 @@ impl Page for Home {
     }
 
     fn keys(&self) -> Vec<(&'static str, &'static str)> {
-        vec![("↑↓", "move"), ("enter", "open"), ("1-6", "pages")]
+        vec![("↑↓", "move"), ("enter", "open")]
     }
 }

@@ -1,4 +1,9 @@
-//! Shared pieces of the TUI's own look: colors, rules, key hints, popups.
+//! Shared pieces of the TUI's own look: colors, rules, key hints, popups,
+//! and small widgets.
+
+mod input;
+
+pub use input::TextInput;
 
 use ratatui::Frame;
 use ratatui::buffer::Buffer;
@@ -7,7 +12,8 @@ use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Clear};
 
-pub const ACCENT: Color = Color::Cyan;
+// Named ANSI colors only, so the TUI follows the terminal's theme.
+pub const ACCENT: Color = Color::Blue;
 pub const MUTED: Color = Color::DarkGray;
 pub const OK: Color = Color::Green;
 pub const WARN: Color = Color::Yellow;
@@ -23,6 +29,37 @@ pub fn accent() -> Style {
 
 pub fn strong() -> Style {
     Style::default().add_modifier(Modifier::BOLD)
+}
+
+/// The current page's tab while the tab row has the keys: a block in the
+/// accent color. Reversed rather than painted, so the text takes the
+/// terminal's background color whatever the theme.
+pub fn tab_on() -> Style {
+    Style::default()
+        .fg(ACCENT)
+        .add_modifier(Modifier::REVERSED | Modifier::BOLD)
+}
+
+/// The current page's tab while the page has the keys: a block in the
+/// terminal's foreground color.
+pub fn tab_current() -> Style {
+    Style::default().add_modifier(Modifier::REVERSED | Modifier::BOLD)
+}
+
+/// The app's name at the start of the tab row.
+pub fn brand() -> Style {
+    accent().add_modifier(Modifier::BOLD)
+}
+
+/// Marker in front of the selected list row.
+pub const SELECTED: &str = "❯ ";
+
+/// Titles sit on a border drawn in the muted color; without their own
+/// foreground they would take it on.
+pub fn title() -> Style {
+    Style::default()
+        .fg(Color::Reset)
+        .add_modifier(Modifier::BOLD)
 }
 
 /// A rule across `width` cells at row `y`, joined to the frame's side
@@ -43,16 +80,19 @@ pub fn rule(buf: &mut Buffer, x: u16, y: u16, width: u16, title: Option<Line>) {
     }
 }
 
-/// `key desc   key desc` hints for the footer and panels.
+/// ` key desc   key desc` hints for the footer, dialogs and panel
+/// borders (where the text needs its own color, not the border's).
 pub fn hints(keys: &[(&str, &str)]) -> Line<'static> {
-    let mut spans = Vec::new();
+    let text = Style::default().fg(Color::Reset);
+    let mut spans = vec![Span::styled(" ", text)];
     for (i, (key, desc)) in keys.iter().enumerate() {
         if i > 0 {
-            spans.push(Span::raw("   "));
+            spans.push(Span::styled("   ", text));
         }
         spans.push(Span::styled(key.to_string(), accent()));
-        spans.push(Span::raw(format!(" {desc}")));
+        spans.push(Span::styled(format!(" {desc}"), text));
     }
+    spans.push(Span::styled(" ", text));
     Line::from(spans)
 }
 
@@ -61,7 +101,7 @@ pub fn panel(title: &str) -> Block<'static> {
     Block::bordered()
         .border_type(BorderType::Rounded)
         .border_style(muted())
-        .title(Span::styled(format!(" {title} "), strong()))
+        .title(Span::styled(format!(" {title} "), self::title()))
 }
 
 /// A `width` × `height` area centered in `area`, cleared for a popup.

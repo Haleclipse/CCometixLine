@@ -104,7 +104,58 @@ impl Default for Registry {
     }
 }
 
+impl Rule {
+    /// Whether this rule matches `id`, ignoring case. A regex that doesn't
+    /// compile matches nothing (see `regex_error`).
+    pub fn matches(&self, id: &str) -> bool {
+        let (id, pattern) = (id.to_lowercase(), self.pattern.to_lowercase());
+        match self.match_kind {
+            MatchKind::Contains => id.contains(&pattern),
+            MatchKind::Prefix => id.starts_with(&pattern),
+            MatchKind::Exact => id == pattern,
+            MatchKind::Regex => {
+                Regex::new(&format!("(?i){}", self.pattern)).is_ok_and(|re| re.is_match(&id))
+            }
+        }
+    }
+
+    pub fn regex_error(&self) -> Option<String> {
+        if self.match_kind != MatchKind::Regex {
+            return None;
+        }
+        Regex::new(&format!("(?i){}", self.pattern))
+            .err()
+            .map(|e| e.to_string())
+    }
+}
+
 impl ModelsFile {
+    /// For each rule, the earlier rule that takes every id it would match,
+    /// so it never applies. Judged on the rule's own pattern (for literal
+    /// patterns) and on `samples` it matches, such as ids seen recently.
+    pub fn shadowed(&self, samples: &[&str]) -> Vec<Option<usize>> {
+        (0..self.rules.len())
+            .map(|j| {
+                let rule = &self.rules[j];
+                let mut ids: Vec<&str> = samples
+                    .iter()
+                    .copied()
+                    .filter(|id| rule.matches(id))
+                    .collect();
+                if rule.match_kind != MatchKind::Regex {
+                    ids.push(&rule.pattern);
+                }
+                let first = |id: &str| (0..j).find(|&i| self.rules[i].matches(id));
+                let by: Vec<Option<usize>> = ids.iter().map(|id| first(id)).collect();
+                if by.is_empty() || by.iter().any(Option::is_none) {
+                    None
+                } else {
+                    by.into_iter().flatten().min()
+                }
+            })
+            .collect()
+    }
+
     /// Read `path`; a missing file is an empty registry.
     pub fn load(path: &std::path::Path) -> Result<ModelsFile, String> {
         match std::fs::read_to_string(path) {
@@ -214,6 +265,27 @@ impl Registry {
     pub fn rules(&self) -> impl Iterator<Item = &Rule> {
         self.rules.iter().map(|r| &r.rule)
     }
+
+    /// Index of the first user rule that matches `id`.
+    pub fn matching_rule(&self, id: &str) -> Option<usize> {
+        let id_lower = id.to_lowercase();
+        self.rules.iter().position(|r| rule_matches(r, &id_lower))
+    }
+}
+
+/// Parse a context window written as `256000`, `256,000`, `256k`, `1m` or
+/// `1.5M`.
+pub fn parse_window(text: &str) -> Option<u64> {
+    let t = text.trim().replace(['_', ','], "").to_lowercase();
+    let (number, scale) = match t.strip_suffix('k') {
+        Some(n) => (n, 1_000.0),
+        None => match t.strip_suffix('m') {
+            Some(n) => (n, 1_000_000.0),
+            None => (t.as_str(), 1.0),
+        },
+    };
+    let value = number.trim().parse::<f64>().ok()? * scale;
+    (value >= 1.0 && value.is_finite()).then(|| value.round() as u64)
 }
 
 fn rule_matches(rule: &CompiledRule, id_lower: &str) -> bool {
@@ -268,6 +340,50 @@ mod tests {
         assert_eq!(res.source, NameSource::UserRule(0));
         assert_eq!(res.window, Some(256_000));
         assert!(res.window_corrected);
+    }
+
+    fn rule(kind: MatchKind, pattern: &str) -> Rule {
+        Rule {
+            pattern: pattern.into(),
+            display_name: None,
+            context_limit: None,
+            match_kind: kind,
+        }
+    }
+
+    #[test]
+    fn parses_windows() {
+        assert_eq!(parse_window("256k"), Some(256_000));
+        assert_eq!(parse_window("1m"), Some(1_000_000));
+        assert_eq!(parse_window("1.5M"), Some(1_500_000));
+        assert_eq!(parse_window(" 262,144 "), Some(262_144));
+        assert_eq!(parse_window("128_000"), Some(128_000));
+        assert_eq!(parse_window(""), None);
+        assert_eq!(parse_window("big"), None);
+        assert_eq!(parse_window("0"), None);
+    }
+
+    #[test]
+    fn finds_rules_that_never_apply() {
+        let file = ModelsFile {
+            rules: vec![
+                rule(MatchKind::Contains, "kimi-k2"),
+                rule(MatchKind::Exact, "kimi-k2-0905"),
+                rule(MatchKind::Prefix, "k3"),
+                rule(MatchKind::Regex, "^k3-turbo"),
+                rule(MatchKind::Regex, "^qwen"),
+                rule(MatchKind::Regex, "(unclosed"),
+            ],
+            context_modifiers: Vec::new(),
+        };
+        let shadowed = file.shadowed(&["k3-turbo-preview", "kimi-k2-turbo"]);
+        assert_eq!(shadowed, vec![None, Some(0), None, Some(2), None, None]);
+        assert!(file.rules[3].matches("K3-Turbo-x"));
+        assert!(file.rules[5].regex_error().is_some());
+        assert!(!file.rules[5].matches("(unclosed"));
+        let reg = Registry::from_file(file);
+        assert_eq!(reg.matching_rule("kimi-k2-0905"), Some(0));
+        assert_eq!(reg.matching_rule("gpt-5"), None);
     }
 
     #[test]

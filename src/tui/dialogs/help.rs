@@ -9,9 +9,10 @@ use ratatui::layout::Rect;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 
-pub const GLOBAL: [(&str, &str); 11] = [
-    ("1-6", "switch page"),
-    ("esc", "back to Home"),
+pub const GLOBAL: [(&str, &str); 12] = [
+    ("←→", "switch page, on the tab row"),
+    ("↑ esc", "up to the tab row"),
+    ("↓", "from the tab row into the page"),
     ("^S", "save"),
     ("^Z ^Y", "undo, redo"),
     ("[ ]", "preview scenario"),
@@ -43,7 +44,7 @@ impl Dialog for Help {
     fn render(&mut self, f: &mut Frame, area: Rect, _: &Doc) {
         let height = (GLOBAL.len() + self.keys.len() + 6) as u16;
         let rect = ui::popup(f, area, 56, height);
-        let mut text = vec![Line::styled(" Everywhere", ui::strong())];
+        let mut text = vec![Line::styled(" Everywhere", ui::title())];
         text.extend(rows(&GLOBAL));
         text.push(Line::raw(""));
         text.push(Line::styled(format!(" {}", self.page), ui::strong()));

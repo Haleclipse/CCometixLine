@@ -61,6 +61,12 @@ fn tier_name(t: GlyphTier) -> &'static str {
 }
 
 impl Preview {
+    pub fn select(&mut self, name: &str) {
+        if let Some(i) = SCENARIOS.iter().position(|s| s.name == name) {
+            self.scenario = i;
+        }
+    }
+
     pub fn next_scenario(&mut self, forward: bool) {
         let n = SCENARIOS.len();
         self.scenario = (self.scenario + if forward { 1 } else { n - 1 }) % n;
@@ -142,7 +148,7 @@ impl Preview {
             ("glyphs", tier),
         ];
         let build = |labels: bool| {
-            let mut spans = vec![Span::styled(" Preview ", ui::strong())];
+            let mut spans = vec![Span::styled(" Preview ", ui::title())];
             for (label, value) in &values {
                 spans.push(Span::raw(if labels {
                     format!(" {label} ")

@@ -12,7 +12,10 @@ use app::App;
 use doc::{Doc, Paths};
 use pages::Env;
 use ratatui::DefaultTerminal;
-use ratatui::crossterm::event::{self, Event, KeyEventKind};
+use ratatui::crossterm::event::{
+    self, DisableBracketedPaste, EnableBracketedPaste, Event, KeyEventKind,
+};
+use ratatui::crossterm::execute;
 use std::time::Duration;
 
 /// How often the screen redraws without input, so messages expire.
@@ -21,7 +24,12 @@ const TICK: Duration = Duration::from_millis(500);
 pub fn run() -> std::io::Result<()> {
     let mut app = App::new(Doc::open(Paths::user()), Env::detect());
     // `ratatui::run` restores the terminal on return and on panic.
-    ratatui::run(|terminal| event_loop(terminal, &mut app))
+    ratatui::run(|terminal| {
+        let _ = execute!(std::io::stdout(), EnableBracketedPaste);
+        let result = event_loop(terminal, &mut app);
+        let _ = execute!(std::io::stdout(), DisableBracketedPaste);
+        result
+    })
 }
 
 fn event_loop(terminal: &mut DefaultTerminal, app: &mut App) -> std::io::Result<()> {
@@ -29,10 +37,10 @@ fn event_loop(terminal: &mut DefaultTerminal, app: &mut App) -> std::io::Result<
         terminal.draw(|f| app.render(f))?;
         if event::poll(TICK)? {
             // Resizes only need the redraw at the top of the loop.
-            if let Event::Key(key) = event::read()?
-                && key.kind == KeyEventKind::Press
-            {
-                app.handle_key(key);
+            match event::read()? {
+                Event::Key(key) if key.kind == KeyEventKind::Press => app.handle_key(key),
+                Event::Paste(text) => app.paste(&text),
+                _ => {}
             }
         }
     }

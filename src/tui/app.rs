@@ -3,7 +3,7 @@
 
 use super::dialogs::{self, Action, Dialog, Reply};
 use super::doc::{Doc, SaveError};
-use super::pages::{Cx, Env, Home, Outcome, Page, PageId, Placeholder};
+use super::pages::{Cx, Env, Home, Models, Outcome, Page, PageId, Placeholder};
 use super::preview::{self, Preview};
 use super::ui;
 use ratatui::Frame;
@@ -34,6 +34,8 @@ pub struct App {
     pub preview: Preview,
     toast: Option<Toast>,
     pub quit: bool,
+    /// Whether keys go to the tab row (←→ switch pages) rather than the page.
+    pub tabs_focused: bool,
     /// Columns the preview fits when its width isn't set, from the last draw.
     fit: u16,
 }
@@ -54,10 +56,7 @@ impl App {
                 "Style",
                 "Skins, palettes and glyphs arrive in a later step of the v2 TUI.",
             )),
-            Box::new(Placeholder::new(
-                "Models",
-                "The model registry arrives in the next step of the v2 TUI.",
-            )),
+            Box::new(Models::default()),
             Box::new(Placeholder::new(
                 "Claude Code",
                 "Claude Code integration arrives in a later step of the v2 TUI.",
@@ -72,6 +71,7 @@ impl App {
             preview: Preview::default(),
             toast: None,
             quit: false,
+            tabs_focused: true,
             fit: 96,
         }
     }
@@ -109,13 +109,17 @@ impl App {
             .cc_version()
             .map(|v| format!("CC {v} · "))
             .unwrap_or_default();
-        let star = if self.doc.dirty() { " *" } else { "" };
-        let version = env!("CARGO_PKG_VERSION");
-        let short = version.split('.').take(2).collect::<Vec<_>>().join(".");
-        let frame = Block::bordered()
-            .border_style(ui::muted())
-            .title(Span::styled(format!(" ccline {short} "), ui::strong()))
-            .title_top(Line::from(format!(" {cc}{file}{star} ")).right_aligned());
+        let star = if self.doc.dirty() { "* " } else { "" };
+        let frame = Block::bordered().border_style(ui::muted()).title_top(
+            Line::from(vec![
+                Span::styled(
+                    format!(" {cc}{file} "),
+                    Style::default().fg(ratatui::style::Color::Reset),
+                ),
+                Span::styled(star, Style::default().fg(ui::WARN)),
+            ])
+            .right_aligned(),
+        );
         let inner = frame.inner(area);
         f.render_widget(frame, area);
 
@@ -150,6 +154,7 @@ impl App {
         let cx = Cx {
             doc: &self.doc,
             env: &self.env,
+            focused: !self.tabs_focused,
         };
         self.pages[page.index()].render(f, body, &cx);
 
@@ -167,11 +172,15 @@ impl App {
                 Style::default().fg(if t.bad { ui::BAD } else { ui::OK }),
             ),
             _ => {
-                let mut all = keys;
+                let mut all = if self.tabs_focused {
+                    vec![("←→", "switch page"), ("↓", "into the page")]
+                } else {
+                    let mut k = keys;
+                    k.push(("↑", "tabs"));
+                    k
+                };
                 all.extend([("^S", "save"), ("?", "help"), ("q", "quit")]);
-                let mut l = ui::hints(&all);
-                l.spans.insert(0, Span::raw(" "));
-                l
+                ui::hints(&all)
             }
         };
         f.render_widget(Paragraph::new(footer_line), footer);
@@ -182,13 +191,19 @@ impl App {
     }
 
     fn tab_line(&self, width: u16) -> Line<'static> {
-        let mut spans = Vec::new();
-        for (i, p) in PageId::ALL.iter().enumerate() {
-            let label = format!("{} {}", i + 1, p.title());
-            if *p == self.page {
-                spans.push(Span::styled(format!("[{label}]"), ui::accent()));
+        let mut spans = vec![Span::styled(" ccline", ui::brand()), Span::raw("  ")];
+        for p in PageId::ALL {
+            let label = format!(" {} ", p.title());
+            if p == self.page {
+                // Filled while the tab row has the keys.
+                let style = if self.tabs_focused {
+                    ui::tab_on()
+                } else {
+                    ui::tab_current()
+                };
+                spans.push(Span::styled(label, style));
             } else {
-                spans.push(Span::raw(format!(" {label} ")));
+                spans.push(Span::raw(label));
             }
             spans.push(Span::raw(" "));
         }
@@ -214,15 +229,45 @@ impl App {
             }
             return;
         }
+        if self.tabs_focused {
+            match key.code {
+                // The page shows as soon as its tab is picked.
+                KeyCode::Left => self.step_page(false),
+                KeyCode::Right => self.step_page(true),
+                KeyCode::Down | KeyCode::Enter => self.tabs_focused = false,
+                _ => self.global(key),
+            }
+            return;
+        }
         let outcome = {
             let (doc, env) = (&mut self.doc, &self.env);
             self.pages[self.page.index()].handle(key, doc, env)
         };
         match outcome {
+            // Up past the top of the page, or Esc, reaches the tab row.
+            Outcome::Ignored if matches!(key.code, KeyCode::Up | KeyCode::Esc) => {
+                self.tabs_focused = true;
+            }
             Outcome::Ignored => self.global(key),
             Outcome::Consumed => {}
-            Outcome::Goto(p) => self.page = p,
+            Outcome::Goto(p) => self.open_page(p),
+            Outcome::Open(d) => self.dialogs.push(d),
+            Outcome::Toast(t) => self.toast(t, false),
+            Outcome::Copy(text) => self.copy(&text),
             Outcome::Quit => self.request_quit(),
+        }
+    }
+
+    /// Bracketed paste goes to the top dialog, else the page.
+    pub fn paste(&mut self, text: &str) {
+        let taken = match self.dialogs.last_mut() {
+            Some(d) => d.paste(text),
+            None => self.pages[self.page.index()].paste(text),
+        };
+        if taken {
+            self.tabs_focused = false;
+        } else {
+            self.toast("Nothing here takes pasted text", false);
         }
     }
 
@@ -253,12 +298,6 @@ impl App {
                     keys,
                 }));
             }
-            KeyCode::Char(c @ '1'..='6') => {
-                if let Some(p) = PageId::from_digit(c) {
-                    self.page = p;
-                }
-            }
-            KeyCode::Esc => self.page = PageId::Home,
             KeyCode::Char('[') => self.preview.next_scenario(false),
             KeyCode::Char(']') => self.preview.next_scenario(true),
             KeyCode::Char('-') => self.preview.resize(-WIDTH_STEP, self.fit),
@@ -267,6 +306,36 @@ impl App {
             KeyCode::Char('}') => self.preview.cycle_glyphs(),
             _ => {}
         }
+    }
+
+    fn step_page(&mut self, forward: bool) {
+        let n = PageId::ALL.len();
+        let i = self.page.index();
+        self.goto(PageId::ALL[(i + if forward { 1 } else { n - 1 }) % n]);
+    }
+
+    /// Show `page` with the keys going to it.
+    pub fn open_page(&mut self, page: PageId) {
+        self.goto(page);
+        self.tabs_focused = false;
+    }
+
+    fn goto(&mut self, page: PageId) {
+        if page != self.page
+            && let Some(s) = self.pages[page.index()].scenario()
+        {
+            self.preview.select(s);
+        }
+        self.page = page;
+    }
+
+    /// Copy through the terminal (OSC 52), which works over SSH too.
+    fn copy(&mut self, text: &str) {
+        use std::io::Write;
+        let mut out = std::io::stdout();
+        let _ = write!(out, "\x1b]52;c;{}\x07", base64(text.as_bytes()));
+        let _ = out.flush();
+        self.toast(format!("Copied: {text}"), false);
     }
 
     fn request_quit(&mut self) {
@@ -280,6 +349,7 @@ impl App {
     fn act(&mut self, action: Action) {
         match action {
             Action::Quit => self.quit = true,
+            Action::Toast(t) => self.toast(t, false),
             Action::Reload => {
                 self.doc.reload();
                 self.toast("Reloaded from disk", false);
@@ -297,6 +367,27 @@ impl App {
             },
         }
     }
+}
+
+fn base64(bytes: &[u8]) -> String {
+    const TABLE: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = String::new();
+    for chunk in bytes.chunks(3) {
+        let b = [
+            chunk[0],
+            *chunk.get(1).unwrap_or(&0),
+            *chunk.get(2).unwrap_or(&0),
+        ];
+        let n = (b[0] as u32) << 16 | (b[1] as u32) << 8 | b[2] as u32;
+        for i in 0..4 {
+            if i <= chunk.len() {
+                out.push(TABLE[(n >> (18 - 6 * i) & 63) as usize] as char);
+            } else {
+                out.push('=');
+            }
+        }
+    }
+    out
 }
 
 #[cfg(test)]
@@ -317,9 +408,23 @@ pub(crate) mod tests {
 
     pub fn env() -> Env {
         Env {
+            now: crate::scenarios::BASE,
             tz: chrono::FixedOffset::east_opt(0).unwrap(),
             session: None,
+            seen: Default::default(),
         }
+    }
+
+    #[test]
+    fn encodes_base64() {
+        assert_eq!(base64(b""), "");
+        assert_eq!(base64(b"f"), "Zg==");
+        assert_eq!(base64(b"fo"), "Zm8=");
+        assert_eq!(base64(b"foo"), "Zm9v");
+        assert_eq!(
+            base64(b"CLAUDE_CODE_MAX_CONTEXT_TOKENS=256000"),
+            "Q0xBVURFX0NPREVfTUFYX0NPTlRFWFRfVE9LRU5TPTI1NjAwMA=="
+        );
     }
 
     /// The screen as text, one row per line.
@@ -339,21 +444,71 @@ pub(crate) mod tests {
             .join("\n")
     }
 
+    /// How the first cell of `title` in the tab row is drawn.
+    fn tab_style(app: &mut App, title: &str) -> Style {
+        let mut t = Terminal::new(TestBackend::new(100, 30)).unwrap();
+        t.draw(|f| app.render(f)).unwrap();
+        let buf = t.backend().buffer();
+        let row: String = (0..100).map(|x| buf[(x, 1)].symbol().to_string()).collect();
+        let x = row[..row.find(title).unwrap()].chars().count() as u16;
+        buf[(x, 1)].style()
+    }
+
+    /// The tab is a filled block: accent while the tab row has focus,
+    /// the terminal's foreground color otherwise.
+    fn tab_on(app: &mut App, title: &str) -> bool {
+        let s = tab_style(app, title);
+        s.fg == Some(ui::ACCENT) && s.add_modifier.contains(ratatui::style::Modifier::REVERSED)
+    }
+
+    fn tab_current(app: &mut App, title: &str) -> bool {
+        let s = tab_style(app, title);
+        s.fg != Some(ui::ACCENT) && s.add_modifier.contains(ratatui::style::Modifier::REVERSED)
+    }
+
     #[test]
-    fn switches_pages_and_draws_the_frame() {
+    fn navigates_pages_from_the_tab_row() {
         let (dir, paths) = temp_paths("app-pages");
         let mut app = App::new(Doc::open(paths), env());
         let home = screen(&mut app, 100, 30);
-        assert!(home.contains("[1 Home]"), "{home}");
-        assert!(home.contains("Health") && home.contains("Start"));
-        assert!(home.contains("Preview"));
-        app.handle_key(key(KeyCode::Char('5')));
+        assert!(
+            home.contains(" ccline   Home ") && !home.contains("[1 Home]"),
+            "{home}"
+        );
+        assert!(home.contains("Health") && home.contains("Start") && home.contains("Preview"));
+        // The tab row starts with the keys; left and right show pages.
+        assert!(app.tabs_focused && tab_on(&mut app, "Home"));
+        app.handle_key(key(KeyCode::Left));
+        assert_eq!(app.page, PageId::Claude);
+        for _ in 0..5 {
+            app.handle_key(key(KeyCode::Right));
+        }
         assert_eq!(app.page, PageId::Models);
+        assert!(tab_on(&mut app, "Models") && !tab_on(&mut app, "Home"));
+        // Down goes into the page; there left and right are the page's.
+        app.handle_key(key(KeyCode::Down));
+        assert!(!app.tabs_focused && tab_current(&mut app, "Models"));
+        assert!(!tab_current(&mut app, "Home"));
+        app.handle_key(key(KeyCode::Right));
+        assert_eq!(app.page, PageId::Models);
+        // Up past the top of the page reaches the tab row again; so does Esc.
+        app.handle_key(key(KeyCode::Up));
+        assert!(app.tabs_focused);
+        app.handle_key(key(KeyCode::Down));
         app.handle_key(key(KeyCode::Esc));
+        assert!(app.tabs_focused);
+        // Digits no longer switch pages.
+        app.handle_key(key(KeyCode::Char('1')));
+        assert_eq!(app.page, PageId::Models);
+
+        app.handle_key(key(KeyCode::Right));
+        app.handle_key(key(KeyCode::Right));
+        app.handle_key(key(KeyCode::Down));
         assert_eq!(app.page, PageId::Home);
         app.handle_key(key(KeyCode::Down));
         app.handle_key(key(KeyCode::Enter));
         assert_eq!(app.page, PageId::Presets);
+        assert!(!app.tabs_focused);
         assert!(screen(&mut app, 60, 20).contains("at least 80×24"));
         std::fs::remove_dir_all(&dir).unwrap();
     }

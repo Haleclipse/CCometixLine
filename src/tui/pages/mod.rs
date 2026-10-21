@@ -2,17 +2,22 @@
 //! anything it ignores falls through to the app's global keys.
 
 mod home;
+mod models;
 mod placeholder;
 
+use super::dialogs::Dialog;
 use super::doc::Doc;
 use crate::state::SessionState;
+use crate::state::models_seen::Seen;
 use crate::version::Version;
 use chrono::FixedOffset;
 use ratatui::Frame;
 use ratatui::crossterm::event::KeyEvent;
 use ratatui::layout::Rect;
+use std::collections::BTreeMap;
 
 pub use home::Home;
+pub use models::Models;
 pub use placeholder::Placeholder;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -49,25 +54,26 @@ impl PageId {
             PageId::Claude => "Claude Code",
         }
     }
-
-    pub fn from_digit(c: char) -> Option<PageId> {
-        let n = c.to_digit(10)? as usize;
-        PageId::ALL.get(n.checked_sub(1)?).copied()
-    }
 }
 
 /// What the TUI knows about its surroundings.
 pub struct Env {
+    /// Unix epoch seconds at start.
+    pub now: i64,
     pub tz: FixedOffset,
     /// The newest session ccline recorded, for replay and version checks.
     pub session: Option<SessionState>,
+    /// Model ids seen in recent sessions.
+    pub seen: BTreeMap<String, Seen>,
 }
 
 impl Env {
     pub fn detect() -> Env {
         Env {
+            now: chrono::Utc::now().timestamp(),
             tz: *chrono::Local::now().offset(),
             session: crate::state::session::latest(),
+            seen: crate::state::models_seen::load(),
         }
     }
 
@@ -82,6 +88,9 @@ impl Env {
 pub struct Cx<'a> {
     pub doc: &'a Doc,
     pub env: &'a Env,
+    /// Whether the page has the keys (else the tab row does), so it shows
+    /// its selection.
+    pub focused: bool,
 }
 
 pub enum Outcome {
@@ -89,11 +98,17 @@ pub enum Outcome {
     Ignored,
     Consumed,
     Goto(PageId),
+    Open(Box<dyn Dialog>),
+    Toast(String),
+    /// Put this text on the clipboard.
+    Copy(String),
     Quit,
 }
 
 pub trait Page {
     fn render(&mut self, f: &mut Frame, area: Rect, cx: &Cx);
+    /// Handle a key. Return `Ignored` for Up at the top of the page so
+    /// focus moves to the tab row.
     fn handle(&mut self, key: KeyEvent, doc: &mut Doc, env: &Env) -> Outcome;
     /// Key hints for the footer.
     fn keys(&self) -> Vec<(&'static str, &'static str)>;
@@ -104,5 +119,13 @@ pub trait Page {
     /// The file this page edits, for the title bar.
     fn file(&self) -> &'static str {
         "config.toml"
+    }
+    /// Pasted text; returns whether a field took it.
+    fn paste(&mut self, _text: &str) -> bool {
+        false
+    }
+    /// The preview scenario that shows this page's effect best.
+    fn scenario(&self) -> Option<&'static str> {
+        None
     }
 }

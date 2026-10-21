@@ -12,6 +12,19 @@ pub fn tokens(n: u64) -> String {
     }
 }
 
+/// `256,000`.
+pub fn grouped(n: u64) -> String {
+    let digits = n.to_string();
+    let mut out = String::new();
+    for (i, c) in digits.chars().enumerate() {
+        if i > 0 && (digits.len() - i).is_multiple_of(3) {
+            out.push(',');
+        }
+        out.push(c);
+    }
+    out
+}
+
 /// Signed token change, e.g. `+12k` or `-80k`.
 pub fn signed_tokens(delta: f64) -> String {
     let n = tokens(delta.abs().round() as u64);
@@ -112,6 +125,14 @@ pub fn signed_percent(delta: f64) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn groups_thousands() {
+        assert_eq!(grouped(0), "0");
+        assert_eq!(grouped(999), "999");
+        assert_eq!(grouped(256_000), "256,000");
+        assert_eq!(grouped(1_000_000), "1,000,000");
+    }
 
     #[test]
     fn formats_tokens() {
