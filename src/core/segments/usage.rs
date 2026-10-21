@@ -233,15 +233,12 @@ impl Segment for UsageSegment {
                     )
                 }
                 None => {
-                    if let Some(cache) = cached_data {
-                        (
-                            cache.five_hour_utilization,
-                            cache.seven_day_utilization,
-                            cache.resets_at,
-                        )
-                    } else {
-                        return None;
-                    }
+                    let cache = cached_data?;
+                    (
+                        cache.five_hour_utilization,
+                        cache.seven_day_utilization,
+                        cache.resets_at,
+                    )
                 }
             }
         };
