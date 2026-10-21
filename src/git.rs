@@ -1,9 +1,9 @@
 //! Repository status from a single `git status --porcelain=v2 --branch`.
 
-use std::io::Read;
+use crate::process::Outcome;
 use std::path::Path;
-use std::process::{Command, Stdio};
-use std::time::{Duration, Instant};
+use std::process::Command;
+use std::time::Duration;
 
 /// How long a render waits for git.
 const TIMEOUT: Duration = Duration::from_millis(800);
@@ -47,45 +47,24 @@ pub fn status_within(dir: &Path, timeout: Duration) -> Option<GitInfo> {
     if !in_repository(dir) {
         return None;
     }
-    let mut child = Command::new("git")
-        .args([
-            "--no-optional-locks",
-            "-c",
-            "core.quotePath=false",
-            "status",
-            "--porcelain=v2",
-            "--branch",
-        ])
-        .current_dir(dir)
-        .env("GIT_OPTIONAL_LOCKS", "0")
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .spawn()
-        .ok()?;
-
-    // Read on another thread so a large status can't fill the pipe and stall
-    // git while we wait for it to exit.
-    let mut stdout = child.stdout.take()?;
-    let reader = std::thread::spawn(move || {
-        let mut out = String::new();
-        stdout.read_to_string(&mut out).ok().map(|_| out)
-    });
-
-    let start = Instant::now();
-    loop {
-        match child.try_wait() {
-            Ok(Some(status)) if status.success() => break,
-            Ok(Some(_)) | Err(_) => return None,
-            Ok(None) if start.elapsed() > timeout => {
-                let _ = child.kill();
-                let _ = child.wait();
-                return None;
-            }
-            Ok(None) => std::thread::sleep(Duration::from_millis(2)),
-        }
+    let mut cmd = Command::new("git");
+    cmd.args([
+        "--no-optional-locks",
+        "-c",
+        "core.quotePath=false",
+        "status",
+        "--porcelain=v2",
+        "--branch",
+    ])
+    .current_dir(dir)
+    .env("GIT_OPTIONAL_LOCKS", "0");
+    match crate::process::run(cmd, None, timeout) {
+        Outcome::Exited {
+            success: true,
+            stdout,
+        } => Some(parse(&stdout)),
+        _ => None,
     }
-    reader.join().ok().flatten().map(|out| parse(&out))
 }
 
 pub fn parse(porcelain: &str) -> GitInfo {

@@ -8,6 +8,7 @@ pub mod metrics;
 pub mod models;
 pub mod paths;
 pub mod presets;
+pub mod process;
 pub mod render;
 pub mod scenarios;
 pub mod state;

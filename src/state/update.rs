@@ -4,12 +4,11 @@
 //! (through curl, so the binary carries no HTTP stack) and records the
 //! answer.
 
-use super::{dir, read_json, spawn_detached, try_lock, write_json};
+use super::{dir, read_json, swr, write_json};
 use crate::config::UpdateConfig;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
-use std::time::Duration;
 
 /// The running ccline.
 pub const CURRENT: &str = env!("CARGO_PKG_VERSION");
@@ -35,8 +34,6 @@ const SOURCES: &[(&str, &str)] = &[
 const FETCH_TIMEOUT: &str = "8";
 /// After a check where no source answered, try again this much later.
 const RETRY_SECS: i64 = 3_600;
-/// An update-check lock older than this was left by a check that died.
-const LOCK_STALE: Duration = Duration::from_secs(60);
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct UpdateState {
@@ -89,11 +86,8 @@ pub fn available(config: &UpdateConfig, now: i64) -> Option<String> {
     } else {
         RETRY_SECS
     };
-    if now - state.checked_at >= every
-        && try_lock(&lock, LOCK_STALE)
-        && !spawn_detached(&["update-check".as_ref()])
-    {
-        let _ = std::fs::remove_file(&lock);
+    if now - state.checked_at >= every && swr::claim(&lock) {
+        swr::spawn(&lock, &["update-check".as_ref()]);
     }
     state.latest.filter(|v| is_newer(v, CURRENT))
 }
@@ -126,7 +120,7 @@ pub fn check(now: i64) -> Option<String> {
         latest: latest.clone().or(previous.latest),
     };
     let _ = write_json(&path, &state);
-    let _ = std::fs::remove_file(&lock);
+    swr::release(&lock);
     latest
 }
 

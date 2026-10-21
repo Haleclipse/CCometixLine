@@ -8,6 +8,7 @@ pub mod git_cache;
 pub mod ledger;
 pub mod models_seen;
 pub mod session;
+pub mod swr;
 pub mod update;
 
 use crate::input::Input;
