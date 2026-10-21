@@ -60,7 +60,7 @@ left = ["model", "dir", "git"]
 right = ["cost"]
 
 [[line]]
-left = [{ metric = "context", bar = "eighths", cells = 10 }, { metric = "quota.5h", cells = 8 }]
+left = [{ metric = "context", bar = "eighths", cells = 10 }, "context.trend", { metric = "quota.5h", cells = 8 }]
 right = ["cache"]
 
 [[line]]
@@ -70,18 +70,18 @@ right = ["duration"]
     },
     Preset {
         name: "budget",
-        summary: "Rate limits with pace, cost and cache",
+        summary: "Rate limits with pace and run-out, spend rates, compaction and cache",
         toml: r#"
 palette = "tokyo-night"
 skin = "plain"
 glyphs = "nerd"
 
 [[line]]
-left = [{ metric = "quota.5h", cells = 10 }, { metric = "quota.7d", cells = 10 }]
-right = ["cost"]
+left = [{ metric = "quota.5h", cells = 10 }, { metric = "quota.7d", cells = 10 }, "quota.eta"]
+right = ["cost", "cost.rate", "cost.today"]
 
 [[line]]
-left = [{ metric = "context", bar = "blocks" }, "cache"]
+left = [{ metric = "context", bar = "blocks" }, "context.to_compact", "cache"]
 right = ["api_share"]
 "#,
     },

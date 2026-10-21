@@ -1,7 +1,8 @@
 //! Context, rate limits, cost, prompt cache and timing.
 
+use super::projection::{self, Limit};
 use super::{Ctx, LEVELS, Metric, MetricMeta, Options, Reading, fmt};
-use crate::input::Window;
+use crate::input::{ContextWindow, SpendLimit, Window};
 use crate::style::{Category, GlyphTier, IconKey, Role, Severity};
 use crate::version::gate;
 use crate::widgets::WidgetKind;
@@ -33,7 +34,7 @@ fn meta(
     }
 }
 
-const WINDOW_FIELDS: &[&str] = &["pct", "reset", "left", "pace", "arrow"];
+const WINDOW_FIELDS: &[&str] = &["pct", "reset", "left", "pace", "arrow", "eta"];
 const WINDOW_TEMPLATES: [&str; 3] = ["{pct}%[ · {reset}]", "{pct}%", "{pct}%"];
 
 pub(super) fn metrics() -> Vec<Metric> {
@@ -91,7 +92,7 @@ pub(super) fn metrics() -> Vec<Metric> {
                 widget: WidgetKind::Bar,
                 templates: ["{pct}%[ · {used}/{limit}]", "{pct}%", "{pct}%"],
                 fields: &[
-                    "pct", "used", "limit", "period", "reset", "left", "pace", "arrow",
+                    "pct", "used", "limit", "period", "reset", "left", "pace", "arrow", "eta",
                 ],
                 min_cc: Some(gate::SPEND_LIMIT),
                 ..meta(
@@ -103,6 +104,20 @@ pub(super) fn metrics() -> Vec<Metric> {
                 )
             },
             compute: spend,
+        },
+        Metric {
+            meta: MetricMeta {
+                templates: ["{which} limit in {left}", "{which} {left}", "{left}"],
+                fields: &["which", "at", "left"],
+                ..meta(
+                    "quota.eta",
+                    Category::Quota,
+                    "Limit run-out",
+                    "When the first rate or spend limit runs out at the current pace",
+                    IconKey::Eta,
+                )
+            },
+            compute: quota_eta,
         },
         Metric {
             meta: MetricMeta {
@@ -122,11 +137,13 @@ pub(super) fn metrics() -> Vec<Metric> {
         Metric {
             meta: MetricMeta {
                 templates: [
-                    "[{left}][{cold}][ · {hit}% hit]",
+                    "[{left}][{cold}[ ~{rewarm}]][ · {hit}% hit]",
                     "[{left}][{cold}]",
                     "[{left}][{cold}]",
                 ],
-                fields: &["left", "cold", "state", "ttl", "hit", "misses", "cause"],
+                fields: &[
+                    "left", "cold", "rewarm", "state", "ttl", "hit", "misses", "cause",
+                ],
                 min_cc: Some(gate::PROMPT_CACHE),
                 priority: 2,
                 ..meta(
@@ -173,16 +190,21 @@ pub(super) fn metrics() -> Vec<Metric> {
     ]
 }
 
-fn context(ctx: &Ctx, _: &Options) -> Option<Reading> {
-    let cw = ctx.input.context_window.as_ref()?;
-    let tokens = cw.total_input_tokens.or_else(|| {
+/// Tokens in the context: the reported total, else the last request's input.
+pub(super) fn context_tokens(cw: &ContextWindow) -> Option<u64> {
+    cw.total_input_tokens.or_else(|| {
         let u = cw.current_usage.as_ref()?;
         Some(
             u.input_tokens.unwrap_or(0)
                 + u.cache_creation_input_tokens.unwrap_or(0)
                 + u.cache_read_input_tokens.unwrap_or(0),
         )
-    })?;
+    })
+}
+
+fn context(ctx: &Ctx, _: &Options) -> Option<Reading> {
+    let cw = ctx.input.context_window.as_ref()?;
+    let tokens = context_tokens(cw)?;
     let resolved = ctx.model();
     let window = resolved.and_then(|r| r.window).or(cw.context_window_size)?;
     let corrected = resolved.is_some_and(|r| r.window_corrected);
@@ -207,8 +229,9 @@ fn context(ctx: &Ctx, _: &Options) -> Option<Reading> {
     Some(r)
 }
 
-/// A rate-limit window: usage, time to reset and pace against elapsed time.
-fn window(w: &Window, length: i64, ctx: &Ctx) -> Option<Reading> {
+/// A rate-limit window: usage, time to reset, pace against elapsed time and
+/// when it runs out at the current rate.
+fn window(w: &Window, length: i64, limit: Limit, ctx: &Ctx) -> Option<Reading> {
     let used = w.used_percentage? / 100.0;
     let resets = w.resets_at.map(|t| t as i64);
     if resets.is_some_and(|t| t <= ctx.now) {
@@ -241,6 +264,9 @@ fn window(w: &Window, length: i64, ctx: &Ctx) -> Option<Reading> {
                 role,
             );
         r.elapsed = Some(elapsed);
+        if let Some(out) = projection::run_out(ctx, limit, used, at, length) {
+            r = r.set("eta", fmt::clock(out, ctx.now, ctx.tz));
+        }
     }
     Some(r)
 }
@@ -249,6 +275,7 @@ fn five_hour(ctx: &Ctx, _: &Options) -> Option<Reading> {
     window(
         ctx.input.rate_limits.as_ref()?.five_hour.as_ref()?,
         FIVE_HOURS,
+        Limit::FiveHour,
         ctx,
     )
 }
@@ -257,12 +284,13 @@ fn seven_day(ctx: &Ctx, _: &Options) -> Option<Reading> {
     window(
         ctx.input.rate_limits.as_ref()?.seven_day.as_ref()?,
         SEVEN_DAYS,
+        Limit::SevenDay,
         ctx,
     )
 }
 
-fn spend(ctx: &Ctx, _: &Options) -> Option<Reading> {
-    let s = ctx.input.rate_limits.as_ref()?.spend_limit.as_ref()?;
+/// A spend limit as a window, and the window's length.
+fn spend_window(s: &SpendLimit) -> (Window, i64) {
     let length = match s.period.as_deref() {
         Some("daily") => 86_400,
         Some("weekly") => SEVEN_DAYS,
@@ -272,7 +300,13 @@ fn spend(ctx: &Ctx, _: &Options) -> Option<Reading> {
         used_percentage: s.used_percentage,
         resets_at: s.resets_at,
     };
-    let mut r = window(&w, length, ctx)?;
+    (w, length)
+}
+
+fn spend(ctx: &Ctx, _: &Options) -> Option<Reading> {
+    let s = ctx.input.rate_limits.as_ref()?.spend_limit.as_ref()?;
+    let (w, length) = spend_window(s);
+    let mut r = window(&w, length, Limit::Spend, ctx)?;
     if let Some(used) = s.used_usd {
         r = r.set("used", fmt::money(used));
     }
@@ -286,6 +320,47 @@ fn spend(ctx: &Ctx, _: &Options) -> Option<Reading> {
         r = r.severity(Severity::Crit);
     }
     Some(r)
+}
+
+/// The limit that runs out first at the current pace, if any runs out
+/// before it resets.
+fn quota_eta(ctx: &Ctx, _: &Options) -> Option<Reading> {
+    let rl = ctx.input.rate_limits.as_ref()?;
+    let spend = rl.spend_limit.as_ref().map(spend_window);
+    let windows = [
+        ("5h", Limit::FiveHour, rl.five_hour.as_ref(), FIVE_HOURS),
+        ("7d", Limit::SevenDay, rl.seven_day.as_ref(), SEVEN_DAYS),
+        (
+            "spend",
+            Limit::Spend,
+            spend.as_ref().map(|(w, _)| w),
+            spend.as_ref().map_or(0, |(_, l)| *l),
+        ),
+    ];
+    let (which, at) = windows
+        .into_iter()
+        .filter_map(|(which, limit, w, length)| {
+            let w = w?;
+            let used = w.used_percentage? / 100.0;
+            let resets = w.resets_at? as i64;
+            Some((
+                which,
+                projection::run_out(ctx, limit, used, resets, length)?,
+            ))
+        })
+        .min_by_key(|(_, at)| *at)?;
+    let left = at - ctx.now;
+    Some(
+        Reading::default()
+            .set("which", which)
+            .set("at", fmt::clock(at, ctx.now, ctx.tz))
+            .set("left", fmt::countdown(left))
+            .severity(if left < 1_800 {
+                Severity::Crit
+            } else {
+                Severity::Warn
+            }),
+    )
 }
 
 fn cost(ctx: &Ctx, _: &Options) -> Option<Reading> {
@@ -327,6 +402,9 @@ fn cache(ctx: &Ctx, _: &Options) -> Option<Reading> {
                 .ratio(0.0)
                 .severity(Severity::Warn);
         }
+    }
+    if let Some((usd, _)) = projection::rewarm_cost(ctx) {
+        r = r.set("rewarm", fmt::money(usd));
     }
     if let Some(hit) = pc.hit_ratio {
         r = r.set("hit", fmt::percent(hit));

@@ -12,6 +12,16 @@ pub fn tokens(n: u64) -> String {
     }
 }
 
+/// Signed token change, e.g. `+12k` or `-80k`.
+pub fn signed_tokens(delta: f64) -> String {
+    let n = tokens(delta.abs().round() as u64);
+    if delta < 0.0 {
+        format!("-{n}")
+    } else {
+        format!("+{n}")
+    }
+}
+
 fn trim_decimal(s: String) -> String {
     s.strip_suffix(".0").map(str::to_string).unwrap_or(s)
 }

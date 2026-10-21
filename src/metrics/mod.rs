@@ -5,6 +5,7 @@
 mod code;
 pub mod fmt;
 mod identity;
+mod projection;
 mod usage;
 
 use crate::env::AutoCompact;
@@ -223,6 +224,7 @@ pub fn catalog() -> &'static [Metric] {
         let mut all = Vec::new();
         all.extend(identity::metrics());
         all.extend(usage::metrics());
+        all.extend(projection::metrics());
         all.extend(code::metrics());
         all
     })
