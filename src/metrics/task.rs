@@ -59,8 +59,8 @@ pub(super) fn metrics() -> Vec<Metric> {
                 "Task name",
                 "A background task's name or description, and its kind (subagent lines)",
                 IconKey::Agent,
-                ["{name}", "{name}", "{kind}"],
-                &["name", "kind"],
+                ["[{agent} · ]{name}", "{name}", "{kind}"],
+                &["name", "kind", "agent"],
             ),
             compute: name,
         },
@@ -146,7 +146,11 @@ fn name(ctx: &Ctx, _: &Options) -> Option<Reading> {
         None => "",
     };
     let name = task.name.as_deref().or(task.description.as_deref())?;
-    Some(Reading::default().set("name", name).set("kind", kind))
+    let mut r = Reading::default().set("name", name).set("kind", kind);
+    if let Some(agent) = &task.agent_type {
+        r = r.set("agent", agent);
+    }
+    Some(r)
 }
 
 fn elapsed(ctx: &Ctx, _: &Options) -> Option<Reading> {
@@ -226,6 +230,10 @@ mod tests {
         );
         assert_eq!(field("task.trend", "a3", "delta"), None);
         assert_eq!(field("task.name", "b1", "kind").as_deref(), Some("shell"));
+        assert_eq!(
+            field("task.name", "a2", "agent").as_deref(),
+            Some("Explore")
+        );
         assert_eq!(field("model", "a1", "name").as_deref(), Some("Opus 5.5 1M"));
         assert_eq!(field("context", "a2", "pct").as_deref(), Some("24"));
     }

@@ -413,7 +413,8 @@ fn cache(ctx: &Ctx, _: &Options) -> Option<Reading> {
         r = r.set("misses", m.to_string());
     }
     if let Some(cause) = pc.last_miss_cause.as_ref().and_then(|c| c.causes.first()) {
-        r = r.set("cause", cause);
+        // `tools_changed` → `tools changed`, `ttl_expired_5m` → `ttl expired 5m`.
+        r = r.set("cause", cause.replace('_', " "));
     }
     Some(r.set("ttl", pc.ttl.clone().unwrap_or_default()))
 }

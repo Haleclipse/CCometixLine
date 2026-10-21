@@ -168,7 +168,12 @@ fn preview(args: PreviewArgs, theme: Option<&str>) {
         }
         println!("Presets (use with --theme):");
         for p in presets::PRESETS {
-            println!("  {:<12} {}", p.name, p.summary);
+            let tags = if p.tags.is_empty() {
+                String::new()
+            } else {
+                format!(" [{}]", p.tags.join(", "))
+            };
+            println!("  {:<12} {}{tags}", p.name, p.summary);
         }
         return;
     }

@@ -276,6 +276,9 @@ pub struct Task {
     /// `in_process_teammate`.
     #[serde(rename = "type", deserialize_with = "lenient")]
     pub kind: Option<String>,
+    /// The subagent type, e.g. `Explore` (Claude Code 2.1.293+).
+    #[serde(deserialize_with = "lenient")]
+    pub agent_type: Option<String>,
     #[serde(deserialize_with = "lenient")]
     pub status: Option<String>,
     #[serde(deserialize_with = "lenient")]

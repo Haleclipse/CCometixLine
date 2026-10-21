@@ -6,6 +6,9 @@ use crate::config::{Config, LineConfig};
 pub struct Preset {
     pub name: &'static str,
     pub summary: &'static str,
+    /// Style and data axes for filtering, as on statuslin.es: `minimal`,
+    /// `multi-line`, `powerline`, `quota`, `cache`, `context`.
+    pub tags: &'static [&'static str],
     toml: &'static str,
 }
 
@@ -15,6 +18,7 @@ pub const PRESETS: &[Preset] = &[
     Preset {
         name: "classic",
         summary: "The v1 look: model, directory, git and context on one line",
+        tags: &[],
         toml: r#"
 palette = "terminal"
 skin = "plain"
@@ -34,6 +38,7 @@ right = ["update"]
     Preset {
         name: "minimal",
         summary: "Model, context and cost, no icons",
+        tags: &["minimal"],
         toml: r#"
 palette = "terminal"
 skin = "plain"
@@ -51,6 +56,7 @@ left = [
     Preset {
         name: "dashboard",
         summary: "Three lines: identity, meters, code activity",
+        tags: &["multi-line", "quota", "context"],
         toml: r#"
 palette = "catppuccin-mocha"
 skin = "pill"
@@ -72,6 +78,7 @@ right = ["duration"]
     Preset {
         name: "budget",
         summary: "Rate limits with pace and run-out, spend rates, compaction and cache",
+        tags: &["multi-line", "quota"],
         toml: r#"
 palette = "tokyo-night"
 skin = "plain"
@@ -87,8 +94,32 @@ right = ["api_share"]
 "#,
     },
     Preset {
+        name: "cache-aware",
+        summary: "Prompt cache countdown, rewarm cost and misses under the usual line",
+        tags: &["multi-line", "cache"],
+        toml: r#"
+palette = "rose-pine"
+skin = "plain"
+glyphs = "nerd"
+separator = " · "
+
+[[line]]
+left = ["model", "dir", "git", { metric = "context", widget = "text" }]
+right = ["update", "cost"]
+
+[[line]]
+left = [
+  { metric = "cache", widget = "bar", bar = "dots", cells = 8, format = "[warm {left}][{cold}]", priority = 4 },
+  { metric = "cache.cold_cost", icon = "", priority = 4 },
+  { metric = "cache", icon = "", format = "[{hit}% hit][ · {misses}× miss][ · last: {cause}]", compact = "[{hit}% hit][ · {misses}× miss]", minimal = "[{hit}%]" },
+]
+right = ["cost.rate"]
+"#,
+    },
+    Preset {
         name: "focus",
-        summary: "One wide context gauge",
+        summary: "A wide context gauge, its growth per turn and the room left before compaction",
+        tags: &["multi-line", "context"],
         toml: r#"
 palette = "terminal"
 skin = "plain"
@@ -97,11 +128,15 @@ glyphs = "unicode"
 [[line]]
 left = [{ metric = "context", bar = "eighths", cells = 20, coloring = "gradient", priority = 5 }]
 right = [{ metric = "model", priority = 2 }]
+
+[[line]]
+left = [{ metric = "context.trend", cells = 12 }, { metric = "context.to_compact", icon = "", priority = 4 }]
 "#,
     },
     Preset {
         name: "zen",
         summary: "Plain ASCII without color, for any terminal",
+        tags: &["minimal"],
         toml: r#"
 palette = "terminal"
 skin = "plain"
@@ -120,6 +155,7 @@ left = [
     Preset {
         name: "powerline",
         summary: "Powerline segments with a quota gauge",
+        tags: &["powerline", "quota"],
         toml: r#"
 palette = "tokyo-night"
 skin = "powerline"

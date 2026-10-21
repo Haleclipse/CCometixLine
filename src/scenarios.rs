@@ -356,7 +356,7 @@ const SUBAGENT: &str = r#"{
      "label": "Reading src/statusline.rs", "startTime": 1790812608000, "model": "claude-opus-5-5[1m]",
      "effort": "high", "contextWindowSize": 1000000, "tokenCount": 211265,
      "tokenSamples": [150000, 168000, 182000, 190000, 206927, 211265], "cwd": "/home/u/app"},
-    {"id": "a2", "type": "local_agent", "status": "running", "description": "Explore test fixtures",
+    {"id": "a2", "type": "local_agent", "agentType": "Explore", "status": "running", "description": "Explore test fixtures",
      "label": "Searching for *.snap files under tests/ and fixtures/", "startTime": 1790812755000,
      "model": "claude-sonnet-5", "contextWindowSize": 200000, "tokenCount": 48000,
      "tokenSamples": [12000, 30000, 48000], "cwd": "/home/u/app"},
