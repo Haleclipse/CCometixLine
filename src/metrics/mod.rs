@@ -7,6 +7,7 @@ pub mod fmt;
 mod identity;
 mod usage;
 
+use crate::env::AutoCompact;
 use crate::git::GitInfo;
 use crate::input::Input;
 use crate::models::{Registry, Resolved};
@@ -133,6 +134,7 @@ pub struct Ctx<'a> {
     pub cc: Option<Version>,
     /// History and cross-session data; empty when state is unavailable.
     pub state: StateView,
+    pub compact: AutoCompact,
     git: GitSource,
     git_cache: OnceCell<Option<GitInfo>>,
     model_cache: OnceCell<Option<Resolved>>,
@@ -154,6 +156,7 @@ impl<'a> Ctx<'a> {
             glyphs,
             cc: input.cc_version(),
             state: StateView::default(),
+            compact: AutoCompact::default(),
             git: GitSource::Live,
             git_cache: OnceCell::new(),
             model_cache: OnceCell::new(),
@@ -167,6 +170,11 @@ impl<'a> Ctx<'a> {
 
     pub fn with_state(mut self, state: StateView) -> Self {
         self.state = state;
+        self
+    }
+
+    pub fn with_compact(mut self, compact: AutoCompact) -> Self {
+        self.compact = compact;
         self
     }
 

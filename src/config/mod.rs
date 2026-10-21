@@ -142,6 +142,19 @@ pub struct LineConfig {
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
+pub struct GitConfig {
+    /// Reuse a git status younger than this; 0 runs git on every render.
+    pub cache_ms: u64,
+}
+
+impl Default for GitConfig {
+    fn default() -> Self {
+        GitConfig { cache_ms: 2_000 }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct UpdateConfig {
     pub check: bool,
     pub interval_hours: u32,
@@ -173,6 +186,7 @@ pub struct Config {
     pub layout: LayoutConfig,
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     pub palette_overrides: BTreeMap<String, String>,
+    pub git: GitConfig,
     pub update: UpdateConfig,
     #[serde(rename = "line")]
     pub lines: Vec<LineConfig>,
@@ -192,6 +206,7 @@ impl Default for Config {
             separator: None,
             layout: LayoutConfig::default(),
             palette_overrides: BTreeMap::new(),
+            git: GitConfig::default(),
             update: UpdateConfig::default(),
             lines: Vec::new(),
         }

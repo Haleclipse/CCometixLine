@@ -5,6 +5,7 @@ use std::path::Path;
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
+/// How long a render waits for git.
 const TIMEOUT: Duration = Duration::from_millis(800);
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -34,8 +35,13 @@ pub fn in_repository(dir: &Path) -> bool {
 }
 
 /// Status of the repository containing `dir`, or `None` outside a repository,
-/// when git is missing, or when it doesn't answer within the timeout.
+/// when git is missing, or when it doesn't answer within a render's wait.
 pub fn status(dir: &Path) -> Option<GitInfo> {
+    status_within(dir, TIMEOUT)
+}
+
+/// `status` with a different deadline.
+pub fn status_within(dir: &Path, timeout: Duration) -> Option<GitInfo> {
     // Spawning git costs several milliseconds even when it then finds no
     // repository, so check for one first.
     if !in_repository(dir) {
@@ -71,7 +77,7 @@ pub fn status(dir: &Path) -> Option<GitInfo> {
         match child.try_wait() {
             Ok(Some(status)) if status.success() => break,
             Ok(Some(_)) | Err(_) => return None,
-            Ok(None) if start.elapsed() > TIMEOUT => {
+            Ok(None) if start.elapsed() > timeout => {
                 let _ = child.kill();
                 let _ = child.wait();
                 return None;

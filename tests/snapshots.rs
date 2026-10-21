@@ -2,6 +2,7 @@
 //! text. Run with `INSTA_UPDATE=always` (or `cargo insta review`) after an
 //! intended rendering change.
 
+use ccometixline::env::AutoCompact;
 use ccometixline::metrics::GitSource;
 use ccometixline::models::Registry;
 use ccometixline::render::ansi::{EmitOptions, emit};
@@ -22,6 +23,8 @@ fn render_preset(preset: &str) -> String {
                 tz: FixedOffset::east_opt(0).unwrap(),
                 width: Some(width),
                 git: GitSource::Fixed(s.git()),
+                state: s.state(scenarios::BASE),
+                compact: AutoCompact::default(),
             };
             let text = emit(
                 &lines(&s.input(scenarios::BASE), &config, &registry, frame),

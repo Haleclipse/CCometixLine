@@ -1,7 +1,7 @@
 //! Per-session history: one sample per change, plus the last input for
 //! replay in the TUI.
 
-use super::{dir, read_json, safe_name, sometimes, sweep, write_json};
+use super::{dir, prompt_key, read_json, safe_name, sometimes, sweep, write_json};
 use crate::input::Input;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -18,6 +18,10 @@ const SAVE_EVERY_SECS: i64 = 5;
 pub struct Sample {
     /// Unix epoch seconds.
     pub t: i64,
+    /// The prompt this sample belongs to (`prompt_key` of `prompt_id`), so
+    /// history can be grouped by turn.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub p: Option<u32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ctx: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -38,6 +42,7 @@ impl Sample {
         let rl = input.rate_limits.as_ref();
         Sample {
             t: now,
+            p: input.prompt_id.as_deref().map(prompt_key),
             ctx: input
                 .context_window
                 .as_ref()
@@ -122,14 +127,22 @@ impl SessionState {
     }
 }
 
-/// Context size at each turn: consecutive distinct context readings.
-pub fn context_series(samples: &[Sample]) -> Vec<f64> {
+/// Context size at the end of each turn, oldest first; the last entry is the
+/// current turn so far. A turn is one prompt when samples carry prompt keys,
+/// otherwise each distinct reading.
+pub fn context_turns(samples: &[Sample]) -> Vec<f64> {
     let mut out: Vec<f64> = Vec::new();
-    for v in samples.iter().filter_map(|s| s.ctx) {
-        let v = v as f64;
-        if out.last() != Some(&v) {
-            out.push(v);
+    let mut last_p = None;
+    for s in samples {
+        let Some(v) = s.ctx.map(|v| v as f64) else {
+            continue;
+        };
+        match (s.p, out.last_mut()) {
+            (Some(p), Some(last)) if last_p == Some(p) => *last = v,
+            (None, Some(last)) if last_p.is_none() && *last == v => {}
+            _ => out.push(v),
         }
+        last_p = s.p;
     }
     out
 }
@@ -168,8 +181,25 @@ mod tests {
     }
 
     #[test]
-    fn series_skips_repeats() {
+    fn turns_without_prompt_keys_skip_repeats() {
         let samples = [s(0, 10, 0.0), s(1, 10, 0.1), s(2, 20, 0.2), s(3, 15, 0.3)];
-        assert_eq!(context_series(&samples), vec![10.0, 20.0, 15.0]);
+        assert_eq!(context_turns(&samples), vec![10.0, 20.0, 15.0]);
+    }
+
+    #[test]
+    fn turns_end_where_prompts_change() {
+        let at = |t, p, ctx| Sample {
+            p: Some(p),
+            ..s(t, ctx, 0.0)
+        };
+        let samples = [
+            at(0, 1, 10),
+            at(1, 1, 14),
+            at(2, 2, 14),
+            at(3, 2, 30),
+            at(4, 2, 35),
+            at(5, 3, 35),
+        ];
+        assert_eq!(context_turns(&samples), vec![14.0, 35.0, 35.0]);
     }
 }

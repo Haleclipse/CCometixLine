@@ -1,10 +1,12 @@
 use ccometixline::cli::{Cli, Command, PreviewArgs};
 use ccometixline::config::{self, Config, DepthSetting, LoadNote};
+use ccometixline::env::{AutoCompact, ClaudeSettings};
 use ccometixline::input::{Input, MAX_INPUT_BYTES};
 use ccometixline::metrics::GitSource;
 use ccometixline::models::Registry;
 use ccometixline::render::ansi::{self, EmitOptions};
 use ccometixline::render::span::{Span, Style};
+use ccometixline::state::{self, StateView};
 use ccometixline::statusline::{self, Frame};
 use ccometixline::style::palette::Token;
 use ccometixline::{presets, scenarios};
@@ -19,9 +21,10 @@ fn main() {
         return;
     }
 
-    if let Some(Command::Preview(args)) = cli.command {
-        preview(args, cli.theme.as_deref());
-        return;
+    match cli.command {
+        Some(Command::Preview(args)) => return preview(args, cli.theme.as_deref()),
+        Some(Command::RefreshGit { dir }) => return state::git_cache::refresh(&dir),
+        None => {}
     }
 
     if cli.config || io::stdin().is_terminal() {
@@ -55,11 +58,15 @@ fn run(theme: Option<&str>) {
     };
     let (config, note) = load_config(theme);
     let registry = Registry::load();
+    let settings = ClaudeSettings::for_input(&input);
+    let (now, tz) = (Utc::now().timestamp(), *Local::now().offset());
     let frame = Frame {
-        now: Utc::now().timestamp(),
-        tz: *Local::now().offset(),
-        width: statusline::budget(&config, &input),
-        git: GitSource::Live,
+        now,
+        tz,
+        width: statusline::budget(&config, &settings),
+        git: GitSource::Cached(config.git.cache_ms),
+        state: state::observe(&input, &text, &registry, now, tz),
+        compact: settings.auto_compact(),
     };
     let mut lines = statusline::lines(&input, &config, &registry, frame);
     if let LoadNote::Invalid(_) = note {
@@ -116,29 +123,47 @@ fn preview(args: PreviewArgs, theme: Option<&str>) {
         guards: true,
     };
 
-    let render = |input: &Input, git: GitSource| {
+    let render = |input: &Input, git: GitSource, state: StateView, compact: AutoCompact| {
         let frame = Frame {
             now,
             tz,
             width: Some(width),
             git,
+            state,
+            compact,
         };
         ansi::emit(&statusline::lines(input, &config, &registry, frame), opts)
+    };
+    let scenario = |s: &scenarios::Scenario| {
+        render(
+            &s.input(now),
+            GitSource::Fixed(s.git()),
+            s.state(now),
+            AutoCompact::default(),
+        )
     };
 
     if args.all {
         for s in scenarios::SCENARIOS {
             println!("\x1b[2m── {} · {}\x1b[0m", s.name, s.summary);
-            println!("{}\n", render(&s.input(now), GitSource::Fixed(s.git())));
+            println!("{}\n", scenario(s));
         }
         return;
     }
     if let Some(s) = scenarios::find(&args.scenario) {
-        println!("{}", render(&s.input(now), GitSource::Fixed(s.git())));
+        println!("{}", scenario(s));
         return;
     }
     match std::fs::read_to_string(&args.scenario).map(|t| Input::parse(&t)) {
-        Ok(Ok(input)) => println!("{}", render(&input, GitSource::Live)),
+        Ok(Ok(input)) => {
+            // A real payload renders against the live environment, but
+            // previewing must not record anything.
+            let compact = ClaudeSettings::for_input(&input).auto_compact();
+            println!(
+                "{}",
+                render(&input, GitSource::Live, StateView::default(), compact)
+            )
+        }
         Ok(Err(e)) => eprintln!("ccline: {} is not status line JSON: {e}", args.scenario),
         Err(_) => eprintln!(
             "ccline: no scenario or file named {:?}; see `ccline preview --list`",

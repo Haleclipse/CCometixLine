@@ -1,10 +1,12 @@
 //! Built-in sample inputs for `ccline preview`, the TUI and snapshot tests.
 //!
-//! Timestamps are written against `BASE`; `load` shifts them so countdowns
-//! stay meaningful when previewing at the current time.
+//! Timestamps are written against `BASE`; `input` shifts them so countdowns
+//! stay meaningful when previewing at the current time, and `state` builds
+//! the history the state layer would hold.
 
 use crate::git::GitInfo;
 use crate::input::Input;
+use crate::state::{Sample, StateView, prompt_key};
 
 /// 2026-10-01 00:00:00 UTC.
 pub const BASE: i64 = 1_790_812_800;
@@ -14,6 +16,30 @@ pub struct Scenario {
     pub summary: &'static str,
     json: &'static str,
     git: Option<GitSpec>,
+    /// Earlier renders of the session, oldest first.
+    history: &'static [Hist],
+    /// Spend across sessions today.
+    today: Option<f64>,
+}
+
+/// An earlier render, `ago` seconds before the current one.
+struct Hist {
+    ago: i64,
+    prompt: &'static str,
+    ctx: u64,
+    cost: f64,
+    /// 5-hour window use in percent.
+    h5: Option<f64>,
+}
+
+const fn h(ago: i64, prompt: &'static str, ctx: u64, cost: f64, h5: Option<f64>) -> Hist {
+    Hist {
+        ago,
+        prompt,
+        ctx,
+        cost,
+        h5,
+    }
 }
 
 struct GitSpec {
@@ -53,8 +79,20 @@ pub const SCENARIOS: &[Scenario] = &[
             untracked: 0,
             conflicts: 0,
         }),
+        history: &[
+            h(2400, "p-1", 31_000, 0.10, Some(14.0)),
+            h(2100, "p-2", 48_000, 0.28, Some(16.0)),
+            h(1800, "p-3", 62_000, 0.41, Some(18.0)),
+            h(1500, "p-4", 75_000, 0.55, Some(19.0)),
+            h(1200, "p-5", 88_000, 0.70, Some(21.0)),
+            h(900, "p-6", 97_000, 0.82, Some(22.0)),
+            h(600, "p-7", 104_000, 0.93, Some(24.0)),
+            h(300, "p-8", 112_000, 1.05, Some(25.0)),
+            h(60, "p-9", 118_000, 1.12, Some(26.0)),
+        ],
+        today: Some(4.85),
         json: r#"{
-  "session_id": "s-normal", "transcript_path": "/home/u/.claude/projects/app/s.jsonl", "cwd": "/home/u/app",
+  "session_id": "s-normal", "prompt_id": "p-9", "transcript_path": "/home/u/.claude/projects/app/s.jsonl", "cwd": "/home/u/app",
   "model": {"id": "claude-opus-4-8", "display_name": "Opus 4.8"},
   "workspace": {"current_dir": "/home/u/app", "project_dir": "/home/u/app", "added_dirs": [],
     "repo": {"host": "github.com", "owner": "acme", "name": "app"}},
@@ -85,6 +123,8 @@ pub const SCENARIOS: &[Scenario] = &[
             untracked: 0,
             conflicts: 0,
         }),
+        history: &[],
+        today: None,
         json: r#"{
   "session_id": "s-fresh", "cwd": "/home/u/app",
   "model": {"id": "claude-sonnet-5", "display_name": "Sonnet 5"},
@@ -107,8 +147,16 @@ pub const SCENARIOS: &[Scenario] = &[
             untracked: 1,
             conflicts: 1,
         }),
+        history: &[
+            h(3000, "q-1", 120_000, 14.10, Some(62.0)),
+            h(2400, "q-2", 138_000, 15.20, Some(66.0)),
+            h(1800, "q-3", 151_000, 16.30, Some(74.0)),
+            h(1200, "q-4", 163_000, 17.10, Some(79.0)),
+            h(600, "q-5", 171_000, 17.80, Some(84.0)),
+        ],
+        today: Some(31.6),
         json: r#"{
-  "session_id": "s-full", "cwd": "/home/u/app",
+  "session_id": "s-full", "prompt_id": "q-6", "cwd": "/home/u/app",
   "model": {"id": "claude-opus-4-8", "display_name": "Opus 4.8"},
   "workspace": {"current_dir": "/home/u/app", "project_dir": "/home/u/app", "added_dirs": [],
     "repo": {"host": "github.com", "owner": "acme", "name": "app"}},
@@ -140,8 +188,14 @@ pub const SCENARIOS: &[Scenario] = &[
             untracked: 0,
             conflicts: 0,
         }),
+        history: &[
+            h(1800, "b-1", 180_000, 5.90, Some(2.0)),
+            h(1200, "b-2", 215_000, 6.60, Some(3.0)),
+            h(600, "b-3", 248_000, 7.20, Some(3.0)),
+        ],
+        today: Some(12.4),
         json: r#"{
-  "session_id": "s-big", "cwd": "/home/u/monorepo",
+  "session_id": "s-big", "prompt_id": "b-4", "cwd": "/home/u/monorepo",
   "model": {"id": "claude-opus-5-5[1m]", "display_name": "Opus 5.5 (1M context)"},
   "workspace": {"current_dir": "/home/u/monorepo/services/api", "project_dir": "/home/u/monorepo", "added_dirs": [],
     "repo": {"host": "github.com", "owner": "acme", "name": "monorepo"}},
@@ -171,8 +225,14 @@ pub const SCENARIOS: &[Scenario] = &[
             untracked: 0,
             conflicts: 0,
         }),
+        history: &[
+            h(900, "k-1", 60_000, 0.40, None),
+            h(600, "k-2", 82_000, 0.60, None),
+            h(300, "k-3", 95_000, 0.75, None),
+        ],
+        today: Some(0.84),
         json: r#"{
-  "session_id": "s-kimi", "cwd": "/home/u/app",
+  "session_id": "s-kimi", "prompt_id": "k-4", "cwd": "/home/u/app",
   "model": {"id": "kimi-k2-turbo-preview", "display_name": "kimi-k2-turbo-preview"},
   "workspace": {"current_dir": "/home/u/app", "project_dir": "/home/u/app", "added_dirs": []},
   "version": "2.1.305", "output_style": {"name": "default"},
@@ -194,8 +254,13 @@ pub const SCENARIOS: &[Scenario] = &[
             untracked: 2,
             conflicts: 0,
         }),
+        history: &[
+            h(420, "w-1", 20_000, 0.10, Some(40.0)),
+            h(200, "w-2", 30_000, 0.22, Some(41.0)),
+        ],
+        today: Some(2.15),
         json: r#"{
-  "session_id": "s-wt", "session_name": "Refactor the auth middleware", "cwd": "/home/u/app/.claude/worktrees/feature-x",
+  "session_id": "s-wt", "prompt_id": "w-3", "session_name": "Refactor the auth middleware", "cwd": "/home/u/app/.claude/worktrees/feature-x",
   "model": {"id": "claude-sonnet-5", "display_name": "Sonnet 5"},
   "workspace": {"current_dir": "/home/u/app/.claude/worktrees/feature-x", "project_dir": "/home/u/app", "added_dirs": [],
     "git_worktree": "feature-x", "repo": {"host": "gitlab.com", "owner": "group/team", "name": "app"}},
@@ -217,6 +282,8 @@ pub const SCENARIOS: &[Scenario] = &[
         name: "non-git",
         summary: "Outside any repository",
         git: None,
+        history: &[],
+        today: None,
         json: r#"{
   "session_id": "s-tmp", "cwd": "/tmp/scratch",
   "model": {"id": "claude-haiku-4-5", "display_name": "Haiku 4.5"},
@@ -240,6 +307,8 @@ pub const SCENARIOS: &[Scenario] = &[
             untracked: 0,
             conflicts: 0,
         }),
+        history: &[],
+        today: None,
         json: r#"{
   "session_id": "s-gw", "cwd": "/home/u/app",
   "model": {"id": "claude-sonnet-5", "display_name": "Sonnet 5"},
@@ -257,6 +326,8 @@ pub const SCENARIOS: &[Scenario] = &[
         name: "old-cc",
         summary: "A Claude Code older than the minimum ccline supports",
         git: None,
+        history: &[],
+        today: None,
         json: r#"{
   "session_id": "s-old", "cwd": "/home/u/app", "version": "2.1.140",
   "model": {"id": "claude-sonnet-4-5", "display_name": "Sonnet 4.5"},
@@ -279,6 +350,31 @@ impl Scenario {
         let mut input = Input::parse(self.json).expect("built-in scenarios parse");
         shift(&mut input, now - BASE);
         input
+    }
+
+    /// The session's history up to `now`, ending with the current render.
+    pub fn state(&self, now: i64) -> StateView {
+        let current = Sample::from_input(&self.input(now), now);
+        let samples = self
+            .history
+            .iter()
+            .map(|h| Sample {
+                t: now - h.ago,
+                p: Some(prompt_key(h.prompt)),
+                ctx: Some(h.ctx),
+                cost: Some(h.cost),
+                h5: h.h5,
+                h5_reset: current.h5_reset,
+                d7: current.d7,
+                d7_reset: current.d7_reset,
+            })
+            .chain(std::iter::once(current))
+            .collect();
+        StateView {
+            samples,
+            today_cost: self.today,
+            latest_version: None,
+        }
     }
 }
 

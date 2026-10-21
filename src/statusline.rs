@@ -1,24 +1,28 @@
 //! The render pipeline: config + input → metrics → widgets → layout → lines.
 
 use crate::config::{Config, ItemConfig, ItemSpec};
+use crate::env::{AutoCompact, ClaudeSettings};
 use crate::input::Input;
 use crate::layout::{self, LaidItem, LineSpec};
 use crate::metrics::{self, Ctx, GitSource, Options};
 use crate::models::Registry;
 use crate::render::span::{Line, Span, Style};
+use crate::state::StateView;
 use crate::style::palette::{self, Palette, Token};
 use crate::style::{Color, Severity, Theme, glyphs};
 use crate::version;
 use crate::widgets::{self, Level, Props};
 use chrono::FixedOffset;
 
-/// Time, width and git for one render.
+/// Time, width and the outside world for one render.
 pub struct Frame {
     pub now: i64,
     pub tz: FixedOffset,
     /// Columns available to the line; `None` when unknown.
     pub width: Option<usize>,
     pub git: GitSource,
+    pub state: StateView,
+    pub compact: AutoCompact,
 }
 
 pub fn theme(config: &Config) -> Theme {
@@ -39,21 +43,19 @@ pub fn theme(config: &Config) -> Theme {
 /// Columns the status line may use: the configured or reported terminal
 /// width, minus Claude Code's `statusLine.padding` on both sides and any
 /// configured reserve.
-pub fn budget(config: &Config, input: &Input) -> Option<usize> {
+pub fn budget(config: &Config, settings: &ClaudeSettings) -> Option<usize> {
     let width = config
         .layout
         .width
         .0
         .map(usize::from)
         .or_else(crate::env::columns)?;
-    let padding = config.layout.padding.0.map(usize::from).unwrap_or_else(|| {
-        let project = input
-            .workspace
-            .as_ref()
-            .and_then(|w| w.project_dir.clone())
-            .or_else(|| std::env::var("CLAUDE_PROJECT_DIR").ok());
-        crate::env::statusline_padding(project.as_deref())
-    });
+    let padding = config
+        .layout
+        .padding
+        .0
+        .map(usize::from)
+        .unwrap_or_else(|| settings.statusline_padding());
     Some(width.saturating_sub(2 * padding + config.layout.reserve as usize))
 }
 
@@ -74,7 +76,10 @@ pub fn lines(input: &Input, config: &Config, registry: &Registry, frame: Frame) 
             },
         )]];
     }
-    let ctx = Ctx::new(input, registry, frame.now, frame.tz, theme.glyphs).with_git(frame.git);
+    let ctx = Ctx::new(input, registry, frame.now, frame.tz, theme.glyphs)
+        .with_git(frame.git)
+        .with_state(frame.state)
+        .with_compact(frame.compact);
     config
         .lines
         .iter()
@@ -164,6 +169,8 @@ mod tests {
             tz: FixedOffset::east_opt(0).unwrap(),
             width,
             git: GitSource::Fixed(s.git()),
+            state: s.state(scenarios::BASE),
+            compact: AutoCompact::default(),
         };
         lines(
             &s.input(scenarios::BASE),
