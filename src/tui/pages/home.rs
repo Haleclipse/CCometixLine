@@ -44,6 +44,15 @@ fn check(mark: char, text: String) -> Line<'static> {
 
 fn health(cx: &Cx) -> Vec<Line<'static>> {
     let mut out = Vec::new();
+    if crate::paths::DEV_BUILD {
+        out.push(check(
+            '·',
+            format!(
+                "development build: files in {}",
+                crate::paths::home().display()
+            ),
+        ));
+    }
     out.push(match cx.env.cc_version() {
         Some(v) if v >= MIN_SUPPORTED => {
             check('✓', format!("Claude Code {v}   (needs {MIN_SUPPORTED})"))
