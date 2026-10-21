@@ -23,7 +23,12 @@ fn main() {
 
     match cli.command {
         Some(Command::Preview(args)) => return preview(args, cli.theme.as_deref()),
+        Some(Command::Update) => return update(),
         Some(Command::RefreshGit { dir }) => return state::git_cache::refresh(&dir),
+        Some(Command::UpdateCheck) => {
+            state::update::check(Utc::now().timestamp());
+            return;
+        }
         None => {}
     }
 
@@ -60,12 +65,14 @@ fn run(theme: Option<&str>) {
     let registry = Registry::load();
     let settings = ClaudeSettings::for_input(&input);
     let (now, tz) = (Utc::now().timestamp(), *Local::now().offset());
+    let mut view = state::observe(&input, &text, &registry, now, tz);
+    view.latest_version = state::update::available(&config.update, now);
     let frame = Frame {
         now,
         tz,
         width: statusline::budget(&config, &settings),
         git: GitSource::Cached(config.git.cache_ms),
-        state: state::observe(&input, &text, &registry, now, tz),
+        state: view,
         compact: settings.auto_compact(),
     };
     let mut lines = statusline::lines(&input, &config, &registry, frame);
@@ -88,6 +95,22 @@ fn run(theme: Option<&str>) {
         guards: true,
     };
     println!("{}", ansi::emit(&lines, opts));
+}
+
+fn update() {
+    use state::update::{CURRENT, RELEASES, is_newer};
+    match state::update::check(Utc::now().timestamp()) {
+        Some(latest) if is_newer(&latest, CURRENT) => {
+            println!("ccline {latest} is available (running {CURRENT}).");
+            println!("Upgrade:       npm update -g @cometix/ccline");
+            println!("Release notes: {RELEASES}/tag/v{latest}");
+        }
+        Some(latest) => println!("ccline {CURRENT} is up to date (latest published: {latest})."),
+        None => {
+            eprintln!("ccline: could not reach the npm registry or GitHub; try again later.");
+            std::process::exit(1);
+        }
+    }
 }
 
 fn preview(args: PreviewArgs, theme: Option<&str>) {

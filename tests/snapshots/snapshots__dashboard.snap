@@ -15,15 +15,15 @@ expression: render_preset(preset.name)
   ▕██████▎   ▏ 62% · 124k    ▁▂▃▄▅▆▆▇█ +12k   󰪞 ▀▀▀▀▀▀▀▀ 26% · 02:07 ⇣32%                                         3:42 · 94% hit ⏎
  ± +128 -34    ]8;;https://github.com/acme/app/pull/1287\#1287 pending]8;;\                                                                                                󱦻 30m30s ⏎
 ── fresh @ 60
-  Sonnet 5   󰉋 app   󰊢 main ✓                  $0 ⏎
+  Sonnet 5   󰉋 app   󰊢 main ✓    󰚰 ]8;;https://github.com/Haleclipse/CCometixLine/releases/tag/v2.1.0\v2.1.0]8;;\    $0 ⏎
   ▕          ▏ 0% ⏎
                                                      󱦻 4s ⏎
 ── fresh @ 100
-  Sonnet 5   󰉋 app   󰊢 main ✓                                                          $0 ⏎
+  Sonnet 5   󰉋 app   󰊢 main ✓                                  󰚰 ]8;;https://github.com/Haleclipse/CCometixLine/releases/tag/v2.1.0\v2.1.0 available]8;;\    $0 ⏎
   ▕          ▏ 0% ⏎
                                                                                              󱦻 4s ⏎
 ── fresh @ 140
-  Sonnet 5   󰉋 app   󰊢 main ✓                                                                                                  $0 ⏎
+  Sonnet 5   󰉋 app   󰊢 main ✓                                                                          󰚰 ]8;;https://github.com/Haleclipse/CCometixLine/releases/tag/v2.1.0\v2.1.0 available]8;;\    $0 ⏎
   ▕          ▏ 0% ⏎
                                                                                                                                      󱦻 4s ⏎
 ── near-full @ 60

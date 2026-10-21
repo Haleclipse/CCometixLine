@@ -20,6 +20,8 @@ pub struct Scenario {
     history: &'static [Hist],
     /// Spend across sessions today.
     today: Option<f64>,
+    /// A newer ccline known to be published.
+    latest: Option<&'static str>,
 }
 
 /// An earlier render, `ago` seconds before the current one.
@@ -91,6 +93,7 @@ pub const SCENARIOS: &[Scenario] = &[
             h(60, "p-9", 118_000, 1.12, Some(26.0)),
         ],
         today: Some(4.85),
+        latest: None,
         json: r#"{
   "session_id": "s-normal", "prompt_id": "p-9", "transcript_path": "/home/u/.claude/projects/app/s.jsonl", "cwd": "/home/u/app",
   "model": {"id": "claude-opus-4-8", "display_name": "Opus 4.8"},
@@ -125,6 +128,7 @@ pub const SCENARIOS: &[Scenario] = &[
         }),
         history: &[],
         today: None,
+        latest: Some("2.1.0"),
         json: r#"{
   "session_id": "s-fresh", "cwd": "/home/u/app",
   "model": {"id": "claude-sonnet-5", "display_name": "Sonnet 5"},
@@ -155,6 +159,7 @@ pub const SCENARIOS: &[Scenario] = &[
             h(600, "q-5", 171_000, 17.80, Some(84.0)),
         ],
         today: Some(31.6),
+        latest: None,
         json: r#"{
   "session_id": "s-full", "prompt_id": "q-6", "cwd": "/home/u/app",
   "model": {"id": "claude-opus-4-8", "display_name": "Opus 4.8"},
@@ -194,6 +199,7 @@ pub const SCENARIOS: &[Scenario] = &[
             h(600, "b-3", 248_000, 7.20, Some(3.0)),
         ],
         today: Some(12.4),
+        latest: None,
         json: r#"{
   "session_id": "s-big", "prompt_id": "b-4", "cwd": "/home/u/monorepo",
   "model": {"id": "claude-opus-5-5[1m]", "display_name": "Opus 5.5 (1M context)"},
@@ -231,6 +237,7 @@ pub const SCENARIOS: &[Scenario] = &[
             h(300, "k-3", 95_000, 0.75, None),
         ],
         today: Some(0.84),
+        latest: None,
         json: r#"{
   "session_id": "s-kimi", "prompt_id": "k-4", "cwd": "/home/u/app",
   "model": {"id": "kimi-k2-turbo-preview", "display_name": "kimi-k2-turbo-preview"},
@@ -259,6 +266,7 @@ pub const SCENARIOS: &[Scenario] = &[
             h(200, "w-2", 30_000, 0.22, Some(41.0)),
         ],
         today: Some(2.15),
+        latest: None,
         json: r#"{
   "session_id": "s-wt", "prompt_id": "w-3", "session_name": "Refactor the auth middleware", "cwd": "/home/u/app/.claude/worktrees/feature-x",
   "model": {"id": "claude-sonnet-5", "display_name": "Sonnet 5"},
@@ -284,6 +292,7 @@ pub const SCENARIOS: &[Scenario] = &[
         git: None,
         history: &[],
         today: None,
+        latest: None,
         json: r#"{
   "session_id": "s-tmp", "cwd": "/tmp/scratch",
   "model": {"id": "claude-haiku-4-5", "display_name": "Haiku 4.5"},
@@ -309,6 +318,7 @@ pub const SCENARIOS: &[Scenario] = &[
         }),
         history: &[],
         today: None,
+        latest: None,
         json: r#"{
   "session_id": "s-gw", "cwd": "/home/u/app",
   "model": {"id": "claude-sonnet-5", "display_name": "Sonnet 5"},
@@ -328,6 +338,7 @@ pub const SCENARIOS: &[Scenario] = &[
         git: None,
         history: &[],
         today: None,
+        latest: None,
         json: r#"{
   "session_id": "s-old", "cwd": "/home/u/app", "version": "2.1.140",
   "model": {"id": "claude-sonnet-4-5", "display_name": "Sonnet 4.5"},
@@ -373,7 +384,7 @@ impl Scenario {
         StateView {
             samples,
             today_cost: self.today,
-            latest_version: None,
+            latest_version: self.latest.map(str::to_string),
         }
     }
 }

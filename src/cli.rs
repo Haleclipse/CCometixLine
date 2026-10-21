@@ -24,10 +24,16 @@ pub struct Cli {
 pub enum Command {
     /// Render built-in sample sessions (or a captured JSON file) with your config
     Preview(PreviewArgs),
+    /// Check for a newer ccline now and show how to upgrade
+    Update,
     /// Refresh the cached git status of a directory (started in the
     /// background by renders)
     #[command(hide = true)]
     RefreshGit { dir: std::path::PathBuf },
+    /// Check for a newer ccline and record the answer (started in the
+    /// background by renders)
+    #[command(hide = true)]
+    UpdateCheck,
 }
 
 #[derive(Args, Debug)]

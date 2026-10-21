@@ -5,3 +5,6 @@ claude-powerline-features.md
 CLAUDE.md
 PRD.md
 .claude/
+
+# insta snapshots pending review
+*.snap.new

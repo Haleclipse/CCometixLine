@@ -28,6 +28,7 @@ left = [
   "git",
   { metric = "context", widget = "text", format = "{pct}%[ · {tokens} tokens]" },
 ]
+right = ["update"]
 "#,
     },
     Preset {
@@ -57,7 +58,7 @@ glyphs = "nerd"
 
 [[line]]
 left = ["model", "dir", "git"]
-right = ["cost"]
+right = ["update", "cost"]
 
 [[line]]
 left = [{ metric = "context", bar = "eighths", cells = 10 }, "context.trend", { metric = "quota.5h", cells = 8 }]

@@ -156,6 +156,22 @@ pub(super) fn metrics() -> Vec<Metric> {
             },
             compute: cc_version,
         },
+        Metric {
+            meta: MetricMeta {
+                priority: 1,
+                stateful: true,
+                ..meta(
+                    "update",
+                    Category::System,
+                    "Update",
+                    "A newer ccline is published; links to its release notes",
+                    IconKey::Update,
+                    ["{version} available", "{version}", "{version}"],
+                    &["version", "current"],
+                )
+            },
+            compute: update,
+        },
     ]
 }
 
@@ -233,4 +249,15 @@ fn session_name(ctx: &Ctx, opts: &Options) -> Option<Reading> {
 
 fn cc_version(ctx: &Ctx, _: &Options) -> Option<Reading> {
     Some(Reading::default().set("version", ctx.input.version.as_deref()?))
+}
+
+fn update(ctx: &Ctx, _: &Options) -> Option<Reading> {
+    use crate::state::update::{CURRENT, RELEASES};
+    let latest = ctx.state.latest_version.as_deref()?;
+    Some(
+        Reading::default()
+            .set("version", format!("v{latest}"))
+            .set("current", format!("v{CURRENT}"))
+            .link(Some(format!("{RELEASES}/tag/v{latest}"))),
+    )
 }
