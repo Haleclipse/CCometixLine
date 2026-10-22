@@ -2,7 +2,7 @@
 //! migration, and the `--theme` override.
 
 use crate::presets;
-use crate::style::{BarGlyphs, ColorDepth, FillStyle, GlyphTier, SkinKind, palette};
+use crate::style::{BarGlyphs, ColorDepth, Edges, FillStyle, GlyphTier, SkinKind, palette};
 use crate::widgets::{Coloring, WidgetKind};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::borrow::Cow;
@@ -190,6 +190,8 @@ pub struct Config {
     /// Separator for the plain skin.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub separator: Option<String>,
+    /// Where powerline segments meet and how their run ends.
+    pub powerline: Edges,
     pub layout: LayoutConfig,
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     pub palette_overrides: BTreeMap<String, String>,
@@ -216,6 +218,7 @@ impl Default for Config {
             glyphs: GlyphTier::Nerd,
             color_depth: DepthSetting::Auto,
             separator: None,
+            powerline: Edges::default(),
             layout: LayoutConfig::default(),
             palette_overrides: BTreeMap::new(),
             git: GitConfig::default(),

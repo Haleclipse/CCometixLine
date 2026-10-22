@@ -5,7 +5,7 @@
 use super::{Cx, Env, Outcome, Page};
 use crate::config::{Config, DepthSetting, ItemSpec, LineConfig};
 use crate::style::palette::{self, Category, Palette, TOKENS, Token};
-use crate::style::{FillStyle, GlyphTier, SkinKind};
+use crate::style::{Edge, FillStyle, GlyphTier, SkinKind};
 use crate::tui::dialogs::{ColorDialog, ColorTarget, FontCheck};
 use crate::tui::doc::Doc;
 use crate::tui::ui;
@@ -196,14 +196,29 @@ impl StylePage {
                 Line::from(spans)
             })
             .collect();
-        lines.push(Line::raw(""));
-        let (marker, style) = self.row_marker(Pane::Skin, SKINS.len(), self.skin_row, cx);
-        lines.push(Line::from(vec![
-            marker,
-            Span::styled("Separator  ", style),
-            ui::choice(&separator_label(cx.doc.config.separator.as_deref())),
-            Span::styled("  plain skin", ui::muted()),
-        ]));
+        let row = |i: usize, label: &str, value: String, note: String| {
+            let (marker, style) = self.row_marker(Pane::Skin, SKINS.len() + i, self.skin_row, cx);
+            Line::from(vec![
+                marker,
+                Span::styled(format!("{label:<11}"), style),
+                ui::choice(&value),
+                Span::styled(format!("  {note}"), ui::muted()),
+            ])
+        };
+        // The edge's glyphs, so the choice shows what it draws.
+        let sample = |e: Edge| match e.glyphs() {
+            Some((right, left)) => format!("{right} {left}  powerline"),
+            None => "powerline".to_string(),
+        };
+        let edges = cx.doc.config.powerline;
+        lines.push(row(
+            0,
+            "Separator",
+            separator_label(cx.doc.config.separator.as_deref()),
+            "plain skin".into(),
+        ));
+        lines.push(row(1, "Join", lower(edges.join), sample(edges.join)));
+        lines.push(row(2, "End", lower(edges.end), sample(edges.end)));
         f.render_widget(
             Paragraph::new(lines).block(self.block("Skin", Pane::Skin, cx)),
             area,
@@ -426,7 +441,7 @@ impl StylePage {
 impl Page for StylePage {
     fn render(&mut self, f: &mut Frame, area: Rect, cx: &Cx) {
         let [top, bottom] =
-            Layout::vertical([Constraint::Length(8), Constraint::Fill(1)]).areas(area);
+            Layout::vertical([Constraint::Length(9), Constraint::Fill(1)]).areas(area);
         let [skin, look] =
             Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)])
                 .spacing(1)
@@ -460,7 +475,7 @@ impl Page for StylePage {
         match self.pane {
             Pane::Skin => match key.code {
                 KeyCode::Up => return Self::up(&mut self.skin_row),
-                KeyCode::Down => self.skin_row = (self.skin_row + 1).min(SKINS.len()),
+                KeyCode::Down => self.skin_row = (self.skin_row + 1).min(SKINS.len() + 2),
                 KeyCode::Enter | KeyCode::Char(' ') | KeyCode::Left | KeyCode::Right
                     if self.skin_row < SKINS.len() =>
                 {
@@ -468,10 +483,18 @@ impl Page for StylePage {
                     doc.edit(|c, _| c.skin = skin);
                 }
                 KeyCode::Enter | KeyCode::Char(' ') | KeyCode::Left | KeyCode::Right => {
-                    doc.edit(|c, _| {
-                        let next = cycle(&SEPARATORS, c.separator.as_deref(), forward);
-                        c.separator = next.map(str::to_string);
-                    });
+                    match self.skin_row - SKINS.len() {
+                        0 => doc.edit(|c, _| {
+                            let next = cycle(&SEPARATORS, c.separator.as_deref(), forward);
+                            c.separator = next.map(str::to_string);
+                        }),
+                        1 => doc.edit(|c, _| {
+                            c.powerline.join = cycle(&Edge::ALL, c.powerline.join, forward)
+                        }),
+                        _ => doc.edit(|c, _| {
+                            c.powerline.end = cycle(&Edge::ALL, c.powerline.end, forward)
+                        }),
+                    }
                 }
                 _ => return Outcome::Ignored,
             },
@@ -659,6 +682,19 @@ mod tests {
                 .map(String::as_str),
             Some("#112233")
         );
+
+        // Powerline join: arrow → round, on the skin pane's join row.
+        for _ in 0..3 {
+            app.handle_key(key(KeyCode::BackTab));
+        }
+        for _ in 0..3 {
+            app.handle_key(key(KeyCode::Down));
+        }
+        app.handle_key(key(KeyCode::Right));
+        assert_eq!(app.doc.config.powerline.join, crate::style::Edge::Round);
+        for _ in 0..3 {
+            app.handle_key(key(KeyCode::Tab));
+        }
 
         // Fill: solid → tinted.
         app.handle_key(key(KeyCode::BackTab));

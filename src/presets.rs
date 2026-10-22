@@ -219,6 +219,7 @@ pub fn apply(config: &Config, preset: &Config, parts: Parts) -> Config {
         out.glyphs = preset.glyphs;
         out.color_depth = preset.color_depth;
         out.separator = preset.separator.clone();
+        out.powerline = preset.powerline;
         out.palette_overrides = preset.palette_overrides.clone();
     }
     if parts == Parts::All {

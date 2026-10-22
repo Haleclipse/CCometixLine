@@ -40,6 +40,7 @@ pub fn theme(config: &Config) -> Theme {
         glyphs: config.glyphs,
         separator: config.separator.clone(),
         fill: config.fill,
+        edges: config.powerline,
     }
 }
 

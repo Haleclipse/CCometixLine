@@ -193,6 +193,7 @@ mod tests {
             glyphs: GlyphTier::Unicode,
             separator: Some(" | ".into()),
             fill: crate::style::FillStyle::Solid,
+            edges: Default::default(),
         }
     }
 

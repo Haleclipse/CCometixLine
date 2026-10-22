@@ -57,6 +57,7 @@ pub struct Theme {
     /// Separator for the plain skin; `None` uses the default.
     pub separator: Option<String>,
     pub fill: FillStyle,
+    pub edges: Edges,
 }
 
 impl Theme {
@@ -98,8 +99,68 @@ pub enum Side {
 
 const PILL_LEFT: &str = "\u{e0b6}";
 const PILL_RIGHT: &str = "\u{e0b4}";
-const ARROW_RIGHT: &str = "\u{e0b0}";
-const ARROW_LEFT: &str = "\u{e0b2}";
+
+/// The shape where powerline segments meet, and where a line's segments
+/// begin and end.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Edge {
+    #[default]
+    Arrow,
+    Round,
+    /// `/`
+    Slant,
+    /// `\`
+    Backslant,
+    Flame,
+    Pixel,
+    /// No glyph: segments meet edge to edge, lines stop square.
+    Flat,
+}
+
+impl Edge {
+    pub const ALL: [Edge; 7] = [
+        Edge::Arrow,
+        Edge::Round,
+        Edge::Slant,
+        Edge::Backslant,
+        Edge::Flame,
+        Edge::Pixel,
+        Edge::Flat,
+    ];
+
+    /// The glyph pointing right (left side of the line) and left (right
+    /// side); `None` for flat.
+    pub fn glyphs(self) -> Option<(&'static str, &'static str)> {
+        Some(match self {
+            Edge::Arrow => ("\u{e0b0}", "\u{e0b2}"),
+            Edge::Round => ("\u{e0b4}", "\u{e0b6}"),
+            Edge::Slant => ("\u{e0bc}", "\u{e0ba}"),
+            Edge::Backslant => ("\u{e0b8}", "\u{e0be}"),
+            Edge::Flame => ("\u{e0c0}", "\u{e0c2}"),
+            Edge::Pixel => ("\u{e0c4}", "\u{e0c6}"),
+            Edge::Flat => return None,
+        })
+    }
+}
+
+/// How powerline segments meet and how a line's run of them ends.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Edges {
+    pub join: Edge,
+    pub end: Edge,
+}
+
+/// As in v1: arrows between segments, square ends.
+impl Default for Edges {
+    fn default() -> Self {
+        Edges {
+            join: Edge::Arrow,
+            end: Edge::Flat,
+        }
+    }
+}
 
 fn severity_token(sev: Severity) -> Option<Token> {
     match sev {
@@ -401,31 +462,39 @@ pub fn compose(items: &[ItemView], side: Side, theme: &Theme) -> Line {
         }
         SkinKind::Powerline => {
             let bgs: Vec<Option<Color>> = items.iter().map(|i| segment(i, theme).0).collect();
-            for (i, item) in items.iter().enumerate() {
-                if side == Side::Right {
-                    let prev = if i > 0 { bgs[i - 1] } else { None };
+            let n = items.len();
+            // A glyph drawn in `fg` over `bg`, if the edge has one.
+            let edge = |line: &mut Line, edge: Edge, fg: Option<Color>, bg: Option<Color>| {
+                if let Some((right, left)) = edge.glyphs() {
+                    let glyph = if side == Side::Left { right } else { left };
                     line.push(Span::styled(
-                        ARROW_LEFT,
+                        glyph,
                         Style {
-                            fg: bgs[i],
-                            bg: prev,
+                            fg,
+                            bg,
                             ..Style::default()
                         },
                     ));
+                }
+            };
+            for (i, item) in items.iter().enumerate() {
+                // The right side's segments point left, toward the gap.
+                if side == Side::Right {
+                    let (kind, prev) = match i {
+                        0 => (theme.edges.end, None),
+                        _ => (theme.edges.join, bgs[i - 1]),
+                    };
+                    edge(&mut line, kind, bgs[i], prev);
                 }
                 line.push(Span::styled(" ", Style::default().with_bg(bgs[i])));
                 line.extend(paint(item, theme));
                 line.push(Span::styled(" ", Style::default().with_bg(bgs[i])));
                 if side == Side::Left {
-                    let next = bgs.get(i + 1).copied().flatten();
-                    line.push(Span::styled(
-                        ARROW_RIGHT,
-                        Style {
-                            fg: bgs[i],
-                            bg: next,
-                            ..Style::default()
-                        },
-                    ));
+                    let (kind, next) = match i + 1 {
+                        j if j == n => (theme.edges.end, None),
+                        j => (theme.edges.join, bgs[j]),
+                    };
+                    edge(&mut line, kind, bgs[i], next);
                 }
             }
         }
@@ -446,6 +515,10 @@ mod tests {
             glyphs,
             separator: None,
             fill: FillStyle::Solid,
+            edges: Edges {
+                join: Edge::Arrow,
+                end: Edge::Arrow,
+            },
         }
     }
 
@@ -493,7 +566,8 @@ mod tests {
         second.category = Category::Cost;
         let t = theme(SkinKind::Powerline, GlyphTier::Nerd);
         let line = compose(&[item(&a), second], Side::Left, &t);
-        let arrow = line.iter().find(|s| s.text == ARROW_RIGHT).unwrap();
+        let right = Edge::Arrow.glyphs().unwrap().0;
+        let arrow = line.iter().find(|s| s.text == right).unwrap();
         assert_eq!(arrow.style.fg, t.palette.get(Token::Identity));
         assert_eq!(arrow.style.bg, t.palette.get(Token::Cost));
     }
