@@ -71,15 +71,6 @@ pub struct Home {
 
 fn checks(cx: &Cx) -> Vec<Check> {
     let mut out = Vec::new();
-    if crate::paths::DEV_BUILD {
-        out.push(check(
-            Mark::Info,
-            format!(
-                "development build: files in {}",
-                crate::paths::home().display()
-            ),
-        ));
-    }
     out.push(match cx.env.cc_version() {
         Some(v) if v >= MIN_SUPPORTED => check(Mark::Ok, format!("Claude Code {v}")),
         Some(v) => check(
