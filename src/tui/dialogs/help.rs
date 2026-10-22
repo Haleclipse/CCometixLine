@@ -2,6 +2,7 @@
 
 use super::{Dialog, Reply};
 use crate::tui::doc::Doc;
+use crate::tui::pages::Cx;
 use crate::tui::ui;
 use ratatui::Frame;
 use ratatui::crossterm::event::KeyEvent;
@@ -41,7 +42,7 @@ fn rows(keys: &[(&str, &str)]) -> Vec<Line<'static>> {
 }
 
 impl Dialog for Help {
-    fn render(&mut self, f: &mut Frame, area: Rect, _: &Doc) {
+    fn render(&mut self, f: &mut Frame, area: Rect, _: &Cx) {
         let height = (GLOBAL.len() + self.keys.len() + 6) as u16;
         let rect = ui::popup(f, area, 56, height);
         let mut text = vec![Line::styled(" Everywhere", ui::title())];

@@ -5,6 +5,7 @@ use super::{Action, Dialog, Reply};
 use crate::metrics::fmt::grouped;
 use crate::models::{MatchKind, Modifier, Rule, parse_window};
 use crate::tui::doc::Doc;
+use crate::tui::pages::Cx;
 use crate::tui::ui;
 use ratatui::Frame;
 use ratatui::crossterm::event::KeyEvent;
@@ -196,7 +197,7 @@ impl Dialog for RuleDialog {
         self.form.paste(text)
     }
 
-    fn render(&mut self, f: &mut Frame, area: Rect, _: &Doc) {
+    fn render(&mut self, f: &mut Frame, area: Rect, _: &Cx) {
         let matches = self.matches();
         let height = 10 + matches.len() as u16 + u16::from(self.error.is_some());
         let rect = ui::popup(f, area, WIDTH, height);
@@ -320,7 +321,7 @@ impl Dialog for ModifierDialog {
         self.form.paste(text)
     }
 
-    fn render(&mut self, f: &mut Frame, area: Rect, _: &Doc) {
+    fn render(&mut self, f: &mut Frame, area: Rect, _: &Cx) {
         let rect = ui::popup(f, area, WIDTH, 9 + u16::from(self.error.is_some()));
         let notes = [
             None,

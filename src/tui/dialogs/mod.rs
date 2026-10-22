@@ -9,6 +9,7 @@ mod prompts;
 mod rule;
 
 use super::doc::Doc;
+use super::pages::Cx;
 use ratatui::Frame;
 use ratatui::crossterm::event::KeyEvent;
 use ratatui::layout::Rect;
@@ -37,7 +38,7 @@ pub enum Reply {
 
 pub trait Dialog {
     /// Draw within `area` (the whole screen); dialogs center themselves.
-    fn render(&mut self, f: &mut Frame, area: Rect, doc: &Doc);
+    fn render(&mut self, f: &mut Frame, area: Rect, cx: &Cx);
     fn handle(&mut self, key: KeyEvent, doc: &mut Doc) -> Reply;
     /// Pasted text; returns whether a field took it.
     fn paste(&mut self, _text: &str) -> bool {

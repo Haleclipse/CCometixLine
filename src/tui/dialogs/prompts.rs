@@ -3,6 +3,7 @@
 
 use super::{Action, Dialog, Reply};
 use crate::tui::doc::Doc;
+use crate::tui::pages::Cx;
 use crate::tui::ui;
 use ratatui::Frame;
 use ratatui::crossterm::event::{KeyCode, KeyEvent};
@@ -15,9 +16,9 @@ use std::path::PathBuf;
 pub struct Quit;
 
 impl Dialog for Quit {
-    fn render(&mut self, f: &mut Frame, area: Rect, doc: &Doc) {
+    fn render(&mut self, f: &mut Frame, area: Rect, cx: &Cx) {
         let rect = ui::popup(f, area, 64, 7);
-        let n = doc.edits();
+        let n = cx.doc.edits();
         let text = vec![
             Line::raw(format!(
                 " {n} change{} since the last save.",
@@ -52,7 +53,7 @@ pub struct Conflict {
 }
 
 impl Dialog for Conflict {
-    fn render(&mut self, f: &mut Frame, area: Rect, _: &Doc) {
+    fn render(&mut self, f: &mut Frame, area: Rect, _: &Cx) {
         let rect = ui::popup(f, area, 72, 8 + self.paths.len() as u16);
         let mut text = vec![Line::raw(" Changed outside ccline since it was opened:")];
         text.extend(

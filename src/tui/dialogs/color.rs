@@ -5,6 +5,7 @@ use super::{Action, Dialog, Reply};
 use crate::style::Color;
 use crate::style::palette::Token;
 use crate::tui::doc::Doc;
+use crate::tui::pages::Cx;
 use crate::tui::ui::{self, TextInput};
 use ratatui::Frame;
 use ratatui::crossterm::event::{KeyCode, KeyEvent};
@@ -174,7 +175,7 @@ impl ColorDialog {
 }
 
 impl Dialog for ColorDialog {
-    fn render(&mut self, f: &mut Frame, area: Rect, _: &Doc) {
+    fn render(&mut self, f: &mut Frame, area: Rect, _: &Cx) {
         let body = self.body();
         let height = body.len() as u16 + 6 + u16::from(self.error.is_some());
         let rect = ui::popup(f, area, WIDTH, height);

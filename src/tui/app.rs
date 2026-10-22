@@ -181,7 +181,7 @@ impl App {
         f.render_widget(Paragraph::new(footer_line), footer);
 
         for d in &mut self.dialogs {
-            d.render(f, area, &self.doc);
+            d.render(f, area, &cx);
         }
     }
 

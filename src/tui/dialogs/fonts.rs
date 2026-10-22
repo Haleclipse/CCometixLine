@@ -4,6 +4,7 @@
 use super::{Action, Dialog, Reply};
 use crate::style::glyphs::{self, GlyphTier, IconKey};
 use crate::tui::doc::Doc;
+use crate::tui::pages::Cx;
 use crate::tui::ui;
 use ratatui::Frame;
 use ratatui::crossterm::event::{KeyCode, KeyEvent};
@@ -32,7 +33,7 @@ fn row(label: &str, glyphs: String) -> Line<'static> {
 }
 
 impl Dialog for FontCheck {
-    fn render(&mut self, f: &mut Frame, area: Rect, _: &Doc) {
+    fn render(&mut self, f: &mut Frame, area: Rect, _: &Cx) {
         let rect = ui::popup(f, area, 64, 12);
         let nerd: Vec<&str> = SAMPLE
             .iter()
