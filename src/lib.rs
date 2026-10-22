@@ -1,3 +1,4 @@
+pub mod cc_settings;
 pub mod cli;
 pub mod config;
 pub mod env;
