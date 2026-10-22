@@ -116,6 +116,16 @@ impl Settings {
         })
     }
 
+    /// Whether the file changed on disk since it was read.
+    pub fn stale(&self) -> bool {
+        std::fs::read_to_string(&self.path).ok() != self.text
+    }
+
+    /// Whether this differs from `other` in any setting.
+    pub fn differs(&self, other: &Settings) -> bool {
+        self.value != other.value
+    }
+
     fn object(&self) -> &Map<String, Value> {
         self.value.as_object().expect("settings are an object")
     }

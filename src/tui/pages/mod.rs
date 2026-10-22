@@ -1,10 +1,10 @@
 //! The six pages. Each draws its body and handles the keys it understands;
 //! anything it ignores falls through to the app's global keys.
 
+mod claude;
 mod home;
 mod layout;
 mod models;
-mod placeholder;
 mod presets;
 mod style;
 
@@ -20,10 +20,10 @@ use ratatui::crossterm::event::KeyEvent;
 use ratatui::layout::Rect;
 use std::collections::BTreeMap;
 
+pub use claude::ClaudePage;
 pub use home::Home;
 pub use layout::LayoutPage;
 pub use models::Models;
-pub use placeholder::Placeholder;
 pub use presets::Presets;
 pub use style::StylePage;
 
@@ -72,6 +72,10 @@ pub struct Env {
     pub session: Option<SessionState>,
     /// Model ids seen in recent sessions.
     pub seen: BTreeMap<String, Seen>,
+    /// Claude Code's user settings file.
+    pub settings: std::path::PathBuf,
+    /// The last update check.
+    pub update: crate::state::update::UpdateState,
 }
 
 impl Env {
@@ -81,6 +85,8 @@ impl Env {
             tz: *chrono::Local::now().offset(),
             session: crate::state::session::latest(),
             seen: crate::state::models_seen::load(),
+            settings: crate::cc_settings::Settings::user_path(),
+            update: crate::state::update::last(),
         }
     }
 

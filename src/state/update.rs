@@ -92,6 +92,11 @@ pub fn available(config: &UpdateConfig, now: i64) -> Option<String> {
     state.latest.filter(|v| is_newer(v, CURRENT))
 }
 
+/// The last check's result, without starting one.
+pub fn last() -> UpdateState {
+    read_json(&paths().0).unwrap_or_default()
+}
+
 /// Ask each source in turn; `None` when none answered with a version.
 pub fn fetch() -> Option<String> {
     SOURCES.iter().find_map(|(url, key)| {

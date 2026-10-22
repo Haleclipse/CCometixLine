@@ -4,7 +4,7 @@
 use super::dialogs::{self, Action, Dialog, Reply};
 use super::doc::{Doc, SaveError};
 use super::pages::{
-    Cx, Env, Home, LayoutPage, Models, Outcome, Page, PageId, Placeholder, Presets, StylePage,
+    ClaudePage, Cx, Env, Home, LayoutPage, Models, Outcome, Page, PageId, Presets, StylePage,
 };
 use super::preview::{self, Preview};
 use super::ui;
@@ -48,10 +48,7 @@ impl App {
             Box::new(LayoutPage::default()),
             Box::new(StylePage::default()),
             Box::new(Models::default()),
-            Box::new(Placeholder::new(
-                "Claude Code",
-                "Claude Code integration arrives in a later step of the v2 TUI.",
-            )),
+            Box::new(ClaudePage::default()),
         ];
         App {
             doc,
@@ -338,6 +335,7 @@ impl App {
         match action {
             Action::Quit => self.quit = true,
             Action::Toast(t) => self.toast(t, false),
+            Action::Error(t) => self.toast(t, true),
             Action::Reload => {
                 self.doc.reload();
                 self.toast("Reloaded from disk", false);
@@ -428,6 +426,8 @@ pub(crate) mod tests {
             tz: chrono::FixedOffset::east_opt(0).unwrap(),
             session: None,
             seen: Default::default(),
+            settings: std::env::temp_dir().join("ccline-test-no-settings.json"),
+            update: Default::default(),
         }
     }
 

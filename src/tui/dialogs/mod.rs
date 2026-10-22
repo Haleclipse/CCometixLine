@@ -7,6 +7,7 @@ mod form;
 mod help;
 mod prompts;
 mod rule;
+mod settings;
 
 use super::doc::Doc;
 use super::pages::Cx;
@@ -19,14 +20,20 @@ pub use fonts::FontCheck;
 pub use help::Help;
 pub use prompts::{Conflict, Quit};
 pub use rule::{ModifierDialog, RuleDialog};
+pub use settings::{SettingsDiff, shown_path};
 
 /// Something only the app can do, asked for by a closing dialog.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Action {
     Quit,
-    Save { force: bool, then_quit: bool },
+    Save {
+        force: bool,
+        then_quit: bool,
+    },
     Reload,
     Toast(String),
+    /// A toast for something that went wrong.
+    Error(String),
 }
 
 pub enum Reply {
