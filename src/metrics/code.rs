@@ -1,6 +1,6 @@
 //! Working directory, repository, branch, pull request and line changes.
 
-use super::{Ctx, LEVELS, Metric, MetricMeta, Options, Reading};
+use super::{Ctx, LEVELS, Metric, MetricMeta, OptKind, OptSpec, Options, Reading};
 use crate::style::{Category, GlyphTier, IconKey, Role, Severity};
 use crate::widgets::WidgetKind;
 
@@ -25,6 +25,7 @@ fn meta(
         levels: LEVELS,
         min_cc: None,
         needs_mod: false,
+        options: &[],
         stateful: false,
         priority: 3,
     }
@@ -35,11 +36,17 @@ pub(super) fn metrics() -> Vec<Metric> {
         Metric {
             meta: MetricMeta {
                 priority: 4,
+                options: &[OptSpec {
+                    key: "style",
+                    kind: OptKind::Choice(&["name", "parent", "tilde", "short", "full"]),
+                    default: "name",
+                    summary: "How much of the path to show",
+                }],
                 ..meta(
                     "dir",
                     Category::Workspace,
                     "Directory",
-                    "Working directory; style = name | parent | tilde | short | full",
+                    "Working directory",
                     IconKey::Dir,
                     ["{path}", "{path}", "{name}"],
                     &["path", "name"],
@@ -50,11 +57,17 @@ pub(super) fn metrics() -> Vec<Metric> {
         Metric {
             meta: MetricMeta {
                 priority: 4,
+                options: &[OptSpec {
+                    key: "sha",
+                    kind: OptKind::Flag,
+                    default: "false",
+                    summary: "Add the short commit id",
+                }],
                 ..meta(
                     "git",
                     Category::Vcs,
                     "Git",
-                    "Branch, status and ahead/behind; sha = true adds the commit",
+                    "Branch, status and ahead/behind",
                     IconKey::Git,
                     [
                         "{branch}[ {status}][ {ahead}][ {behind}][ {sha}]",

@@ -30,6 +30,7 @@ fn meta(
         levels: &[],
         min_cc: None,
         needs_mod: false,
+        options: &[],
         stateful: false,
         priority: 3,
     }

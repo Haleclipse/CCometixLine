@@ -3,7 +3,7 @@
 //! default 10), `timeout_ms` (limit for a run, default 2000) and `sample`
 //! (what previews show instead of running it).
 
-use super::{Commands, Ctx, Metric, MetricMeta, Options, Reading};
+use super::{Commands, Ctx, Metric, MetricMeta, OptKind, OptSpec, Options, Reading};
 use crate::state::cmd_cache::{self, Job};
 use crate::style::{Category, IconKey};
 use crate::widgets::WidgetKind;
@@ -27,6 +27,32 @@ pub(super) fn metrics() -> Vec<Metric> {
             levels: &[],
             min_cc: None,
             needs_mod: false,
+            options: &[
+                OptSpec {
+                    key: "run",
+                    kind: OptKind::Text,
+                    default: "",
+                    summary: "Command line, run by the shell",
+                },
+                OptSpec {
+                    key: "cache_s",
+                    kind: OptKind::Number,
+                    default: "10",
+                    summary: "Seconds output stays fresh",
+                },
+                OptSpec {
+                    key: "timeout_ms",
+                    kind: OptKind::Number,
+                    default: "2000",
+                    summary: "Longest a run may take",
+                },
+                OptSpec {
+                    key: "sample",
+                    kind: OptKind::Text,
+                    default: "",
+                    summary: "What previews show instead of running it",
+                },
+            ],
             stateful: false,
             priority: 2,
         },

@@ -92,6 +92,25 @@ impl Reading {
 /// Default thresholds on a ratio, in percent.
 pub const LEVELS: &[(f64, Severity)] = &[(50.0, Severity::Warn), (80.0, Severity::Crit)];
 
+/// How a metric option is edited.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum OptKind {
+    Text,
+    Number,
+    Flag,
+    Choice(&'static [&'static str]),
+}
+
+/// An option a metric reads from its item's `options` table.
+#[derive(Debug)]
+pub struct OptSpec {
+    pub key: &'static str,
+    pub kind: OptKind,
+    /// The value used when unset, as shown to the user.
+    pub default: &'static str,
+    pub summary: &'static str,
+}
+
 pub struct MetricMeta {
     pub id: &'static str,
     pub category: Category,
@@ -107,6 +126,8 @@ pub struct MetricMeta {
     /// Oldest Claude Code that provides the data.
     pub min_cc: Option<Version>,
     pub needs_mod: bool,
+    /// Options read from the item's `options` table.
+    pub options: &'static [OptSpec],
     pub stateful: bool,
     pub priority: u8,
 }
@@ -281,6 +302,11 @@ mod tests {
         let mut seen = std::collections::HashSet::new();
         for m in catalog() {
             assert!(seen.insert(m.meta.id), "duplicate {}", m.meta.id);
+            for o in m.meta.options {
+                if let OptKind::Choice(values) = o.kind {
+                    assert!(values.contains(&o.default), "{}.{}", m.meta.id, o.key);
+                }
+            }
             for t in m.meta.templates {
                 let mut rest = t;
                 while let Some(start) = rest.find('{') {
