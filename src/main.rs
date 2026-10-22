@@ -237,13 +237,17 @@ fn preview(args: PreviewArgs, theme: Option<&str>) {
             println!("  {:<12} {}", s.name, s.summary);
         }
         println!("Presets (use with --theme):");
-        for p in presets::PRESETS {
+        for p in presets::Library::load(ccometixline::paths::presets_dir()).entries() {
             let tags = if p.tags.is_empty() {
                 String::new()
             } else {
                 format!(" [{}]", p.tags.join(", "))
             };
-            println!("  {:<12} {}{tags}", p.name, p.summary);
+            let summary = match &p.config {
+                Ok(_) => p.summary.clone(),
+                Err(e) => format!("(can't read: {e})"),
+            };
+            println!("  {:<12} {summary}{tags}", p.name);
         }
         return;
     }

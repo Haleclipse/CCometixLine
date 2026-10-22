@@ -1,7 +1,13 @@
-//! Built-in presets: layouts with a look. Applying one copies it into the
-//! user's config.
+//! Presets: layouts with a look. Applying one copies it into the user's
+//! config. Built-ins live here; the user's own are files in `presets/`,
+//! and a file named like a built-in replaces it.
 
-use crate::config::{Config, LineConfig};
+use crate::config::{Config, DepthSetting, LineConfig};
+use crate::style::{Edges, FillStyle, GlyphTier, SkinKind};
+use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
+use std::path::{Path, PathBuf};
+use std::time::SystemTime;
 
 pub struct Preset {
     pub name: &'static str,
@@ -238,6 +244,359 @@ pub fn default_config() -> Config {
     get(DEFAULT).expect("default preset exists")
 }
 
+/// Longest name a preset of the user's may have, in characters.
+pub const NAME_MAX: usize = 32;
+
+/// A typed name as a preset's file name: lowercase letters and digits,
+/// with dashes between words.
+pub fn slug(text: &str) -> String {
+    let mut out = String::new();
+    for ch in text.trim().chars().flat_map(char::to_lowercase) {
+        if ch.is_alphanumeric() {
+            out.push(ch);
+        } else if matches!(ch, ' ' | '-' | '_' | '.') && !out.is_empty() && !out.ends_with('-') {
+            out.push('-');
+        }
+    }
+    while out.ends_with('-') {
+        out.pop();
+    }
+    out
+}
+
+/// Why `name` (a slug) can't name a new preset, if it can't.
+pub fn name_problem(name: &str) -> Option<String> {
+    if name.is_empty() {
+        return Some("Give it a name.".into());
+    }
+    if name.chars().count() > NAME_MAX {
+        return Some(format!("Keep the name to {NAME_MAX} characters."));
+    }
+    if PRESETS.iter().any(|p| p.name == name) {
+        return Some(format!("{name} is a built-in preset; pick another name."));
+    }
+    None
+}
+
+/// The preset `name` for `--theme`: the user's file first, then a built-in.
+pub fn find(name: &str) -> Option<Config> {
+    find_in(&crate::paths::presets_dir(), name)
+}
+
+pub fn find_in(dir: &Path, name: &str) -> Option<Config> {
+    // A name, never a path.
+    let plain = !name.is_empty() && !name.contains(['/', '\\']) && !name.starts_with('.');
+    if plain && let Ok((_, config)) = read_file(&dir.join(format!("{name}.toml")), name) {
+        return Some(config);
+    }
+    get(name)
+}
+
+/// Where a preset comes from.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Origin {
+    Builtin,
+    /// A file in the user's `presets/`.
+    Mine {
+        path: PathBuf,
+        modified: Option<SystemTime>,
+        /// Named like a built-in, which it replaces.
+        replaces: bool,
+    },
+}
+
+/// A preset as the gallery lists it.
+#[derive(Clone, Debug)]
+pub struct Entry {
+    pub name: String,
+    pub summary: String,
+    pub tags: Vec<&'static str>,
+    pub origin: Origin,
+    /// The preset as a full config, or why its file can't be used.
+    pub config: Result<Config, String>,
+}
+
+impl Entry {
+    pub fn is_mine(&self) -> bool {
+        matches!(self.origin, Origin::Mine { .. })
+    }
+}
+
+/// What a preset file holds: the parts `apply` copies, and a summary. The
+/// fields keep `Config`'s order, so a preset reads like a `config.toml`.
+#[derive(Serialize)]
+struct PresetFile<'a> {
+    version: u32,
+    #[serde(skip_serializing_if = "str::is_empty")]
+    summary: &'a str,
+    palette: &'a str,
+    skin: SkinKind,
+    fill: FillStyle,
+    glyphs: GlyphTier,
+    color_depth: DepthSetting,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    separator: Option<&'a str>,
+    powerline: Edges,
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    palette_overrides: &'a BTreeMap<String, String>,
+    #[serde(rename = "line")]
+    lines: &'a [LineConfig],
+}
+
+const FILE_HEADER: &str = "# A ccline preset: the status line's layout and look. Applying it leaves\n\
+                           # width, git, update and subagent line settings as they are.\n\n";
+
+fn file_text(summary: &str, c: &Config) -> String {
+    let file = PresetFile {
+        version: crate::config::VERSION,
+        summary,
+        palette: &c.palette,
+        skin: c.skin,
+        fill: c.fill,
+        glyphs: c.glyphs,
+        color_depth: c.color_depth,
+        separator: c.separator.as_deref(),
+        powerline: c.powerline,
+        palette_overrides: &c.palette_overrides,
+        lines: &c.lines,
+    };
+    format!(
+        "{FILE_HEADER}{}",
+        toml::to_string_pretty(&file).unwrap_or_default()
+    )
+}
+
+#[derive(Deserialize, Default)]
+#[serde(default)]
+struct Head {
+    summary: String,
+}
+
+/// A preset file's summary and config, the config named `name`.
+fn read_file(path: &Path, name: &str) -> Result<(String, Config), String> {
+    let text = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
+    let table: toml::Table = toml::from_str(&text).map_err(|e| e.message().to_string())?;
+    let head = Head::deserialize(toml::Value::Table(table.clone())).unwrap_or_default();
+    let mut config =
+        Config::deserialize(toml::Value::Table(table)).map_err(|e| e.message().to_string())?;
+    // Applying a preset without lines would leave the status line empty.
+    if config.lines.is_empty() {
+        return Err("it has no [[line]]".into());
+    }
+    config.preset = Some(name.to_string());
+    Ok((head.summary, config))
+}
+
+/// Filter tags for a preset of the user's, read from what it shows.
+fn tags_of(c: &Config) -> Vec<&'static str> {
+    let ids: Vec<String> = c
+        .lines
+        .iter()
+        .flat_map(|l| l.left.iter().chain(&l.right))
+        .map(|i| i.config().metric.clone())
+        .collect();
+    let mut tags = vec!["mine"];
+    if c.lines.len() > 1 {
+        tags.push("multi-line");
+    }
+    if c.skin == SkinKind::Powerline {
+        tags.push("powerline");
+    }
+    if ids.iter().any(|m| m.starts_with("quota.")) {
+        tags.push("quota");
+    }
+    if ids.iter().any(|m| m == "cache" || m.starts_with("cache.")) {
+        tags.push("cache");
+    }
+    tags
+}
+
+/// The presets on offer, the user's first, and the changes made to theirs.
+/// Every change is written at once: the files are the library.
+pub struct Library {
+    dir: PathBuf,
+    entries: Vec<Entry>,
+    /// Bumped whenever the entries are read again, so views can follow.
+    generation: u64,
+    /// The preset the last change made, renamed or replaced.
+    last: Option<String>,
+}
+
+impl Library {
+    pub fn load(dir: PathBuf) -> Library {
+        let mut lib = Library {
+            dir,
+            entries: Vec::new(),
+            generation: 0,
+            last: None,
+        };
+        lib.refresh();
+        lib
+    }
+
+    pub fn dir(&self) -> &Path {
+        &self.dir
+    }
+
+    pub fn entries(&self) -> &[Entry] {
+        &self.entries
+    }
+
+    pub fn get(&self, name: &str) -> Option<&Entry> {
+        self.entries.iter().find(|e| e.name == name)
+    }
+
+    pub fn generation(&self) -> u64 {
+        self.generation
+    }
+
+    pub fn last(&self) -> Option<&str> {
+        self.last.as_deref()
+    }
+
+    /// Read the directory again, after changes made elsewhere.
+    pub fn reload(&mut self) {
+        self.last = None;
+        self.refresh();
+    }
+
+    fn refresh(&mut self) {
+        let mut mine = Vec::new();
+        for e in std::fs::read_dir(&self.dir).into_iter().flatten().flatten() {
+            let path = e.path();
+            if path.extension().and_then(|x| x.to_str()) != Some("toml") {
+                continue;
+            }
+            let Some(name) = path.file_stem().and_then(|s| s.to_str()) else {
+                continue;
+            };
+            let name = name.to_string();
+            let (summary, config) = match read_file(&path, &name) {
+                Ok((s, c)) => (s, Ok(c)),
+                Err(e) => (String::new(), Err(e)),
+            };
+            mine.push(Entry {
+                tags: config
+                    .as_ref()
+                    .map(tags_of)
+                    .unwrap_or_else(|_| vec!["mine"]),
+                origin: Origin::Mine {
+                    modified: e.metadata().and_then(|m| m.modified()).ok(),
+                    replaces: PRESETS.iter().any(|p| p.name == name),
+                    path,
+                },
+                name,
+                summary,
+                config,
+            });
+        }
+        mine.sort_by(|a, b| a.name.cmp(&b.name));
+        let builtin: Vec<Entry> = PRESETS
+            .iter()
+            .filter(|p| !mine.iter().any(|m| m.name == p.name))
+            .map(|p| Entry {
+                name: p.name.to_string(),
+                summary: p.summary.to_string(),
+                tags: p.tags.to_vec(),
+                origin: Origin::Builtin,
+                config: Ok(get(p.name).expect("listed presets exist")),
+            })
+            .collect();
+        self.entries = mine;
+        self.entries.extend(builtin);
+        self.generation += 1;
+    }
+
+    fn mine(&self, name: &str) -> Result<&Entry, String> {
+        self.get(name)
+            .filter(|e| e.is_mine())
+            .ok_or_else(|| format!("{name} isn't one of your presets"))
+    }
+
+    fn taken(&self, name: &str) -> Result<(), String> {
+        match self.get(name) {
+            Some(e) if e.is_mine() => Err(format!("You already have {name}; W on it replaces it.")),
+            _ => Ok(()),
+        }
+    }
+
+    fn write(&self, path: &Path, summary: &str, config: &Config) -> Result<(), String> {
+        crate::paths::write_atomic(path, &file_text(summary, config))
+            .map_err(|e| format!("couldn't write {}: {e}", path.display()))
+    }
+
+    fn changed(&mut self, last: Option<&str>) {
+        self.last = last.map(str::to_string);
+        self.refresh();
+    }
+
+    /// Save `config`'s layout and look as a new preset.
+    pub fn create(&mut self, name: &str, summary: &str, config: &Config) -> Result<(), String> {
+        if let Some(problem) = name_problem(name) {
+            return Err(problem);
+        }
+        self.taken(name)?;
+        self.write(&self.dir.join(format!("{name}.toml")), summary, config)?;
+        self.changed(Some(name));
+        Ok(())
+    }
+
+    /// Replace one of the user's presets with `config`, keeping its summary.
+    pub fn replace(&mut self, name: &str, config: &Config) -> Result<(), String> {
+        let entry = self.mine(name)?;
+        let Origin::Mine { path, .. } = &entry.origin else {
+            unreachable!("mine() returns the user's presets")
+        };
+        self.write(path, &entry.summary, config)?;
+        self.changed(Some(name));
+        Ok(())
+    }
+
+    /// Rename one of the user's presets and set its summary.
+    pub fn rename(&mut self, old: &str, new: &str, summary: &str) -> Result<(), String> {
+        let entry = self.mine(old)?.clone();
+        let Origin::Mine { path, .. } = &entry.origin else {
+            unreachable!("mine() returns the user's presets")
+        };
+        let to = if new == old {
+            path.clone()
+        } else {
+            if let Some(problem) = name_problem(new) {
+                return Err(problem);
+            }
+            self.taken(new)?;
+            self.dir.join(format!("{new}.toml"))
+        };
+        if summary == entry.summary {
+            if to != *path {
+                std::fs::rename(path, &to).map_err(|e| format!("couldn't rename {old}: {e}"))?;
+            }
+        } else {
+            let config = entry
+                .config
+                .as_ref()
+                .map_err(|e| format!("can't read {old}: {e}"))?;
+            self.write(&to, summary, config)?;
+            if to != *path {
+                std::fs::remove_file(path).map_err(|e| format!("couldn't remove {old}: {e}"))?;
+            }
+        }
+        self.changed(Some(new));
+        Ok(())
+    }
+
+    /// Delete one of the user's presets.
+    pub fn delete(&mut self, name: &str) -> Result<(), String> {
+        let entry = self.mine(name)?;
+        let Origin::Mine { path, .. } = &entry.origin else {
+            unreachable!("mine() returns the user's presets")
+        };
+        std::fs::remove_file(path).map_err(|e| format!("couldn't delete {name}: {e}"))?;
+        self.changed(None);
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -296,5 +655,158 @@ mod tests {
         for item in sub.left.iter().chain(&sub.right) {
             assert!(metrics::find(&item.config().metric).is_some());
         }
+    }
+
+    fn temp(tag: &str) -> PathBuf {
+        let d = std::env::temp_dir().join(format!("ccline-presets-{tag}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        d
+    }
+
+    fn names(lib: &Library) -> Vec<(&str, bool)> {
+        lib.entries()
+            .iter()
+            .map(|e| (e.name.as_str(), e.is_mine()))
+            .collect()
+    }
+
+    #[test]
+    fn names_presets_like_files() {
+        assert_eq!(slug("  Work Laptop "), "work-laptop");
+        assert_eq!(slug("night_owl.v2"), "night-owl-v2");
+        assert_eq!(slug("--a  --  b--"), "a-b");
+        assert_eq!(slug("工作 布局"), "工作-布局");
+        assert_eq!(slug("!!!"), "");
+        assert!(name_problem("").is_some());
+        assert!(name_problem("classic").unwrap().contains("built-in"));
+        assert!(name_problem(&"x".repeat(NAME_MAX + 1)).is_some());
+        assert_eq!(name_problem("work"), None);
+    }
+
+    #[test]
+    fn saves_the_layout_and_look_and_reads_them_back() {
+        let dir = temp("save");
+        let mut lib = Library::load(dir.clone());
+        assert!(lib.entries().iter().all(|e| !e.is_mine()));
+        assert_eq!(lib.entries().len(), PRESETS.len());
+
+        let mut mine = get("dashboard").unwrap();
+        mine.palette = "nord".into();
+        mine.palette_overrides
+            .insert("warn".into(), "#ff8800".into());
+        mine.layout.reserve = 6;
+        mine.git.cache_ms = 0;
+        mine.subagent = Some(default_subagent());
+        lib.create("work", "Quota and cache", &mine).unwrap();
+        assert_eq!(lib.last(), Some("work"));
+
+        let text = std::fs::read_to_string(dir.join("work.toml")).unwrap();
+        assert!(text.starts_with("# A ccline preset"), "{text}");
+        assert!(text.contains("summary = \"Quota and cache\""), "{text}");
+        for setup in ["[layout]", "[git]", "[update]", "[subagent]", "preset ="] {
+            assert!(!text.contains(setup), "{setup} stays out: {text}");
+        }
+
+        let e = lib.get("work").unwrap();
+        assert!(e.is_mine());
+        assert_eq!(e.summary, "Quota and cache");
+        assert_eq!(e.tags, ["mine", "multi-line", "quota", "cache"]);
+        let back = e.config.as_ref().unwrap();
+        assert_eq!(back.preset.as_deref(), Some("work"));
+        // Applying it reproduces the look and layout it was saved from.
+        let mut want = apply(&default_config(), &mine, Parts::All);
+        want.preset = Some("work".into());
+        assert_eq!(apply(&default_config(), back, Parts::All), want);
+        assert_eq!(names(&lib)[0], ("work", true), "the user's come first");
+
+        assert!(
+            lib.create("work", "", &mine)
+                .unwrap_err()
+                .contains("already")
+        );
+        assert!(
+            lib.create("classic", "", &mine)
+                .unwrap_err()
+                .contains("built-in")
+        );
+        assert_eq!(find_in(&dir, "work").unwrap().palette, "nord");
+        assert_eq!(
+            find_in(&dir, "minimal").unwrap().preset.as_deref(),
+            Some("minimal")
+        );
+        assert!(find_in(&dir, "../work").is_none());
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn replaces_renames_and_deletes() {
+        let dir = temp("edit");
+        let mut lib = Library::load(dir.clone());
+        lib.create("work", "Mine", &get("classic").unwrap())
+            .unwrap();
+        lib.replace("work", &get("zen").unwrap()).unwrap();
+        let e = lib.get("work").unwrap();
+        assert_eq!(e.summary, "Mine", "replacing keeps the summary");
+        assert_eq!(e.config.as_ref().unwrap().glyphs, GlyphTier::Ascii);
+
+        lib.rename("work", "home", "Mine").unwrap();
+        assert!(lib.get("work").is_none() && !dir.join("work.toml").exists());
+        assert_eq!(lib.last(), Some("home"));
+        lib.rename("home", "home", "At home").unwrap();
+        assert_eq!(lib.get("home").unwrap().summary, "At home");
+        lib.rename("home", "office", "Office").unwrap();
+        assert_eq!(lib.get("office").unwrap().summary, "Office");
+        assert!(!dir.join("home.toml").exists());
+
+        lib.create("other", "", &get("zen").unwrap()).unwrap();
+        assert!(lib.rename("office", "other", "").is_err());
+        assert!(
+            lib.rename("classic", "x", "").is_err(),
+            "built-ins don't change"
+        );
+        assert!(lib.replace("classic", &get("zen").unwrap()).is_err());
+        assert!(lib.delete("minimal").is_err());
+
+        lib.delete("office").unwrap();
+        assert!(lib.get("office").is_none() && !dir.join("office.toml").exists());
+        assert_eq!(lib.last(), None);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn lists_hand_written_files_and_their_problems() {
+        let dir = temp("files");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("broken.toml"), "palette = [").unwrap();
+        std::fs::write(dir.join("look-only.toml"), "palette = \"nord\"\n").unwrap();
+        std::fs::write(dir.join("notes.txt"), "not a preset").unwrap();
+        // Named like a built-in: it replaces it, as palette files do.
+        std::fs::write(
+            dir.join("minimal.toml"),
+            "summary = \"My minimal\"\nskin = \"powerline\"\n[[line]]\nleft = [\"model\"]\n",
+        )
+        .unwrap();
+        let lib = Library::load(dir.clone());
+        let mine: Vec<_> = names(&lib).into_iter().filter(|(_, m)| *m).collect();
+        assert_eq!(
+            mine,
+            [("broken", true), ("look-only", true), ("minimal", true)]
+        );
+        assert_eq!(lib.entries().len(), PRESETS.len() + 2);
+        assert!(lib.get("broken").unwrap().config.is_err());
+        assert!(
+            lib.get("look-only")
+                .unwrap()
+                .config
+                .as_ref()
+                .unwrap_err()
+                .contains("[[line]]")
+        );
+        let min = lib.get("minimal").unwrap();
+        assert!(matches!(min.origin, Origin::Mine { replaces: true, .. }));
+        assert_eq!(min.tags, ["mine", "powerline"]);
+        assert_eq!(find_in(&dir, "minimal").unwrap().skin, SkinKind::Powerline);
+        assert!(find_in(&dir, "broken").is_none());
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 }

@@ -47,6 +47,11 @@ pub fn models_file() -> PathBuf {
     home().join("models.toml")
 }
 
+/// The user's own presets, one file each.
+pub fn presets_dir() -> PathBuf {
+    home().join("presets")
+}
+
 pub fn state_dir() -> PathBuf {
     home().join("state")
 }

@@ -4,7 +4,7 @@
 use super::{Action, Dialog, Reply};
 use crate::config::{Config, ItemSpec, LineConfig};
 use crate::metrics;
-use crate::presets::{self, PRESETS, Parts};
+use crate::presets::{self, Library, Parts};
 use crate::scenarios::SCENARIOS;
 use crate::style::palette;
 use crate::style::{GlyphTier, SkinKind};
@@ -59,7 +59,7 @@ fn lower<T: std::fmt::Debug>(v: T) -> String {
     format!("{v:?}").to_lowercase()
 }
 
-fn all() -> Vec<Command> {
+fn all(presets: &Library) -> Vec<Command> {
     let mut out = Vec::new();
     for p in PageId::ALL {
         out.push(app("Go", format!("to {}", p.title()), Action::Goto(p)));
@@ -78,14 +78,19 @@ fn all() -> Vec<Command> {
     out.push(app("File", "quit", Action::AskQuit));
     out.push(app("Setup", "run the first-run setup", Action::Setup));
     out.push(app("Help", "keys for this page", Action::Help));
-    for p in PRESETS {
-        let name = p.name;
-        out.push(edit("Preset", format!("apply {name}"), move |c| {
-            if let Some(preset) = presets::get(name) {
-                *c = presets::apply(c, &preset, Parts::All);
-            }
+    for entry in presets.entries() {
+        let Ok(preset) = entry.config.clone() else {
+            continue;
+        };
+        out.push(edit("Preset", format!("apply {}", entry.name), move |c| {
+            *c = presets::apply(c, &preset, Parts::All);
         }));
     }
+    out.push(app(
+        "Preset",
+        "save the current setup as a new preset",
+        Action::SavePreset,
+    ));
     for name in palette::available() {
         let label = name.clone();
         out.push(edit("Palette", label, move |c| c.palette = name.clone()));
@@ -166,17 +171,15 @@ pub struct Commands {
     all: Vec<Command>,
 }
 
-impl Default for Commands {
-    fn default() -> Self {
+impl Commands {
+    pub fn new(presets: &Library) -> Self {
         Commands {
             input: TextInput::default(),
             row: 0,
-            all: all(),
+            all: all(presets),
         }
     }
-}
 
-impl Commands {
     fn matches(&self) -> Vec<&Command> {
         let q = self.input.text().trim().to_lowercase();
         let mut found: Vec<(usize, &Command)> = self
@@ -288,7 +291,7 @@ mod tests {
 
         let (dir, paths) = temp_paths("commands");
         let mut doc = Doc::open(paths);
-        let mut c = Commands::default();
+        let mut c = Commands::new(&doc.presets);
         for ch in "skin pill".chars() {
             c.handle(key(KeyCode::Char(ch)), &mut doc);
         }
@@ -296,7 +299,7 @@ mod tests {
         c.handle(key(KeyCode::Enter), &mut doc);
         assert_eq!(doc.config.skin, SkinKind::Pill);
 
-        let mut c = Commands::default();
+        let mut c = Commands::new(&doc.presets);
         for ch in "go lay".chars() {
             c.handle(key(KeyCode::Char(ch)), &mut doc);
         }
@@ -306,7 +309,7 @@ mod tests {
         ));
 
         let run = |doc: &mut Doc| {
-            let mut c = Commands::default();
+            let mut c = Commands::new(&doc.presets);
             for ch in "remove cost.today".chars() {
                 c.handle(key(KeyCode::Char(ch)), doc);
             }

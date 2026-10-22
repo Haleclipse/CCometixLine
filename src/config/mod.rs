@@ -353,12 +353,13 @@ const V1_THEMES: &[(&str, &str, SkinKind, GlyphTier)] = &[
     ),
 ];
 
-/// `--theme <name>`: a preset replaces layout and look; a v1 theme name
-/// changes the look; a palette name changes the palette. `None` when the
-/// name is unknown, so callers can ignore it instead of failing.
+/// `--theme <name>`: a preset (the user's own first) replaces layout and
+/// look; a v1 theme name changes the look; a palette name changes the
+/// palette. `None` when the name is unknown, so callers can ignore it
+/// instead of failing.
 pub fn apply_theme(config: Config, name: &str) -> Option<Config> {
-    if let Some(preset) = presets::get(name) {
-        return Some(preset);
+    if let Some(preset) = presets::find(name) {
+        return Some(presets::apply(&config, &preset, presets::Parts::All));
     }
     if let Some((_, pal, skin, glyphs)) = V1_THEMES.iter().find(|(n, ..)| *n == name) {
         // v1 joined powerline segments with arrows and left the ends square.
@@ -395,6 +396,17 @@ mod tests {
         let c: Config =
             toml::from_str("version = 2\n[layout]\noverflow = \"shrink\"\nreserve = 2\n").unwrap();
         assert_eq!(c.layout.reserve, 2);
+    }
+
+    #[test]
+    fn theme_presets_keep_the_setup() {
+        let mut mine = presets::default_config();
+        mine.layout.reserve = 4;
+        mine.git.cache_ms = 0;
+        let themed = apply_theme(mine, "dashboard").unwrap();
+        assert_eq!(themed.lines.len(), 3);
+        assert_eq!(themed.preset.as_deref(), Some("dashboard"));
+        assert_eq!((themed.layout.reserve, themed.git.cache_ms), (4, 0));
     }
 
     #[test]

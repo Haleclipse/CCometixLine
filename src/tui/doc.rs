@@ -5,6 +5,7 @@
 
 use crate::config::{self, Config, LoadNote};
 use crate::models::{ModelsFile, Registry};
+use crate::presets::Library;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
@@ -17,6 +18,8 @@ pub struct Paths {
     /// Where a migrated v1 config is backed up.
     pub config_backup: PathBuf,
     pub models: PathBuf,
+    /// The user's own presets.
+    pub presets: PathBuf,
 }
 
 impl Paths {
@@ -25,6 +28,7 @@ impl Paths {
             config: crate::paths::config_file(),
             config_backup: crate::paths::legacy_config_backup(),
             models: crate::paths::models_file(),
+            presets: crate::paths::presets_dir(),
         }
     }
 }
@@ -45,6 +49,9 @@ pub enum SaveError {
 pub struct Doc {
     pub config: Config,
     pub models: ModelsFile,
+    /// The presets on offer. Changes to the user's are written at once,
+    /// outside the undo history.
+    pub presets: Library,
     saved: Snapshot,
     undo: Vec<Snapshot>,
     redo: Vec<Snapshot>,
@@ -80,6 +87,7 @@ impl Doc {
         Doc {
             config,
             models,
+            presets: Library::load(paths.presets.clone()),
             saved,
             undo: Vec::new(),
             redo: Vec::new(),
@@ -225,6 +233,7 @@ pub(crate) mod tests {
             config: dir.join("config.toml"),
             config_backup: dir.join("config.v1.toml"),
             models: dir.join("models.toml"),
+            presets: dir.join("presets"),
         };
         (dir, paths)
     }

@@ -7,6 +7,7 @@ mod companion;
 mod fonts;
 mod form;
 mod help;
+mod preset;
 mod prompts;
 mod rule;
 mod settings;
@@ -23,6 +24,7 @@ pub use commands::Commands;
 pub use companion::ModSteps;
 pub use fonts::FontCheck;
 pub use help::Help;
+pub use preset::{PresetDialog, PresetPrompt};
 pub use prompts::{Conflict, Quit};
 pub use rule::{ModifierDialog, RuleDialog};
 pub use settings::{SettingsDiff, shown_path};
@@ -51,6 +53,8 @@ pub enum Action {
     AskQuit,
     Help,
     Setup,
+    /// Ask for a name and save the current setup as a preset.
+    SavePreset,
 }
 
 pub enum Reply {

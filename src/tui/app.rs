@@ -300,7 +300,9 @@ impl App {
             }),
             KeyCode::Char('z') if ctrl => self.act(Action::Undo),
             KeyCode::Char('y') if ctrl => self.act(Action::Redo),
-            KeyCode::Char('p') if ctrl => self.dialogs.push(Box::new(dialogs::Commands::default())),
+            KeyCode::Char('p') if ctrl => self
+                .dialogs
+                .push(Box::new(dialogs::Commands::new(&self.doc.presets))),
             _ if ctrl => {}
             KeyCode::Char('q') => self.request_quit(),
             KeyCode::Char('?') => self.act(Action::Help),
@@ -390,6 +392,7 @@ impl App {
                 }));
             }
             Action::Setup => self.open_setup(),
+            Action::SavePreset => self.dialogs.push(Box::new(dialogs::PresetDialog::new())),
             Action::Reload => {
                 self.doc.reload();
                 self.toast("Reloaded from disk", false);
