@@ -3,7 +3,9 @@
 
 use super::dialogs::{self, Action, Dialog, Reply};
 use super::doc::{Doc, SaveError};
-use super::pages::{Cx, Env, Home, Models, Outcome, Page, PageId, Placeholder, Presets, StylePage};
+use super::pages::{
+    Cx, Env, Home, LayoutPage, Models, Outcome, Page, PageId, Placeholder, Presets, StylePage,
+};
 use super::preview::{self, Preview};
 use super::ui;
 use ratatui::Frame;
@@ -36,8 +38,6 @@ pub struct App {
     pub quit: bool,
     /// Whether keys go to the tab row (←→ switch pages) rather than the page.
     pub tabs_focused: bool,
-    /// Columns the preview fits when its width isn't set, from the last draw.
-    fit: u16,
 }
 
 impl App {
@@ -45,10 +45,7 @@ impl App {
         let pages: Vec<Box<dyn Page>> = vec![
             Box::new(Home::default()),
             Box::new(Presets::default()),
-            Box::new(Placeholder::new(
-                "Layout",
-                "The composer arrives in a later step of the v2 TUI.",
-            )),
+            Box::new(LayoutPage::default()),
             Box::new(StylePage::default()),
             Box::new(Models::default()),
             Box::new(Placeholder::new(
@@ -66,7 +63,6 @@ impl App {
             toast: None,
             quit: false,
             tabs_focused: true,
-            fit: 96,
         }
     }
 
@@ -93,9 +89,9 @@ impl App {
             return;
         }
         let page = self.page;
-        let (file, show_preview, keys) = {
+        let (file, show_preview, keys, target) = {
             let p = &self.pages[page.index()];
-            (p.file(), p.preview(), p.keys())
+            (p.file(), p.preview(), p.keys(), p.target())
         };
 
         let cc = self
@@ -117,11 +113,11 @@ impl App {
         let inner = frame.inner(area);
         f.render_widget(frame, area);
 
-        self.fit = inner.width;
+        self.preview.fit = inner.width;
         let registry = self.doc.registry();
         let lines = if show_preview {
             self.preview
-                .render_lines(&self.doc, &registry, self.env.tz, self.fit)
+                .render_lines(&self.doc, &registry, self.env.tz, target)
         } else {
             Vec::new()
         };
@@ -155,10 +151,10 @@ impl App {
 
         if show_preview {
             let (title, body, ruler) = preview::split(preview_area, lines.len());
-            let heading = self.preview.title(&self.doc, self.fit, area.width - 4);
+            let heading = self.preview.title(&self.doc, target, area.width - 4);
             ui::rule(f.buffer_mut(), area.x, title.y, area.width, Some(heading));
             f.render_widget(Paragraph::new(lines), body);
-            f.render_widget(Paragraph::new(self.preview.ruler(self.fit)), ruler);
+            f.render_widget(Paragraph::new(self.preview.ruler()), ruler);
         }
 
         let footer_line = match &self.toast {
@@ -167,15 +163,12 @@ impl App {
                 Style::default().fg(if t.bad { ui::BAD } else { ui::OK }),
             ),
             _ => {
-                let mut all = if self.tabs_focused {
+                let own = if self.tabs_focused {
                     vec![("←→", "switch page"), ("↓", "into the page")]
                 } else {
-                    let mut k = keys;
-                    k.push(("↑", "tabs"));
-                    k
+                    keys
                 };
-                all.extend([("^S", "save"), ("?", "help"), ("q", "quit")]);
-                ui::hints(&all)
+                footer_hints(own, !self.tabs_focused, footer.width as usize)
             }
         };
         f.render_widget(Paragraph::new(footer_line), footer);
@@ -295,8 +288,8 @@ impl App {
             }
             KeyCode::Char('[') => self.preview.next_scenario(false),
             KeyCode::Char(']') => self.preview.next_scenario(true),
-            KeyCode::Char('-') => self.preview.resize(-WIDTH_STEP, self.fit),
-            KeyCode::Char('+' | '=') => self.preview.resize(WIDTH_STEP, self.fit),
+            KeyCode::Char('-') => self.preview.resize(-WIDTH_STEP),
+            KeyCode::Char('+' | '=') => self.preview.resize(WIDTH_STEP),
             KeyCode::Char('{') => self.preview.cycle_depth(),
             KeyCode::Char('}') => self.preview.cycle_glyphs(),
             _ => {}
@@ -364,6 +357,34 @@ impl App {
     }
 }
 
+/// The footer's key hints in `width` columns: the page's own, then the
+/// global ones. What doesn't fit is left out, quit first and the page's
+/// last hints after the globals, but never `? help`, which lists them all.
+fn footer_hints(own: Vec<(&str, &str)>, in_page: bool, width: usize) -> Line<'static> {
+    let mut own = own;
+    let mut global = vec![("^S", "save"), ("?", "help"), ("q", "quit")];
+    if in_page {
+        global.insert(0, ("↑", "tabs"));
+    }
+    loop {
+        let all: Vec<(&str, &str)> = own.iter().chain(&global).copied().collect();
+        let line = ui::hints(&all);
+        if line.width() <= width {
+            return line;
+        }
+        let next = ["q", "^S", "↑"]
+            .iter()
+            .find_map(|d| global.iter().position(|(k, _)| k == d));
+        match next {
+            Some(i) => {
+                global.remove(i);
+            }
+            None if own.pop().is_some() => {}
+            None => return line,
+        }
+    }
+}
+
 fn base64(bytes: &[u8]) -> String {
     const TABLE: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     let mut out = String::new();
@@ -408,6 +429,26 @@ pub(crate) mod tests {
             session: None,
             seen: Default::default(),
         }
+    }
+
+    #[test]
+    fn footer_keeps_help_when_short_of_room() {
+        let page = vec![("tab", "pane"), ("x", "remove"), ("n", "new line")];
+        let text = |w| {
+            footer_hints(page.clone(), true, w)
+                .spans
+                .iter()
+                .map(|s| s.content.to_string())
+                .collect::<String>()
+        };
+        assert!(text(120).contains("q quit"));
+        let mid = text(60);
+        assert!(!mid.contains("q quit") && mid.contains("? help") && mid.contains("n new line"));
+        let tight = text(30);
+        assert!(
+            tight.contains("? help") && !tight.contains("n new line"),
+            "{tight}"
+        );
     }
 
     #[test]

@@ -4,12 +4,13 @@
 use super::convert;
 use super::doc::Doc;
 use super::ui;
-use crate::config::Config;
+use crate::config::{Config, ItemConfig, LineConfig};
 use crate::env::AutoCompact;
+use crate::input::{Input, SubagentInput};
 use crate::metrics::{Commands, GitSource};
 use crate::models::Registry;
-use crate::scenarios::{BASE, SCENARIOS};
-use crate::statusline::{self, Frame};
+use crate::scenarios::{self, BASE, SCENARIOS};
+use crate::statusline::{self, Frame, Report};
 use crate::style::GlyphTier;
 use crate::style::color::ColorDepth;
 use chrono::FixedOffset;
@@ -34,14 +35,51 @@ const TIERS: [Option<GlyphTier>; 4] = [
     Some(GlyphTier::Ascii),
 ];
 
-#[derive(Clone, Debug, Default)]
+/// Which configured lines the bar shows.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Target {
+    /// The status line, under the prompt.
+    #[default]
+    Status,
+    /// The line drawn for each background task.
+    Subagent,
+}
+
+#[derive(Clone, Debug)]
 pub struct Preview {
     /// Index into `SCENARIOS`.
     pub scenario: usize,
     /// Columns to lay out in; `None` fits the bar.
     pub width: Option<u16>,
+    /// Columns the bar has, from the last draw.
+    pub fit: u16,
     depth: usize,
     tier: usize,
+}
+
+impl Default for Preview {
+    fn default() -> Self {
+        Preview {
+            scenario: 0,
+            width: None,
+            fit: 96,
+            depth: 0,
+            tier: 0,
+        }
+    }
+}
+
+/// A sample render's input: the session, or one background task of it.
+struct Scene {
+    input: Input,
+    sub: Option<SubagentInput>,
+    frame: Frame,
+}
+
+impl Scene {
+    fn task(&self) -> Option<&crate::input::Task> {
+        self.sub.as_ref()?.tasks.first()
+    }
 }
 
 fn depth_name(d: ColorDepth) -> &'static str {
@@ -73,7 +111,8 @@ impl Preview {
         self.scenario = (self.scenario + if forward { 1 } else { n - 1 }) % n;
     }
 
-    pub fn resize(&mut self, delta: i32, fit: u16) {
+    pub fn resize(&mut self, delta: i32) {
+        let fit = self.fit;
         let w = self.width.unwrap_or(fit) as i32 + delta;
         let w = w.clamp(MIN_WIDTH as i32, fit as i32) as u16;
         self.width = (w != fit).then_some(w);
@@ -91,19 +130,67 @@ impl Preview {
         DEPTHS[self.depth].unwrap_or_else(|| doc.config.color_depth.resolve())
     }
 
-    fn width(&self, fit: u16) -> u16 {
-        self.width.unwrap_or(fit).min(fit)
+    /// Columns the lines are laid out in.
+    pub fn columns(&self) -> u16 {
+        self.width.unwrap_or(self.fit).min(self.fit)
     }
 
-    /// The edited config rendered for the current scenario.
+    /// `config` with the bar's glyph override.
+    fn effective(&self, config: &Config) -> Config {
+        let mut config = config.clone();
+        if let Some(t) = TIERS[self.tier] {
+            config.glyphs = t;
+        }
+        config
+    }
+
+    /// The current scenario in `width` columns; for `Subagent`, its first
+    /// background task.
+    fn scene(&self, tz: FixedOffset, width: Option<usize>, target: Target) -> Scene {
+        let s = &SCENARIOS[self.scenario];
+        let frame = Frame {
+            now: BASE,
+            tz,
+            width,
+            git: GitSource::Fixed(s.git()),
+            state: s.state(BASE),
+            compact: AutoCompact::default(),
+            commands: Commands::Show,
+        };
+        let sub = (target == Target::Subagent).then(|| {
+            let mut sub = scenarios::subagent(BASE);
+            sub.columns = width;
+            sub
+        });
+        let input = match &sub {
+            Some(sub) => sub.tasks[0].input(sub),
+            None => s.input(BASE),
+        };
+        Scene { input, sub, frame }
+    }
+
+    /// The edited config's `target` lines for the current scenario.
     pub fn render_lines(
         &self,
         doc: &Doc,
         registry: &Registry,
         tz: FixedOffset,
-        fit: u16,
+        target: Target,
     ) -> Vec<Line<'static>> {
-        self.render(&doc.config, doc, registry, tz, self.width(fit))
+        match target {
+            Target::Status => self.render(&doc.config, doc, registry, tz, self.columns()),
+            Target::Subagent => {
+                let config = self.effective(&doc.config);
+                let scene = self.scene(tz, Some(self.columns() as usize), target);
+                let depth = self.depth(doc);
+                let sub = scene.sub.expect("a subagent scene has tasks");
+                statusline::subagent_lines(&sub, &config, registry, scene.frame)
+                    .iter()
+                    .take(MAX_LINES)
+                    .map(|(_, l)| convert::line(l, depth))
+                    .collect()
+            }
+        }
     }
 
     /// `config` rendered for the current scenario in `width` columns, with
@@ -116,22 +203,10 @@ impl Preview {
         tz: FixedOffset,
         width: u16,
     ) -> Vec<Line<'static>> {
-        let mut config = config.clone();
-        if let Some(t) = TIERS[self.tier] {
-            config.glyphs = t;
-        }
-        let s = &SCENARIOS[self.scenario];
-        let frame = Frame {
-            now: BASE,
-            tz,
-            width: Some(width as usize),
-            git: GitSource::Fixed(s.git()),
-            state: s.state(BASE),
-            compact: AutoCompact::default(),
-            commands: Commands::Show,
-        };
+        let config = self.effective(config);
+        let scene = self.scene(tz, Some(width as usize), Target::Status);
         let depth = self.depth(doc);
-        statusline::lines(&s.input(BASE), &config, registry, frame)
+        statusline::lines(&scene.input, &config, registry, scene.frame)
             .iter()
             .filter(|l| l.iter().any(|s| !s.text.trim().is_empty()))
             .take(MAX_LINES)
@@ -139,8 +214,53 @@ impl Preview {
             .collect()
     }
 
+    /// How `line` of the edited config lays out at the bar's width.
+    pub fn report(
+        &self,
+        doc: &Doc,
+        registry: &Registry,
+        tz: FixedOffset,
+        target: Target,
+        line: &LineConfig,
+    ) -> Report {
+        let config = self.effective(&doc.config);
+        let scene = self.scene(tz, Some(self.columns() as usize), target);
+        statusline::report(
+            &scene.input,
+            scene.task(),
+            &config,
+            registry,
+            &scene.frame,
+            line,
+        )
+    }
+
+    /// `item` drawn alone at each level for the current scenario; `None`
+    /// when it has nothing to show.
+    pub fn item_levels(
+        &self,
+        doc: &Doc,
+        registry: &Registry,
+        tz: FixedOffset,
+        target: Target,
+        item: &ItemConfig,
+    ) -> Option<[Option<Line<'static>>; 3]> {
+        let config = self.effective(&doc.config);
+        let scene = self.scene(tz, None, target);
+        let depth = self.depth(doc);
+        let levels = statusline::item_levels(
+            &scene.input,
+            scene.task(),
+            &config,
+            registry,
+            &scene.frame,
+            item,
+        )?;
+        Some(levels.map(|l| l.map(|l| convert::line(&l, depth))))
+    }
+
     /// The title on the bar's top rule, labelled when `room` allows.
-    pub fn title(&self, doc: &Doc, fit: u16, room: u16) -> Line<'static> {
+    pub fn title(&self, doc: &Doc, target: Target, room: u16) -> Line<'static> {
         let depth = match DEPTHS[self.depth] {
             Some(d) => depth_name(d).to_string(),
             None => format!("auto·{}", depth_name(self.depth(doc))),
@@ -151,7 +271,7 @@ impl Preview {
         };
         let width = match self.width {
             Some(w) => w.to_string(),
-            None => format!("fit {fit}"),
+            None => format!("fit {}", self.fit),
         };
         let values = [
             ("scenario", SCENARIOS[self.scenario].name.to_string()),
@@ -159,8 +279,12 @@ impl Preview {
             ("depth", depth),
             ("glyphs", tier),
         ];
+        let heading = match target {
+            Target::Status => " Preview ",
+            Target::Subagent => " Preview · subagent ",
+        };
         let build = |labels: bool| {
-            let mut spans = vec![Span::styled(" Preview ", ui::title())];
+            let mut spans = vec![Span::styled(heading, ui::title())];
             for (label, value) in &values {
                 spans.push(Span::raw(if labels {
                     format!(" {label} ")
@@ -181,8 +305,8 @@ impl Preview {
     }
 
     /// `·········1·········2…` marking every tenth column up to the width.
-    pub fn ruler(&self, fit: u16) -> Line<'static> {
-        let w = self.width(fit) as usize;
+    pub fn ruler(&self) -> Line<'static> {
+        let w = self.columns() as usize;
         let text: String = (1..=w)
             .map(|c| {
                 if c % 10 == 0 {
@@ -228,12 +352,12 @@ mod tests {
         assert_eq!(p.scenario, SCENARIOS.len() - 1);
         p.next_scenario(true);
         assert_eq!(SCENARIOS[p.scenario].name, "normal");
-        p.resize(-8, 96);
+        p.resize(-8);
         assert_eq!(p.width, Some(88));
-        p.resize(100, 96);
+        p.resize(100);
         assert_eq!(p.width, None);
-        p.resize(-500, 96);
+        p.resize(-500);
         assert_eq!(p.width, Some(MIN_WIDTH));
-        assert_eq!(p.ruler(96).spans[0].content.chars().count(), 20);
+        assert_eq!(p.ruler().spans[0].content.chars().count(), 20);
     }
 }

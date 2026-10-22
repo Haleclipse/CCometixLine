@@ -2,6 +2,7 @@
 //! anything it ignores falls through to the app's global keys.
 
 mod home;
+mod layout;
 mod models;
 mod placeholder;
 mod presets;
@@ -9,6 +10,7 @@ mod style;
 
 use super::dialogs::Dialog;
 use super::doc::Doc;
+use super::preview::Target;
 use crate::state::SessionState;
 use crate::state::models_seen::Seen;
 use crate::version::Version;
@@ -19,6 +21,7 @@ use ratatui::layout::Rect;
 use std::collections::BTreeMap;
 
 pub use home::Home;
+pub use layout::LayoutPage;
 pub use models::Models;
 pub use placeholder::Placeholder;
 pub use presets::Presets;
@@ -133,5 +136,9 @@ pub trait Page {
     /// The preview scenario that shows this page's effect best.
     fn scenario(&self) -> Option<&'static str> {
         None
+    }
+    /// Which lines the preview bar shows.
+    fn target(&self) -> Target {
+        Target::Status
     }
 }
