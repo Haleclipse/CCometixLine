@@ -232,17 +232,38 @@ pub fn has_metric(lines: &[LineConfig], metric: &str) -> bool {
         .any(|s| s.config().metric == metric)
 }
 
-/// Remove every item of `metric`; returns how many there were.
-pub fn remove_metric(lines: &mut [LineConfig], metric: &str) -> usize {
+/// Remove every item of `metric`; returns where the cursor at `at` goes.
+/// It stays on its item. On a removed one it goes back to the item before,
+/// the one an add put it after, so adding and removing again leaves the
+/// line as it was.
+pub fn remove_metric(lines: &mut [LineConfig], metric: &str, at: Cursor) -> Cursor {
+    let mut to = at;
+    if let Some(line) = lines.get(at.line) {
+        let gone: Vec<bool> = line
+            .left
+            .iter()
+            .chain(&line.right)
+            .map(|s| s.config().metric == metric)
+            .collect();
+        let before = gone.iter().take(at.pos).filter(|g| **g).count();
+        let on = gone.get(at.pos).copied().unwrap_or(false);
+        to.pos = at.pos - before;
+        if on {
+            to.pos = to.pos.saturating_sub(1);
+        }
+    }
     let mut removed = 0;
-    for line in lines {
+    for line in lines.iter_mut() {
         for side in [&mut line.left, &mut line.right] {
             let before = side.len();
             side.retain(|s| s.config().metric != metric);
             removed += before - side.len();
         }
     }
-    removed
+    if removed == 0 {
+        return at;
+    }
+    clamp(lines, to, false)
 }
 
 /// Add an empty line after `line`; returns the cursor on it.
@@ -363,8 +384,22 @@ mod tests {
 
         let mut two = vec![line(&["model", "git"], &["git"])];
         assert!(has_metric(&two, "git") && !has_metric(&two, "cost"));
-        assert_eq!(remove_metric(&mut two, "git"), 2);
+        assert_eq!(remove_metric(&mut two, "git", at(0, 1)), at(0, 0));
         assert_eq!(two[0], line(&["model"], &[]));
+
+        // Add after the cursor, remove, add: the same line each time.
+        let start = vec![line(&["model", "dir", "git"], &["cost"])];
+        let mut ls = start.clone();
+        let mut cur = at(0, 0);
+        for _ in 0..3 {
+            cur = insert(&mut ls, cur, id("effort"));
+            assert_eq!((ls[0].left[1].clone(), cur), (id("effort"), at(0, 1)));
+            cur = remove_metric(&mut ls, "effort", cur);
+            assert_eq!((ls.clone(), cur), (start.clone(), at(0, 0)));
+        }
+        // A removal before the cursor keeps the cursor on its item.
+        let mut ls = start.clone();
+        assert_eq!(remove_metric(&mut ls, "model", at(0, 3)), at(0, 2));
 
         let mut config = Config::default();
         assert_eq!(

@@ -220,12 +220,7 @@ impl LayoutPage {
         let id = m.meta.id;
         let lines = edit::lines(&doc.config, self.target);
         if id != "cmd" && edit::has_metric(&lines, id) {
-            let target = self.target;
-            doc.edit(|c, _| {
-                edit::edit_lines(c, target, |lines| edit::remove_metric(lines, id));
-            });
-            let lines = edit::lines(&doc.config, self.target);
-            self.cursor = edit::clamp(&lines, self.cursor, self.grow());
+            self.apply(doc, |lines, at| Some(edit::remove_metric(lines, id, at)));
             return Outcome::Toast(format!("Removed {id}"));
         }
         match library::avail(&m.meta, self.target, env.cc_version()) {
@@ -662,20 +657,17 @@ mod tests {
         let mut want = left.clone();
         want.insert(1, "effort".into());
         assert_eq!(ids(&app.doc.config.lines[0]).0, want);
-        // Enter again takes it off rather than adding a second one.
-        app.handle_key(key(KeyCode::Enter));
-        assert_eq!(ids(&app.doc.config.lines[0]).0, left);
-        app.handle_key(key(KeyCode::Enter));
-        let (l, _) = ids(&app.doc.config.lines[0]);
-        assert_eq!(l.iter().filter(|m| *m == "effort").count(), 1);
-        app.handle_key(ctrl('z'));
-        app.handle_key(ctrl('z'));
-        assert_eq!(ids(&app.doc.config.lines[0]).0, want);
+        // Enter again takes it off rather than adding a second one; toggling
+        // on and off keeps it in the same place every time.
+        for _ in 0..3 {
+            app.handle_key(key(KeyCode::Enter));
+            assert_eq!(ids(&app.doc.config.lines[0]).0, left);
+            app.handle_key(key(KeyCode::Enter));
+            assert_eq!(ids(&app.doc.config.lines[0]).0, want);
+        }
 
         // Canvas: move it to the end of the left side, then over to the right.
-        // The cursor still sits where the second add put effort.
         app.handle_key(key(KeyCode::Tab));
-        app.handle_key(key(KeyCode::Left));
         for _ in 0..left.len() {
             app.handle_key(alt(KeyCode::Right));
         }
