@@ -27,15 +27,18 @@ pub enum Field {
     Priority,
 }
 
-/// How a field changes.
+/// What Enter does on a field.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Change {
-    /// ←→ step through its values.
+    /// Step to the next value.
     Cycle,
-    /// Enter starts typing.
+    /// Start typing.
     Text,
-    /// Enter opens a dialog.
-    Dialog,
+    /// Open that field's dialog.
+    Widget,
+    Icon,
+    Color,
+    Levels,
 }
 
 const WIDGETS: [WidgetKind; 5] = [
@@ -131,9 +134,26 @@ pub fn change(field: Field, meta: &MetricMeta) -> Change {
             OptKind::Text | OptKind::Number => Change::Text,
             OptKind::Flag | OptKind::Choice(_) => Change::Cycle,
         },
-        Field::Template(_) | Field::Icon => Change::Text,
-        Field::Levels => Change::Dialog,
-        _ => Change::Cycle,
+        Field::Template(_) => Change::Text,
+        Field::Widget => Change::Widget,
+        Field::Icon => Change::Icon,
+        Field::Color => Change::Color,
+        Field::Levels => Change::Levels,
+        Field::Bar | Field::Cells | Field::Coloring | Field::Priority => Change::Cycle,
+    }
+}
+
+/// Whether ←→ step through the field's values.
+pub fn cycles(field: Field, meta: &MetricMeta) -> bool {
+    match field {
+        Field::Opt(i) => matches!(meta.options[i].kind, OptKind::Flag | OptKind::Choice(_)),
+        Field::Widget
+        | Field::Bar
+        | Field::Cells
+        | Field::Color
+        | Field::Coloring
+        | Field::Priority => true,
+        Field::Template(_) | Field::Icon | Field::Levels => false,
     }
 }
 
@@ -461,7 +481,8 @@ pub fn row(
             spans.extend(input.line(room, true, "").spans);
         }
         _ => {
-            spans.extend(value(field, cfg, meta, look));
+            let room = width.saturating_sub(2 + LABEL + 2);
+            spans.extend(ui::clip(value(field, cfg, meta, look), room));
             if is_set(field, cfg, meta) {
                 spans.push(Span::styled(" *", Style::default().fg(ui::WARN)));
             }

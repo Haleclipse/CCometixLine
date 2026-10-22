@@ -48,6 +48,53 @@ pub enum IconKey {
     Command,
 }
 
+impl IconKey {
+    pub const ALL: [IconKey; 29] = [
+        IconKey::Model,
+        IconKey::Effort,
+        IconKey::Thinking,
+        IconKey::Fast,
+        IconKey::OutputStyle,
+        IconKey::Vim,
+        IconKey::Agent,
+        IconKey::SessionName,
+        IconKey::Duration,
+        IconKey::ApiShare,
+        IconKey::Context,
+        IconKey::Trend,
+        IconKey::Compact,
+        IconKey::Quota,
+        IconKey::Eta,
+        IconKey::Spend,
+        IconKey::Cost,
+        IconKey::Rate,
+        IconKey::Today,
+        IconKey::Cache,
+        IconKey::Dir,
+        IconKey::Git,
+        IconKey::Repo,
+        IconKey::Pr,
+        IconKey::Worktree,
+        IconKey::Lines,
+        IconKey::Version,
+        IconKey::Update,
+        IconKey::Command,
+    ];
+
+    /// A short lowercase name, for pickers.
+    pub fn name(self) -> String {
+        let debug = format!("{self:?}");
+        let mut out = String::new();
+        for (i, c) in debug.chars().enumerate() {
+            if c.is_uppercase() && i > 0 {
+                out.push(' ');
+            }
+            out.extend(c.to_lowercase());
+        }
+        out
+    }
+}
+
 /// The icon for `key`; empty when the tier has none.
 pub fn icon(key: IconKey, tier: GlyphTier) -> &'static str {
     let (nerd, unicode) = match key {

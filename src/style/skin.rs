@@ -114,7 +114,9 @@ fn lerp(a: (u8, u8, u8), b: (u8, u8, u8), t: f32) -> Color {
     Color::Rgb(mix(a.0, b.0), mix(a.1, b.1), mix(a.2, b.2))
 }
 
-fn gradient(theme: &Theme, t: f32) -> Option<Color> {
+/// The color at `t` (0..1) along ok → warn → crit; stepped when the palette
+/// isn't all RGB.
+pub fn gradient(theme: &Theme, t: f32) -> Option<Color> {
     let (ok, warn, crit) = (
         theme.token(Token::Ok)?,
         theme.token(Token::Warn)?,

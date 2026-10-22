@@ -3,6 +3,7 @@
 //! status line and the line drawn for each background task.
 
 mod canvas;
+mod dialogs;
 mod edit;
 mod inspector;
 mod library;
@@ -11,6 +12,7 @@ use super::{Cx, Env, Outcome, Page};
 use crate::config::{ItemConfig, ItemSpec, LineConfig};
 use crate::metrics::{self, Metric, MetricMeta};
 use crate::statusline::Report;
+use crate::tui::dialogs::ColorDialog;
 use crate::tui::doc::Doc;
 use crate::tui::preview::Target;
 use crate::tui::ui::{self, TextInput};
@@ -173,8 +175,9 @@ impl LayoutPage {
                         format!("  {name:<w$}", w = inspector::LABEL),
                         ui::muted(),
                     )];
+                    let room = width.saturating_sub(2 + inspector::LABEL);
                     match line {
-                        Some(l) => spans.extend(l.spans),
+                        Some(l) => spans.extend(ui::clip(l.spans, room)),
                         None => spans.push(Span::styled("nothing", ui::muted())),
                     }
                     text.push(Line::from(spans));
@@ -314,12 +317,17 @@ impl LayoutPage {
         self.field = self.field.min(fields.len() - 1);
         let field = fields[self.field];
         let tier = doc.config.glyphs;
+        let item = dialogs::ItemRef {
+            target: self.target,
+            loc,
+            meta,
+        };
         match key.code {
             KeyCode::Up if self.field == 0 => return Outcome::Ignored,
             KeyCode::Up => self.field -= 1,
             KeyCode::Down => self.field = (self.field + 1).min(fields.len() - 1),
             KeyCode::Esc => self.pane = Pane::Canvas,
-            KeyCode::Left | KeyCode::Right if inspector::change(field, meta) == Change::Cycle => {
+            KeyCode::Left | KeyCode::Right if inspector::cycles(field, meta) => {
                 let forward = key.code == KeyCode::Right;
                 self.edit_item(doc, loc, |c| inspector::cycle(field, c, meta, forward));
             }
@@ -330,8 +338,29 @@ impl LayoutPage {
                 Change::Text => {
                     self.editing = Some(TextInput::new(&inspector::text(field, &cfg, meta, tier)));
                 }
-                Change::Dialog => {
-                    return Outcome::Toast("The levels editor arrives in the next step".into());
+                Change::Widget => {
+                    return Outcome::Open(Box::new(dialogs::WidgetDialog::new(item, &cfg)));
+                }
+                Change::Icon => {
+                    return Outcome::Open(Box::new(dialogs::IconDialog::new(item, tier)));
+                }
+                Change::Levels => {
+                    return Outcome::Open(Box::new(dialogs::LevelsDialog::new(item, &cfg)));
+                }
+                Change::Color => {
+                    let target = self.target;
+                    let apply = Box::new(move |doc: &mut Doc, value: String| {
+                        doc.edit(|c, _| {
+                            edit::edit_lines(c, target, |lines| {
+                                edit::edit_item(lines, loc, |cfg| cfg.color = Some(value))
+                            })
+                        });
+                    });
+                    return Outcome::Open(Box::new(ColorDialog::custom(
+                        meta.id.to_string(),
+                        cfg.color.as_deref(),
+                        apply,
+                    )));
                 }
             },
             KeyCode::Delete | KeyCode::Backspace => {

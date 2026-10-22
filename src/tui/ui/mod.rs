@@ -133,3 +133,43 @@ pub fn swatch(
 pub fn choice(value: &str) -> Span<'static> {
     Span::styled(format!("‹{value}›"), accent())
 }
+
+/// `spans` cut to `width` columns, ending in `…` when anything was cut.
+pub fn clip(spans: Vec<Span<'static>>, width: usize) -> Vec<Span<'static>> {
+    let total: usize = spans.iter().map(Span::width).sum();
+    if total <= width {
+        return spans;
+    }
+    let mut out = Vec::new();
+    let mut room = width.saturating_sub(1);
+    for span in spans {
+        let w = span.width();
+        if w <= room {
+            room -= w;
+            out.push(span);
+            continue;
+        }
+        let cut = crate::render::width::truncate(&span.content, room + 1);
+        let cut = cut.trim_end_matches('…').to_string();
+        out.push(Span::styled(cut, span.style));
+        break;
+    }
+    out.push(Span::styled("…", muted()));
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn clips_to_width() {
+        let text = |spans: Vec<Span<'static>>| -> String {
+            spans.iter().map(|s| s.content.as_ref()).collect()
+        };
+        let spans = vec![Span::raw("{pct}%"), Span::raw("[ · {tokens}]")];
+        assert_eq!(text(clip(spans.clone(), 40)), "{pct}%[ · {tokens}]");
+        assert_eq!(text(clip(spans.clone(), 10)), "{pct}%[ ·…");
+        assert_eq!(text(clip(spans, 4)), "{pc…");
+    }
+}
