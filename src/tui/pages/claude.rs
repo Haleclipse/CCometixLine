@@ -311,7 +311,7 @@ impl ClaudePage {
             ),
         ];
         f.render_widget(
-            Paragraph::new(text).wrap(Wrap { trim: true }).block(block),
+            Paragraph::new(text).wrap(Wrap { trim: false }).block(block),
             area,
         );
     }
@@ -347,7 +347,7 @@ impl ClaudePage {
             ),
         ];
         f.render_widget(
-            Paragraph::new(text).wrap(Wrap { trim: true }).block(block),
+            Paragraph::new(text).wrap(Wrap { trim: false }).block(block),
             area,
         );
     }
@@ -412,15 +412,10 @@ impl ClaudePage {
             Self::info(
                 pane,
                 "adds",
-                Span::raw("context by kind, exact compact point,"),
+                Span::raw("context by kind, compact point,"),
                 width,
             ),
-            Self::info(
-                pane,
-                "",
-                Span::raw("running tools and agents, turn timing"),
-                width,
-            ),
+            Self::info(pane, "", Span::raw("tools, agents, turn timing"), width),
         ];
         f.render_widget(Paragraph::new(text).block(block), area);
     }
