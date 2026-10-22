@@ -102,6 +102,10 @@ impl ModelConfig {
                 BuiltinModelFamily::new("sonnet", "Sonnet", 200_000),
                 BuiltinModelFamily::new("opus", "Opus", 200_000),
                 BuiltinModelFamily::new("haiku", "Haiku", 200_000),
+                // Fable 5 and Mythos 5 models ship with a 1M-token context
+                // window by default (no beta header / [1m] suffix required)
+                BuiltinModelFamily::new("fable", "Fable", 1_000_000),
+                BuiltinModelFamily::new("mythos", "Mythos", 1_000_000),
             ]
         })
     }
@@ -257,7 +261,7 @@ impl ModelConfig {
              # This file defines model display names and context limits for different LLM models\n\
              # File location: ~/.claude/ccline/models.toml\n\
              #\n\
-             # Claude models are automatically recognized (Sonnet, Opus, Haiku) with\n\
+             # Claude models are automatically recognized (Sonnet, Opus, Haiku, Fable, Mythos) with\n\
              # version extraction. You only need to add entries here for overrides or\n\
              # third-party models.\n\
              \n\
@@ -296,7 +300,7 @@ impl Default for ModelConfig {
     fn default() -> Self {
         Self {
             // Only third-party models need explicit entries.
-            // Claude models (Sonnet, Opus, Haiku) are handled by built-in regex families.
+            // Claude models (Sonnet, Opus, Haiku, Fable, Mythos) are handled by built-in regex families.
             model_entries: vec![
                 ModelEntry {
                     pattern: "glm-4.5".to_string(),
