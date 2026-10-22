@@ -305,6 +305,7 @@ Contributions are welcome! Please feel free to submit issues or pull requests.
 ## Related Projects
 
 - [tweakcc](https://github.com/Piebald-AI/tweakcc) - Command-line tool to customize your Claude Code themes, thinking verbs, and more.
+- [ccx](https://github.com/aaronwong1999/ccx) - macOS menu bar app that hands a task between Claude Code and Codex with its full context. Reads CCometixLine's usage cache to warn before Claude's 5-hour limit runs out and offer the switch in one click.
 
 ## License
 
