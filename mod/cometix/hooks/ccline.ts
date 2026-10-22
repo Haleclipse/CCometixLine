@@ -70,6 +70,24 @@ async function where($: $): Promise<string | undefined> {
   return live.dir
 }
 
+// Forget what the bridge held for another session.
+function reset(session: string) {
+  live.session = session
+  live.context = undefined
+  live.turn = undefined
+  live.agents = []
+  live.tools.clear()
+}
+
+// The session can change under a running process (/clear, /resume), and
+// each one's figures are its own: start over when the id moves.
+async function follow($: $) {
+  try {
+    const id = await $.session.id()
+    if (id && id !== live.session) reset(id)
+  } catch {}
+}
+
 async function write($: $) {
   try {
     const to = await where($)
@@ -153,7 +171,7 @@ export const register: Register = (on) => {
   on('session.start', async ($, e, next) => {
     const started = await next(e)
     try {
-      live.session = await $.session.id()
+      await follow($)
       await measure($)
       await write($)
     } catch {}
@@ -163,6 +181,7 @@ export const register: Register = (on) => {
   // After each main-thread turn, and when a rate limit moves.
   on('session.measure', async ($, e, next) => {
     const echoed = await next(e)
+    await follow($)
     if (e.changed.includes('context')) {
       await measure($)
       flush($)
@@ -170,11 +189,13 @@ export const register: Register = (on) => {
     return echoed
   })
 
-  // Time each model request on the main loop: when it went out, when the
-  // first of the answer (text, thinking or a tool call) came back, and what
-  // its stop counted. Subagents' requests pass straight through.
+  // Time each model request on the main loop as Claude Code does: from
+  // sending it to the first thing back (the response's envelope), then the
+  // output its stop counted over the time it streamed, thinking included.
+  // Subagents' requests pass straight through.
   on('turn.step', async function* ($, e, next) {
     if (e.agentId !== undefined) return yield* next(e)
+    await follow($)
     const sent = await now($)
     let first: number | undefined
     let output: number | undefined
@@ -196,9 +217,7 @@ export const register: Register = (on) => {
           return piece.value
         }
         const c = piece.value as Chunk
-        if (first === undefined && c.kind !== undefined && c.kind !== 'engine' && c.kind !== 'stop') {
-          first = await now($)
-        }
+        if (first === undefined) first = await now($)
         if (c.kind === 'stop' && c.usage) {
           output = c.usage.output_tokens
           model = c.usage.model
@@ -215,6 +234,7 @@ export const register: Register = (on) => {
   on('turn.complete', async ($, e, next) => {
     const answered = await next(e)
     try {
+      await follow($)
       if (e.agentId === undefined) {
         live.turn = { ...live.turn, duration_ms: e.durationMs, ended_at: await now($) }
       }
@@ -228,6 +248,7 @@ export const register: Register = (on) => {
   on('tool.call', async ($, e, next) => {
     const key = e.tool_use_id ?? `ccline-${live.seq++}`
     try {
+      await follow($)
       live.tools.set(key, { name: e.tool, since: await now($), agent: e.agentId })
       flush($)
     } catch {}
@@ -241,6 +262,7 @@ export const register: Register = (on) => {
 
   on('agent.spawn', async ($, e, next) => {
     const spawned = await next(e)
+    await follow($)
     await listAgents($)
     flush($)
     return spawned

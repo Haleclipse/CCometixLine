@@ -41,7 +41,8 @@ test('times each main-loop request as it finishes, before the turn ends', async 
     written.push({ path: e.path, text: e.text })
     return { value: undefined }
   })
-  on('session.id', () => ({ value: 'session-1' }))
+  let session = 'session-1'
+  on('session.id', () => ({ value: session }))
   on('agent.list', () => ({ value: [] }))
   on('turn.step', async function* (_, e) {
     return yield* answer(clock, e)
@@ -80,4 +81,13 @@ test('times each main-loop request as it finishes, before the turn ends', async 
   await $.turn.complete({ answer: 'done', durationMs: 5_000, isAborted: false, turnId: 't1', reason: 'answer' })
   await clock.advance(200)
   expect(bridge().turn).toEqual(expect.objectContaining({ ttft_ms: 800, tps: 75, duration_ms: 5_000 }))
+
+  // /clear starts another session in the same process: its file starts
+  // empty of the last one's figures.
+  session = 'session-2'
+  await $.turn.complete({ answer: '', durationMs: 1_000, isAborted: false, turnId: 't2', reason: 'answer' })
+  await clock.advance(200)
+  expect(written[written.length - 1].path).toBe('/home/u/.claude/ccline/bridge/session-2.json')
+  expect(bridge().session).toBe('session-2')
+  expect(bridge().turn).toEqual({ duration_ms: 1_000, ended_at: expect.any(Number) })
 })

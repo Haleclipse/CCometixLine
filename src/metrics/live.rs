@@ -89,7 +89,7 @@ pub(super) fn metrics() -> Vec<Metric> {
                 "Time to first token",
                 "How long the main loop's last model request took to start answering",
                 IconKey::Ttft,
-                ["{ttft} to first token", "{ttft}", "{ttft}"],
+                ["{ttft}", "{ttft}", "{ttft}"],
                 &["ttft"],
             ),
             compute: ttft,
@@ -296,10 +296,7 @@ mod tests {
             text("activity.agents", "2.1.300", b).as_deref(),
             Some("2 running · Explore")
         );
-        assert_eq!(
-            text("timing.ttft", "2.1.300", b).as_deref(),
-            Some("0.8s to first token")
-        );
+        assert_eq!(text("timing.ttft", "2.1.300", b).as_deref(), Some("0.8s"));
         assert_eq!(
             text("timing.tps", "2.1.300", b).as_deref(),
             Some("74 tok/s")

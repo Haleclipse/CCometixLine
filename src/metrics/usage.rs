@@ -142,12 +142,12 @@ pub(super) fn metrics() -> Vec<Metric> {
         Metric {
             meta: MetricMeta {
                 templates: [
-                    "[{left}][{cold}[ ~{rewarm}]][ · {hit}% hit]",
+                    "[{left}][{cold}][ · ~{risk}]",
                     "[{left}][{cold}]",
                     "[{left}][{cold}]",
                 ],
                 fields: &[
-                    "left", "cold", "rewarm", "state", "ttl", "hit", "misses", "cause",
+                    "left", "cold", "risk", "rewarm", "state", "ttl", "hit", "misses", "cause",
                 ],
                 min_cc: Some(gate::PROMPT_CACHE),
                 priority: 2,
@@ -155,7 +155,7 @@ pub(super) fn metrics() -> Vec<Metric> {
                     "cache",
                     Category::Cache,
                     "Prompt cache",
-                    "Time until the prompt cache goes cold, and hit ratio",
+                    "Time until the prompt cache goes cold; near it, what rebuilding it would cost",
                     IconKey::Cache,
                 )
             },
@@ -387,18 +387,20 @@ fn cache(ctx: &Ctx, _: &Options) -> Option<Reading> {
         .map(|t| t as i64 - ctx.now)
         .filter(|l| *l > 0 && pc.warm == Some(true));
     let mut r = Reading::default();
-    match left {
+    // The last minutes before it goes cold, or cold already.
+    let at_risk = match left {
         Some(left) => {
-            let warn_below = (ttl / 5).clamp(60, 300);
+            let near = left < (ttl / 5).clamp(60, 300);
             r = r
                 .set("left", fmt::countdown(left))
                 .set("state", "warm")
                 .ratio(left as f64 / ttl as f64)
-                .severity(if left < warn_below {
+                .severity(if near {
                     Severity::Warn
                 } else {
                     Severity::Normal
                 });
+            near
         }
         None => {
             r = r
@@ -406,10 +408,15 @@ fn cache(ctx: &Ctx, _: &Options) -> Option<Reading> {
                 .set("state", "cold")
                 .ratio(0.0)
                 .severity(Severity::Warn);
+            true
         }
-    }
+    };
     if let Some((usd, _)) = projection::rewarm_cost(ctx) {
-        r = r.set("rewarm", fmt::money(usd));
+        let usd = fmt::money(usd);
+        if at_risk {
+            r = r.set("risk", usd.clone());
+        }
+        r = r.set("rewarm", usd);
     }
     if let Some(hit) = pc.hit_ratio {
         r = r.set("hit", fmt::percent(hit));
