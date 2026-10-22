@@ -23,6 +23,9 @@ const TICK: Duration = Duration::from_millis(500);
 
 pub fn run() -> std::io::Result<()> {
     let mut app = App::new(Doc::open(Paths::user()), Env::detect());
+    if app.doc.note == crate::config::LoadNote::Missing {
+        app.open_setup();
+    }
     // `ratatui::run` restores the terminal on return and on panic.
     ratatui::run(|terminal| {
         let _ = execute!(std::io::stdout(), EnableBracketedPaste);

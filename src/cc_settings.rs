@@ -116,6 +116,11 @@ impl Settings {
         })
     }
 
+    /// Whether there was a file to read.
+    pub fn exists(&self) -> bool {
+        self.text.is_some()
+    }
+
     /// Whether the file changed on disk since it was read.
     pub fn stale(&self) -> bool {
         std::fs::read_to_string(&self.path).ok() != self.text

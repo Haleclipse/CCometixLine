@@ -2,25 +2,29 @@
 //! closes.
 
 mod color;
+mod commands;
 mod fonts;
 mod form;
 mod help;
 mod prompts;
 mod rule;
 mod settings;
+mod setup;
 
 use super::doc::Doc;
-use super::pages::Cx;
+use super::pages::{Cx, PageId};
 use ratatui::Frame;
 use ratatui::crossterm::event::KeyEvent;
 use ratatui::layout::Rect;
 
 pub use color::{ColorDialog, Target as ColorTarget};
+pub use commands::Commands;
 pub use fonts::FontCheck;
 pub use help::Help;
 pub use prompts::{Conflict, Quit};
 pub use rule::{ModifierDialog, RuleDialog};
 pub use settings::{SettingsDiff, shown_path};
+pub use setup::Setup;
 
 /// Something only the app can do, asked for by a closing dialog.
 #[derive(Clone, Debug, PartialEq)]
@@ -34,6 +38,17 @@ pub enum Action {
     Toast(String),
     /// A toast for something that went wrong.
     Error(String),
+    Goto(PageId),
+    /// Show this sample scenario in the preview.
+    Scenario(usize),
+    /// Show the last real session in the preview.
+    Replay,
+    Undo,
+    Redo,
+    /// Quit, asking first if there are unsaved changes.
+    AskQuit,
+    Help,
+    Setup,
 }
 
 pub enum Reply {

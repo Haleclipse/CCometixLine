@@ -199,7 +199,7 @@ impl App {
             spans.push(Span::raw(" "));
         }
         let used: usize = spans.iter().map(|s| s.width()).sum();
-        let right = "? help ";
+        let right = "^P commands   ? help ";
         let gap = (width as usize).saturating_sub(used + right.len());
         spans.push(Span::raw(" ".repeat(gap)));
         spans.push(Span::styled(right, ui::muted()));
@@ -218,6 +218,11 @@ impl App {
                     self.act(action);
                 }
             }
+            return;
+        }
+        // Control keys are the app's, whatever has focus.
+        if key.modifiers.contains(KeyModifiers::CONTROL) {
+            self.global(key);
             return;
         }
         if self.tabs_focused {
@@ -285,34 +290,17 @@ impl App {
                 force: false,
                 then_quit: false,
             }),
-            KeyCode::Char('z') if ctrl => {
-                if !self.doc.undo() {
-                    self.toast("Nothing to undo", false);
-                }
-            }
-            KeyCode::Char('y') if ctrl => {
-                if !self.doc.redo() {
-                    self.toast("Nothing to redo", false);
-                }
-            }
+            KeyCode::Char('z') if ctrl => self.act(Action::Undo),
+            KeyCode::Char('y') if ctrl => self.act(Action::Redo),
+            KeyCode::Char('p') if ctrl => self.dialogs.push(Box::new(dialogs::Commands::default())),
             _ if ctrl => {}
             KeyCode::Char('q') => self.request_quit(),
-            KeyCode::Char('?') => {
-                let keys = self.page_mut().keys();
-                self.dialogs.push(Box::new(dialogs::Help {
-                    page: self.page.title(),
-                    keys,
-                }));
-            }
+            KeyCode::Char('?') => self.act(Action::Help),
             KeyCode::Char('[') => self.preview.next_scenario(false),
             KeyCode::Char(']') => self.preview.next_scenario(true),
             KeyCode::Char('-') => self.preview.resize(-WIDTH_STEP),
             KeyCode::Char('+' | '=') => self.preview.resize(WIDTH_STEP),
-            KeyCode::Char('R') => {
-                if !self.preview.toggle_replay() {
-                    self.toast("No session recorded yet to replay", false);
-                }
-            }
+            KeyCode::Char('R') => self.act(Action::Replay),
             KeyCode::Char('{') => self.preview.cycle_depth(),
             KeyCode::Char('}') => self.preview.cycle_glyphs(),
             _ => {}
@@ -349,6 +337,12 @@ impl App {
         self.toast(format!("Copied: {text}"), false);
     }
 
+    /// The first-run setup, over whatever is showing.
+    pub fn open_setup(&mut self) {
+        self.dialogs
+            .push(Box::new(dialogs::Setup::new(self.env.settings.clone())));
+    }
+
     fn request_quit(&mut self) {
         if self.doc.dirty() {
             self.dialogs.push(Box::new(dialogs::Quit));
@@ -362,6 +356,32 @@ impl App {
             Action::Quit => self.quit = true,
             Action::Toast(t) => self.toast(t, false),
             Action::Error(t) => self.toast(t, true),
+            Action::Goto(p) => self.open_page(p),
+            Action::Scenario(i) => self.preview.scenario = i,
+            Action::Replay => {
+                if !self.preview.toggle_replay() {
+                    self.toast("No session recorded yet to replay", false);
+                }
+            }
+            Action::Undo => {
+                if !self.doc.undo() {
+                    self.toast("Nothing to undo", false);
+                }
+            }
+            Action::Redo => {
+                if !self.doc.redo() {
+                    self.toast("Nothing to redo", false);
+                }
+            }
+            Action::AskQuit => self.request_quit(),
+            Action::Help => {
+                let keys = self.page_mut().keys();
+                self.dialogs.push(Box::new(dialogs::Help {
+                    page: self.page.title(),
+                    keys,
+                }));
+            }
+            Action::Setup => self.open_setup(),
             Action::Reload => {
                 self.doc.reload();
                 self.toast("Reloaded from disk", false);

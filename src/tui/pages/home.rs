@@ -19,14 +19,16 @@ use ratatui::widgets::Paragraph;
 
 enum Go {
     Page(PageId),
+    Setup,
     Quit,
 }
 
-const START: [(&str, Go); 5] = [
+const START: [(&str, Go); 6] = [
     ("Open composer", Go::Page(PageId::Layout)),
     ("Browse presets", Go::Page(PageId::Presets)),
     ("Model registry", Go::Page(PageId::Models)),
     ("Claude Code integration", Go::Page(PageId::Claude)),
+    ("First-run setup", Go::Setup),
     ("Quit", Go::Quit),
 ];
 const UPGRADE: &str = "npm update -g @cometix/ccline";
@@ -269,6 +271,9 @@ impl Page for Home {
             }
             KeyCode::Enter => match START[self.selected].1 {
                 Go::Page(p) => Outcome::Goto(p),
+                Go::Setup => Outcome::Open(Box::new(crate::tui::dialogs::Setup::new(
+                    env.settings.clone(),
+                ))),
                 Go::Quit => Outcome::Quit,
             },
             KeyCode::Char('s') => change_settings(env, false),
