@@ -31,6 +31,12 @@ pub enum Command {
     Preview(PreviewArgs),
     /// Check for a newer ccline now and show how to upgrade
     Update,
+    /// The companion mod for Claude Code 2.1.287+: install, update, remove
+    /// or show it
+    Mod {
+        #[command(subcommand)]
+        action: Option<ModAction>,
+    },
     /// Refresh the cached git status of a directory (started in the
     /// background by renders)
     #[command(hide = true)]
@@ -50,6 +56,16 @@ pub enum Command {
         #[arg(last = true)]
         run: String,
     },
+}
+
+#[derive(Subcommand, Debug, Clone, Copy)]
+pub enum ModAction {
+    /// Show whether it is installed and current
+    Status,
+    /// Install it, or bring it up to date
+    Install,
+    /// Remove it
+    Uninstall,
 }
 
 #[derive(Args, Debug)]

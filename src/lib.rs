@@ -1,5 +1,6 @@
 pub mod cc_settings;
 pub mod cli;
+pub mod companion;
 pub mod config;
 pub mod env;
 pub mod git;

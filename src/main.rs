@@ -1,4 +1,4 @@
-use ccometixline::cli::{Cli, Command, PreviewArgs};
+use ccometixline::cli::{Cli, Command, ModAction, PreviewArgs};
 use ccometixline::config::{self, Config, DepthSetting, LoadNote};
 use ccometixline::env::{AutoCompact, ClaudeSettings};
 use ccometixline::input::{Input, MAX_INPUT_BYTES, SubagentInput};
@@ -24,6 +24,7 @@ fn main() {
     match cli.command {
         Some(Command::Preview(args)) => return preview(args, cli.theme.as_deref()),
         Some(Command::Update) => return update(),
+        Some(Command::Mod { action }) => return companion(action.unwrap_or(ModAction::Status)),
         Some(Command::RefreshGit { dir }) => return state::git_cache::refresh(&dir),
         Some(Command::UpdateCheck) => {
             state::update::check(Utc::now().timestamp());
@@ -155,6 +156,60 @@ fn run_subagent(payload: &SubagentInput, raw: &str, theme: Option<&str>) {
         let content = ansi::emit(&[line], opts);
         if !content.is_empty() {
             println!("{}", serde_json::json!({ "id": id, "content": content }));
+        }
+    }
+}
+
+/// `ccline mod`: the companion mod's state, or installing and removing it
+/// through Claude Code's own plugin commands.
+fn companion(action: ModAction) {
+    use ccometixline::companion::{self, Status};
+    let status = companion::status();
+    match action {
+        ModAction::Status => {
+            match &status {
+                Status::NotInstalled => println!("The companion mod is not installed."),
+                Status::Outdated(i) => println!(
+                    "The companion mod {} is installed; this ccline has {}. Run `ccline mod install` to update it.",
+                    i.version.as_deref().unwrap_or("(unknown version)"),
+                    companion::version()
+                ),
+                Status::Current(i) => println!(
+                    "The companion mod {} is installed ({} scope).",
+                    companion::version(),
+                    i.scope
+                ),
+            }
+            println!(
+                "It needs Claude Code 2.1.287 or newer, and writes to {}.",
+                ccometixline::state::bridge::dir().display()
+            );
+        }
+        ModAction::Install | ModAction::Uninstall => {
+            let install = matches!(action, ModAction::Install);
+            let steps = if install {
+                companion::install_steps(&status, &companion::dir())
+            } else {
+                companion::uninstall_steps()
+            };
+            for s in &steps {
+                println!("$ {}", companion::shown(s));
+            }
+            let result = if install {
+                companion::install()
+            } else {
+                companion::uninstall()
+            };
+            match result {
+                Ok(()) if install => println!(
+                    "Installed. Restart Claude Code; set statusLine.refreshInterval (ccline's TUI can) so live data shows between turns."
+                ),
+                Ok(()) => println!("Removed."),
+                Err(e) => {
+                    eprintln!("ccline: {e}");
+                    std::process::exit(1);
+                }
+            }
         }
     }
 }

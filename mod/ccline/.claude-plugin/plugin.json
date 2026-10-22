@@ -1,0 +1,10 @@
+{
+  "name": "ccline",
+  "displayName": "ccline status line bridge",
+  "description": "Feeds the ccline status line what its JSON lacks: context by category, the exact auto-compact point, the last turn's timing, and the tools and agents running. Draws nothing itself.",
+  "author": { "name": "Haleclipse", "url": "https://github.com/Haleclipse" },
+  "homepage": "https://github.com/Haleclipse/CCometixLine",
+  "version": "2.0.0",
+  "license": "MIT",
+  "keywords": ["statusline", "ccline"]
+}
