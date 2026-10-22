@@ -28,3 +28,10 @@ dirs = "6.0"
 regex = "1.0"
 tree-sitter = "0.26"
 tree-sitter-javascript = "0.25"
+
+[profile.release]
+opt-level = "z"
+strip = true
+lto = true
+codegen-units = 1
+panic = "abort"
