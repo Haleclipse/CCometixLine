@@ -278,20 +278,6 @@ pub fn name_problem(name: &str) -> Option<String> {
     None
 }
 
-/// The preset `name` for `--theme`: the user's file first, then a built-in.
-pub fn find(name: &str) -> Option<Config> {
-    find_in(&crate::paths::presets_dir(), name)
-}
-
-pub fn find_in(dir: &Path, name: &str) -> Option<Config> {
-    // A name, never a path.
-    let plain = !name.is_empty() && !name.contains(['/', '\\']) && !name.starts_with('.');
-    if plain && let Ok((_, config)) = read_file(&dir.join(format!("{name}.toml")), name) {
-        return Some(config);
-    }
-    get(name)
-}
-
 /// Where a preset comes from.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Origin {
@@ -729,12 +715,6 @@ mod tests {
                 .unwrap_err()
                 .contains("built-in")
         );
-        assert_eq!(find_in(&dir, "work").unwrap().palette, "nord");
-        assert_eq!(
-            find_in(&dir, "minimal").unwrap().preset.as_deref(),
-            Some("minimal")
-        );
-        assert!(find_in(&dir, "../work").is_none());
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
@@ -805,8 +785,7 @@ mod tests {
         let min = lib.get("minimal").unwrap();
         assert!(matches!(min.origin, Origin::Mine { replaces: true, .. }));
         assert_eq!(min.tags, ["mine", "powerline"]);
-        assert_eq!(find_in(&dir, "minimal").unwrap().skin, SkinKind::Powerline);
-        assert!(find_in(&dir, "broken").is_none());
+        assert_eq!(min.config.as_ref().unwrap().skin, SkinKind::Powerline);
         std::fs::remove_dir_all(&dir).unwrap();
     }
 }

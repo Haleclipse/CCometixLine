@@ -434,7 +434,7 @@ mod tests {
 
     #[test]
     fn spots_ccline_commands() {
-        assert!(is_ccline("~/.claude/ccline/ccline --theme nord"));
+        assert!(is_ccline("~/.claude/ccline/ccline --subagent"));
         assert!(is_ccline("/x/target/debug/ccometixline"));
         assert!(!is_ccline("bash ~/.claude/statusline.sh"));
     }

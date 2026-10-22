@@ -1,5 +1,5 @@
-//! The v2 configuration (`~/.claude/ccline/config.toml`), loading with v1
-//! migration, and the `--theme` override.
+//! The v2 configuration (`~/.claude/ccline/config.toml`) and loading it,
+//! with v1 migration.
 
 use crate::presets;
 use crate::style::{BarGlyphs, ColorDepth, Edge, Edges, FillStyle, GlyphTier, SkinKind, palette};
@@ -308,7 +308,7 @@ pub fn read_from(path: &Path) -> (Config, LoadNote) {
             .and_then(|v| v.as_str())
             .unwrap_or("default");
         let config =
-            apply_theme(presets::default_config(), theme).unwrap_or_else(presets::default_config);
+            v1_look(presets::default_config(), theme).unwrap_or_else(presets::default_config);
         return (config, LoadNote::V1);
     }
     match Config::deserialize(toml::Value::Table(table)) {
@@ -353,12 +353,11 @@ const V1_THEMES: &[(&str, &str, SkinKind, GlyphTier)] = &[
     ),
 ];
 
-/// `--theme <name>`: a preset (the user's own first) replaces layout and
-/// look; a v1 theme name changes the look; a palette name changes the
-/// palette. `None` when the name is unknown, so callers can ignore it
-/// instead of failing.
-pub fn apply_theme(config: Config, name: &str) -> Option<Config> {
-    if let Some(preset) = presets::find(name) {
+/// A v1 config's `theme` on `config`: a built-in preset of that name
+/// replaces layout and look; a v1 theme name changes the look; a palette
+/// name changes the palette. `None` when the name is unknown.
+fn v1_look(config: Config, name: &str) -> Option<Config> {
+    if let Some(preset) = presets::get(name) {
         return Some(presets::apply(&config, &preset, presets::Parts::All));
     }
     if let Some((_, pal, skin, glyphs)) = V1_THEMES.iter().find(|(n, ..)| *n == name) {
@@ -396,17 +395,6 @@ mod tests {
         let c: Config =
             toml::from_str("version = 2\n[layout]\noverflow = \"shrink\"\nreserve = 2\n").unwrap();
         assert_eq!(c.layout.reserve, 2);
-    }
-
-    #[test]
-    fn theme_presets_keep_the_setup() {
-        let mut mine = presets::default_config();
-        mine.layout.reserve = 4;
-        mine.git.cache_ms = 0;
-        let themed = apply_theme(mine, "dashboard").unwrap();
-        assert_eq!(themed.lines.len(), 3);
-        assert_eq!(themed.preset.as_deref(), Some("dashboard"));
-        assert_eq!((themed.layout.reserve, themed.git.cache_ms), (4, 0));
     }
 
     #[test]
@@ -494,13 +482,13 @@ mod tests {
     }
 
     #[test]
-    fn theme_override_lookup_order() {
+    fn maps_v1_theme_names() {
         let base = presets::default_config();
         assert_eq!(
-            apply_theme(base.clone(), "zen").unwrap().glyphs,
+            v1_look(base.clone(), "zen").unwrap().glyphs,
             GlyphTier::Ascii
         );
-        let v1 = apply_theme(base.clone(), "powerline-rose-pine").unwrap();
+        let v1 = v1_look(base.clone(), "powerline-rose-pine").unwrap();
         assert_eq!(
             (v1.palette.as_str(), v1.skin),
             ("powerline-rose-pine", SkinKind::Powerline)
@@ -511,10 +499,7 @@ mod tests {
         );
         assert_eq!(base.powerline.join, Edge::Flat);
         assert_eq!(v1.lines, base.lines);
-        assert_eq!(
-            apply_theme(base.clone(), "dracula").unwrap().palette,
-            "dracula"
-        );
-        assert!(apply_theme(base, "no-such-theme").is_none());
+        assert_eq!(v1_look(base.clone(), "dracula").unwrap().palette, "dracula");
+        assert!(v1_look(base, "no-such-theme").is_none());
     }
 }

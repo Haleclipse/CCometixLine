@@ -8,10 +8,6 @@ pub struct Cli {
     #[arg(short = 'c', long = "config")]
     pub config: bool,
 
-    /// Override the preset, legacy v1 theme or palette for this render
-    #[arg(short = 't', long = "theme", global = true)]
-    pub theme: Option<String>,
-
     /// Render task lines for `subagentStatusLine` (also detected from the
     /// input)
     #[arg(long)]
@@ -78,7 +74,7 @@ pub struct PreviewArgs {
     #[arg(long)]
     pub all: bool,
 
-    /// List the built-in scenarios and presets
+    /// List the built-in scenarios
     #[arg(long)]
     pub list: bool,
 
