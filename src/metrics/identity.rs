@@ -46,12 +46,8 @@ pub(super) fn metrics() -> Vec<Metric> {
                     "Model",
                     "Model name, corrected by the model registry, with its reasoning effort",
                     IconKey::Model,
-                    [
-                        "{name}[ · {effort}]",
-                        "{name}[ · {effort_short}]",
-                        "{family}",
-                    ],
-                    &["name", "family", "id", "effort", "effort_short"],
+                    ["{name}[ · {effort}]", "{name}[ · {effort}]", "{family}"],
+                    &["name", "family", "id", "effort"],
                 )
             },
             compute: model,
@@ -155,29 +151,33 @@ fn model(ctx: &Ctx, opts: &Options) -> Option<Reading> {
         .set("family", family)
         .set("id", ctx.input.model_id().unwrap_or_default());
     let with_effort = opts.get("effort").and_then(|v| v.as_bool()).unwrap_or(true);
-    if with_effort && let Some((long, short)) = effort(ctx) {
-        r = r.set("effort", long).set("effort_short", short);
+    if with_effort && let Some(level) = effort(ctx) {
+        r = r.set("effort", level);
     }
     Some(r)
 }
 
-/// The reasoning effort, `high` and `H`, for models that have one. Thinking
-/// and effort go together: with thinking off there is none to show.
-fn effort(ctx: &Ctx) -> Option<(String, String)> {
+/// The reasoning effort as `Low`, `Med`, `High`, `xHigh` or `Max`, for
+/// models that have one. Thinking and effort go together: with thinking off
+/// there is none to show.
+fn effort(ctx: &Ctx) -> Option<String> {
     if ctx.input.thinking.as_ref().and_then(|t| t.enabled) == Some(false) {
         return None;
     }
     let level = ctx.input.effort.as_ref()?.level.as_deref()?.to_lowercase();
-    let short = match level.as_str() {
-        "low" => "L",
-        "medium" => "M",
-        "high" => "H",
-        "xhigh" => "XH",
-        "max" => "MAX",
-        other => other,
-    }
-    .to_string();
-    Some((level, short))
+    Some(match level.as_str() {
+        "low" => "Low".into(),
+        "medium" => "Med".into(),
+        "high" => "High".into(),
+        "xhigh" => "xHigh".into(),
+        "max" => "Max".into(),
+        other => {
+            let mut c = other.chars();
+            c.next()
+                .map(|f| f.to_uppercase().chain(c).collect())
+                .unwrap_or_default()
+        }
+    })
 }
 
 fn output_style(ctx: &Ctx, opts: &Options) -> Option<Reading> {
@@ -266,8 +266,17 @@ mod tests {
         let on = format!(
             r#"{{{OPUS}, "effort": {{"level": "high"}}, "thinking": {{"enabled": true}}}}"#
         );
-        assert_eq!(model_text(&on, "", 0), "Opus 4.8 · high");
-        assert_eq!(model_text(&on, "", 1), "Opus 4.8 · H");
+        assert_eq!(model_text(&on, "", 0), "Opus 4.8 · High");
+        assert_eq!(model_text(&on, "", 1), "Opus 4.8 · High");
+        for (level, shown) in [
+            ("low", "Low"),
+            ("medium", "Med"),
+            ("xhigh", "xHigh"),
+            ("max", "Max"),
+        ] {
+            let json = format!(r#"{{{OPUS}, "effort": {{"level": "{level}"}}}}"#);
+            assert_eq!(model_text(&json, "", 0), format!("Opus 4.8 · {shown}"));
+        }
         assert_eq!(model_text(&on, "effort = false", 0), "Opus 4.8");
         let off = format!(
             r#"{{{OPUS}, "effort": {{"level": "high"}}, "thinking": {{"enabled": false}}}}"#
