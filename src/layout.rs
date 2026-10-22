@@ -1,6 +1,7 @@
-//! Fit a line into the available width: wrap it onto more lines between
-//! items, or keep it on one by stepping items down from full to compact to
-//! minimal and finally dropping them, lowest priority first.
+//! Fit a line into the available width. A status line wraps onto more
+//! lines between items; a line that must stay one (a background task's, or
+//! one item wider than the terminal) steps items down from full to compact
+//! to minimal and finally drops them, lowest priority first.
 
 use crate::render::span::{Line, Span, line_width};
 use crate::style::skin::{ItemView, Side, Theme, compose};
@@ -23,18 +24,6 @@ pub struct LaidItem {
 pub struct LineSpec {
     pub left: Vec<LaidItem>,
     pub right: Vec<LaidItem>,
-}
-
-/// What a line too wide for the terminal does.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum Overflow {
-    /// Go on below: break after the last item that fits, as text wraps.
-    #[default]
-    Wrap,
-    /// Stay on one line: shorten items, then drop them, lowest priority
-    /// first.
-    Shrink,
 }
 
 /// One line of a wrapped line: which of the spec's items it holds, by
@@ -174,14 +163,14 @@ pub fn rows(spec: &LineSpec, budget: usize, theme: &Theme) -> Vec<Row> {
     rows
 }
 
-/// Lay out one line into as many as `overflow` lets it take.
-pub fn lay(spec: &LineSpec, budget: Option<usize>, theme: &Theme, overflow: Overflow) -> Vec<Line> {
-    match (budget, overflow) {
-        (Some(w), Overflow::Wrap) => rows(spec, w, theme)
+/// Lay out a status line, wrapping it onto as many lines as it needs.
+pub fn wrap(spec: &LineSpec, budget: Option<usize>, theme: &Theme) -> Vec<Line> {
+    match budget {
+        Some(w) => rows(spec, w, theme)
             .iter()
             .map(|r| fit(&spec.row(r), budget, theme))
             .collect(),
-        _ => vec![fit(spec, budget, theme)],
+        None => vec![fit(spec, budget, theme)],
     }
 }
 
@@ -391,12 +380,8 @@ mod tests {
     fn wraps_between_items() {
         let s = spec();
         let t = theme();
-        let texts = |w| -> Vec<String> {
-            lay(&s, Some(w), &t, Overflow::Wrap)
-                .iter()
-                .map(|l| line_text(l))
-                .collect()
-        };
+        let texts =
+            |w| -> Vec<String> { wrap(&s, Some(w), &t).iter().map(|l| line_text(l)).collect() };
         // Fits: one line, as before.
         assert_eq!(texts(50).len(), 1);
         // At 32, git moves down with cost after it on the right.
@@ -424,9 +409,7 @@ mod tests {
         );
         // An item wider than any line is shortened on its own line.
         assert_eq!(texts(10)[1], "62%");
-        // Shrink keeps one line, as before.
-        assert_eq!(lay(&s, Some(32), &t, Overflow::Shrink).len(), 1);
-        assert_eq!(lay(&s, None, &t, Overflow::Wrap).len(), 1);
+        assert_eq!(wrap(&s, None, &t).len(), 1);
     }
 
     #[test]

@@ -75,8 +75,6 @@ pub struct LayoutConfig {
     pub width: Dim,
     pub padding: Dim,
     pub reserve: u16,
-    /// What a line too wide for the terminal does.
-    pub overflow: crate::layout::Overflow,
 }
 
 /// One item on a line: a metric id, or a table of settings.
@@ -391,6 +389,13 @@ pub fn apply_theme(config: Config, name: &str) -> Option<Config> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn ignores_the_removed_overflow_setting() {
+        let c: Config =
+            toml::from_str("version = 2\n[layout]\noverflow = \"shrink\"\nreserve = 2\n").unwrap();
+        assert_eq!(c.layout.reserve, 2);
+    }
 
     #[test]
     fn round_trips_through_toml() {

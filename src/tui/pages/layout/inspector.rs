@@ -88,7 +88,9 @@ pub fn sev_name(s: Severity) -> &'static str {
     }
 }
 
-pub fn fields(cfg: &ItemConfig, meta: &MetricMeta) -> Vec<Field> {
+/// The fields an item has; `one_line` for a line that never wraps (a
+/// background task's), where priority decides what gives way.
+pub fn fields(cfg: &ItemConfig, meta: &MetricMeta, one_line: bool) -> Vec<Field> {
     let kind = cfg.widget.unwrap_or(meta.widget);
     let mut f: Vec<Field> = (0..meta.options.len()).map(Field::Opt).collect();
     f.push(Field::Widget);
@@ -111,7 +113,10 @@ pub fn fields(cfg: &ItemConfig, meta: &MetricMeta) -> Vec<Field> {
     if kind == WidgetKind::Bar {
         f.push(Field::Coloring);
     }
-    f.push(Field::Priority);
+    // A status line wraps instead: nothing there gives way to another.
+    if one_line {
+        f.push(Field::Priority);
+    }
     f
 }
 
@@ -538,13 +543,16 @@ mod tests {
     #[test]
     fn lists_fields_for_the_widget() {
         let ctx = meta("context");
-        let f = fields(&bare("context"), ctx);
+        let f = fields(&bare("context"), ctx, false);
         assert!(f.contains(&Field::Bar) && f.contains(&Field::Coloring));
         let mut text = bare("context");
         text.widget = Some(WidgetKind::Text);
-        let f = fields(&text, ctx);
+        let f = fields(&text, ctx, false);
         assert!(!f.contains(&Field::Bar) && !f.contains(&Field::Cells));
-        assert_eq!(fields(&bare("cmd"), meta("cmd"))[0], Field::Opt(0));
+        assert_eq!(fields(&bare("cmd"), meta("cmd"), false)[0], Field::Opt(0));
+        // Priority only on a line that stays one.
+        assert!(!fields(&bare("git"), meta("git"), false).contains(&Field::Priority));
+        assert!(fields(&bare("git"), meta("git"), true).contains(&Field::Priority));
         // Levels only where there is a percentage to judge.
         for id in [
             "context",
@@ -553,11 +561,14 @@ mod tests {
             "quota.spend",
             "context.breakdown",
         ] {
-            assert!(fields(&bare(id), meta(id)).contains(&Field::Levels), "{id}");
+            assert!(
+                fields(&bare(id), meta(id), false).contains(&Field::Levels),
+                "{id}"
+            );
         }
         for id in ["model", "dir", "git", "cost", "cmd", "cache", "duration"] {
             assert!(
-                !fields(&bare(id), meta(id)).contains(&Field::Levels),
+                !fields(&bare(id), meta(id), false).contains(&Field::Levels),
                 "{id}"
             );
         }

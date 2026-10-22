@@ -86,7 +86,7 @@ pub fn lines(input: &Input, config: &Config, registry: &Registry, frame: Frame) 
         .iter()
         .flat_map(|line| {
             let spec = line_spec(line, &ctx, &theme).0;
-            layout::lay(&spec, frame.width, &theme, config.layout.overflow)
+            layout::wrap(&spec, frame.width, &theme)
         })
         .collect()
 }
@@ -136,8 +136,8 @@ pub fn report(
     })
     .collect();
     // A task's line is always one line; the status line may wrap.
-    let rows = match (frame.width, config.layout.overflow, task) {
-        (Some(w), layout::Overflow::Wrap, None) => layout::rows(&spec, w, &theme),
+    let rows = match (frame.width, task) {
+        (Some(w), None) => layout::rows(&spec, w, &theme),
         _ => vec![layout::Row {
             left: (0..spec.left.len()).collect(),
             right: (0..spec.right.len()).collect(),
@@ -411,9 +411,19 @@ mod tests {
         assert_eq!(r.breaks, vec![(Side::Right, 0)]);
         assert!(r.steps.is_empty());
 
-        // Kept on one line, git (priority 1) is the first to shrink.
-        config.layout.overflow = layout::Overflow::Shrink;
-        let r = report(&input, None, &config, &reg, &frame(Some(narrow)), &line);
+        // A task's line stays one: git (priority 1) is the first to shrink.
+        let sub = scenarios::subagent(scenarios::BASE);
+        let task = &sub.tasks[0];
+        let task_input = task.input(&sub);
+        let wide = report(&task_input, Some(task), &config, &reg, &frame(None), &line);
+        let r = report(
+            &task_input,
+            Some(task),
+            &config,
+            &reg,
+            &frame(Some(wide.natural - 1)),
+            &line,
+        );
         assert!(r.breaks.is_empty());
         let first = r.steps[0];
         assert_eq!((first.side, first.index), (Side::Left, 2));
