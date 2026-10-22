@@ -147,4 +147,9 @@ pub trait Page {
     fn target(&self) -> Target {
         Target::Status
     }
+    /// Whether letter keys reach the page while the tab row has the keys,
+    /// for pages whose letters only open things.
+    fn shortcuts(&self) -> bool {
+        false
+    }
 }

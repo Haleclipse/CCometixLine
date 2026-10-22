@@ -40,7 +40,7 @@ pub struct Models {
     tester: TextInput,
 }
 
-struct Unrecognized {
+pub(super) struct Unrecognized {
     id: String,
     count: u64,
     last: i64,
@@ -49,7 +49,7 @@ struct Unrecognized {
 
 /// Ids seen recently that nothing, including the rules being edited,
 /// recognizes; most recent first.
-fn unrecognized(env: &Env, registry: &Registry) -> Vec<Unrecognized> {
+pub(super) fn unrecognized(env: &Env, registry: &Registry) -> Vec<Unrecognized> {
     let mut out: Vec<Unrecognized> = env
         .seen
         .iter()

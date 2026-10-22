@@ -6,16 +6,20 @@ use super::doc::Doc;
 use super::ui;
 use crate::config::{Config, ItemConfig, LineConfig};
 use crate::env::AutoCompact;
+use crate::git::GitInfo;
 use crate::input::{Input, SubagentInput};
 use crate::metrics::{Commands, GitSource};
 use crate::models::Registry;
 use crate::scenarios::{self, BASE, SCENARIOS};
+use crate::state::StateView;
+use crate::state::session::{Sample, SessionState};
 use crate::statusline::{self, Frame, Report};
 use crate::style::GlyphTier;
 use crate::style::color::ColorDepth;
 use chrono::FixedOffset;
 use ratatui::layout::Rect;
 use ratatui::text::{Line, Span};
+use std::rc::Rc;
 
 /// Most lines the bar shows.
 pub const MAX_LINES: usize = 4;
@@ -45,9 +49,39 @@ pub enum Target {
     Subagent,
 }
 
+/// The newest real session, shown after the sample scenarios.
+#[derive(Clone, Debug)]
+pub struct Replay {
+    pub input: Input,
+    /// When it was last drawn, so timers read as they did then.
+    pub now: i64,
+    pub samples: Vec<Sample>,
+    pub git: Option<GitInfo>,
+}
+
+impl Replay {
+    /// The session's last payload, with git read once from its directory.
+    pub fn from_session(s: &SessionState) -> Option<Replay> {
+        let input = Input::parse(&s.last_input.as_ref()?.to_string()).ok()?;
+        let git = input.current_dir().and_then(|d| {
+            crate::git::status_within(
+                std::path::Path::new(d),
+                std::time::Duration::from_millis(800),
+            )
+        });
+        let last = s.samples.last().map(|x| x.t).unwrap_or(0);
+        Some(Replay {
+            input,
+            now: s.saved_at.max(last),
+            samples: s.samples.clone(),
+            git,
+        })
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct Preview {
-    /// Index into `SCENARIOS`.
+    /// Index into `SCENARIOS`; one past the end is the replay.
     pub scenario: usize,
     /// Columns to lay out in; `None` fits the bar.
     pub width: Option<u16>,
@@ -55,6 +89,7 @@ pub struct Preview {
     pub fit: u16,
     depth: usize,
     tier: usize,
+    replay: Option<Rc<Replay>>,
 }
 
 impl Default for Preview {
@@ -65,6 +100,7 @@ impl Default for Preview {
             fit: 96,
             depth: 0,
             tier: 0,
+            replay: None,
         }
     }
 }
@@ -107,8 +143,34 @@ impl Preview {
     }
 
     pub fn next_scenario(&mut self, forward: bool) {
-        let n = SCENARIOS.len();
+        let n = SCENARIOS.len() + usize::from(self.replay.is_some());
         self.scenario = (self.scenario + if forward { 1 } else { n - 1 }) % n;
+    }
+
+    pub fn set_replay(&mut self, replay: Option<Replay>) {
+        self.replay = replay.map(Rc::new);
+        self.scenario = self.scenario.min(SCENARIOS.len() - 1);
+    }
+
+    pub fn replaying(&self) -> bool {
+        self.replay.is_some() && self.scenario >= SCENARIOS.len()
+    }
+
+    /// Switch between the replay and the first sample; false without one.
+    pub fn toggle_replay(&mut self) -> bool {
+        if self.replay.is_none() {
+            return false;
+        }
+        self.scenario = if self.replaying() { 0 } else { SCENARIOS.len() };
+        true
+    }
+
+    /// A copy showing the replay, if there is one.
+    pub fn replayed(&self) -> Option<Preview> {
+        let mut p = self.clone();
+        p.replay.as_ref()?;
+        p.scenario = SCENARIOS.len();
+        Some(p)
     }
 
     pub fn resize(&mut self, delta: i32) {
@@ -147,7 +209,28 @@ impl Preview {
     /// The current scenario in `width` columns; for `Subagent`, its first
     /// background task.
     fn scene(&self, tz: FixedOffset, width: Option<usize>, target: Target) -> Scene {
-        let s = &SCENARIOS[self.scenario];
+        if let Some(r) = self.replay.as_ref().filter(|_| self.replaying())
+            && target == Target::Status
+        {
+            return Scene {
+                input: r.input.clone(),
+                sub: None,
+                frame: Frame {
+                    now: r.now,
+                    tz,
+                    width,
+                    git: GitSource::Fixed(r.git.clone()),
+                    state: StateView {
+                        samples: r.samples.clone(),
+                        ..StateView::default()
+                    },
+                    compact: AutoCompact::default(),
+                    commands: Commands::Show,
+                },
+            };
+        }
+        // The replay has no background tasks; those use the first sample.
+        let s = SCENARIOS.get(self.scenario).unwrap_or(&SCENARIOS[0]);
         let frame = Frame {
             now: BASE,
             tz,
@@ -273,8 +356,12 @@ impl Preview {
             Some(w) => w.to_string(),
             None => format!("fit {}", self.fit),
         };
+        let scenario = match SCENARIOS.get(self.scenario) {
+            Some(s) => s.name.to_string(),
+            None => "your session".to_string(),
+        };
         let values = [
-            ("scenario", SCENARIOS[self.scenario].name.to_string()),
+            ("scenario", scenario),
             ("width", width),
             ("depth", depth),
             ("glyphs", tier),
@@ -293,7 +380,12 @@ impl Preview {
                 }));
                 spans.push(ui::choice(value));
             }
-            spans.push(Span::styled("  [ ] - + { } ", ui::muted()));
+            let keys = if self.replay.is_some() {
+                "  [ ] - + { } R "
+            } else {
+                "  [ ] - + { } "
+            };
+            spans.push(Span::styled(keys, ui::muted()));
             Line::from(spans)
         };
         let full = build(true);
@@ -359,5 +451,33 @@ mod tests {
         p.resize(-500);
         assert_eq!(p.width, Some(MIN_WIDTH));
         assert_eq!(p.ruler().spans[0].content.chars().count(), 20);
+    }
+
+    #[test]
+    fn replays_the_last_session() {
+        let mut p = Preview::default();
+        assert!(!p.toggle_replay() && p.replayed().is_none());
+        let session = SessionState {
+            last_input: serde_json::from_str(
+                r#"{"model": {"id": "claude-opus-4-8", "display_name": "Opus 4.8"}, "version": "2.1.305"}"#,
+            )
+            .ok(),
+            saved_at: BASE,
+            ..SessionState::default()
+        };
+        p.set_replay(Replay::from_session(&session));
+        p.next_scenario(false);
+        assert!(p.replaying());
+        let (dir, paths) = crate::tui::doc::tests::temp_paths("replay");
+        let doc = Doc::open(paths);
+        let title: String = p
+            .title(&doc, Target::Status, 200)
+            .spans
+            .iter()
+            .map(|s| s.content.as_ref())
+            .collect();
+        assert!(title.contains("your session"), "{title}");
+        assert!(p.toggle_replay() && p.scenario == 0);
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 }

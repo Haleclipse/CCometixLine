@@ -42,6 +42,12 @@ pub struct App {
 
 impl App {
     pub fn new(doc: Doc, env: Env) -> App {
+        let mut preview = Preview::default();
+        preview.set_replay(
+            env.session
+                .as_ref()
+                .and_then(super::preview::Replay::from_session),
+        );
         let pages: Vec<Box<dyn Page>> = vec![
             Box::new(Home::default()),
             Box::new(Presets::default()),
@@ -56,7 +62,7 @@ impl App {
             page: PageId::Home,
             pages,
             dialogs: Vec::new(),
-            preview: Preview::default(),
+            preview,
             toast: None,
             quit: false,
             tabs_focused: true,
@@ -215,11 +221,20 @@ impl App {
             return;
         }
         if self.tabs_focused {
+            let letter = matches!(key.code, KeyCode::Char(c) if c.is_ascii_lowercase())
+                && key.modifiers.is_empty();
             match key.code {
                 // The page shows as soon as its tab is picked.
                 KeyCode::Left => self.step_page(false),
                 KeyCode::Right => self.step_page(true),
                 KeyCode::Down | KeyCode::Enter => self.tabs_focused = false,
+                _ if letter && self.pages[self.page.index()].shortcuts() => {
+                    let outcome = {
+                        let (doc, env) = (&mut self.doc, &self.env);
+                        self.pages[self.page.index()].handle(key, doc, env)
+                    };
+                    self.outcome(outcome, key);
+                }
                 _ => self.global(key),
             }
             return;
@@ -233,6 +248,12 @@ impl App {
             Outcome::Ignored if matches!(key.code, KeyCode::Up | KeyCode::Esc) => {
                 self.tabs_focused = true;
             }
+            other => self.outcome(other, key),
+        }
+    }
+
+    fn outcome(&mut self, outcome: Outcome, key: KeyEvent) {
+        match outcome {
             Outcome::Ignored => self.global(key),
             Outcome::Consumed => {}
             Outcome::Goto(p) => self.open_page(p),
@@ -287,6 +308,11 @@ impl App {
             KeyCode::Char(']') => self.preview.next_scenario(true),
             KeyCode::Char('-') => self.preview.resize(-WIDTH_STEP),
             KeyCode::Char('+' | '=') => self.preview.resize(WIDTH_STEP),
+            KeyCode::Char('R') => {
+                if !self.preview.toggle_replay() {
+                    self.toast("No session recorded yet to replay", false);
+                }
+            }
             KeyCode::Char('{') => self.preview.cycle_depth(),
             KeyCode::Char('}') => self.preview.cycle_glyphs(),
             _ => {}
@@ -511,7 +537,11 @@ pub(crate) mod tests {
             home.contains(" ccline   Home ") && !home.contains("[1 Home]"),
             "{home}"
         );
-        assert!(home.contains("Health") && home.contains("Start") && home.contains("Preview"));
+        assert!(
+            home.contains("Health")
+                && home.contains("Start")
+                && home.contains("Your status line now")
+        );
         // The tab row starts with the keys; left and right show pages.
         assert!(app.tabs_focused && tab_on(&mut app, "Home"));
         app.handle_key(key(KeyCode::Left));
@@ -590,6 +620,7 @@ pub(crate) mod tests {
     fn preview_keys_change_the_bar() {
         let (dir, paths) = temp_paths("app-preview");
         let mut app = App::new(Doc::open(paths), env());
+        app.page = PageId::Style;
         let _ = screen(&mut app, 100, 30);
         app.handle_key(key(KeyCode::Char(']')));
         app.handle_key(key(KeyCode::Char('-')));
