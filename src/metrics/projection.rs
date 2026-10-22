@@ -193,7 +193,13 @@ fn turns_left(samples: &[Sample], left: u64) -> Option<u64> {
 fn to_compact(ctx: &Ctx, _: &Options) -> Option<Reading> {
     let cw = ctx.input.context_window.as_ref()?;
     let tokens = usage::context_tokens(cw).filter(|t| *t > 0)?;
-    let mut at = compact_point(cw.context_window_size?, &ctx.compact)?;
+    // The mod knows the point exactly; otherwise follow Claude Code's rules.
+    let exact = ctx.state.bridge.as_deref().and_then(|b| b.context.as_ref());
+    let mut at = match exact {
+        Some(c) if !c.auto => return None,
+        Some(c) if c.threshold.is_some() => c.threshold?,
+        _ => compact_point(cw.context_window_size?, &ctx.compact)?,
+    };
     // Claude Code measures against the window it believes in; a smaller
     // real window fails requests before it would compact.
     if let Some(real) = ctx
@@ -356,6 +362,36 @@ mod tests {
 
     fn field(r: &Reading, name: &str) -> String {
         r.get(name).map(|f| f.text.clone()).unwrap_or_default()
+    }
+
+    #[test]
+    fn the_mods_compact_point_wins() {
+        let s = scenarios::find("normal").unwrap();
+        let input = s.input(BASE);
+        let reg = Registry::default();
+        let with = |edit: &dyn Fn(&mut crate::state::bridge::Context)| {
+            let mut bridge = s.bridge(BASE).unwrap();
+            edit(bridge.context.as_mut().unwrap());
+            let state = crate::state::StateView {
+                bridge: Some(std::rc::Rc::new(bridge)),
+                ..s.state(BASE)
+            };
+            let ctx = Ctx::new(
+                &input,
+                &reg,
+                BASE,
+                FixedOffset::east_opt(0).unwrap(),
+                GlyphTier::Unicode,
+            )
+            .with_state(state);
+            read(find("context.to_compact").unwrap(), &ctx, &Options::new())
+        };
+        let r = with(&|c| c.threshold = Some(150_000)).unwrap();
+        assert_eq!(field(&r, "at"), "150k");
+        assert!(with(&|c| c.auto = false).is_none());
+        // Without a threshold from the mod, Claude Code's rules still apply.
+        let r = with(&|c| c.threshold = None).unwrap();
+        assert_eq!(field(&r, "at"), "167k");
     }
 
     #[test]

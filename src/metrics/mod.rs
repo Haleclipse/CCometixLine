@@ -6,6 +6,7 @@ mod code;
 mod custom;
 pub mod fmt;
 mod identity;
+mod live;
 mod projection;
 mod task;
 mod usage;
@@ -276,6 +277,7 @@ pub fn catalog() -> &'static [Metric] {
         all.extend(projection::metrics());
         all.extend(code::metrics());
         all.extend(custom::metrics());
+        all.extend(live::metrics());
         all.extend(task::metrics());
         all
     })

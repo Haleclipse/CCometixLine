@@ -46,10 +46,13 @@ pub enum IconKey {
     Version,
     Update,
     Command,
+    Tools,
+    Ttft,
+    Speed,
 }
 
 impl IconKey {
-    pub const ALL: [IconKey; 29] = [
+    pub const ALL: [IconKey; 32] = [
         IconKey::Model,
         IconKey::Effort,
         IconKey::Thinking,
@@ -79,6 +82,9 @@ impl IconKey {
         IconKey::Version,
         IconKey::Update,
         IconKey::Command,
+        IconKey::Tools,
+        IconKey::Ttft,
+        IconKey::Speed,
     ];
 
     /// A short lowercase name, for pickers.
@@ -127,6 +133,9 @@ pub fn icon(key: IconKey, tier: GlyphTier) -> &'static str {
         IconKey::Version => ("\u{f05a}", "v"),
         IconKey::Update => ("\u{f06b0}", "↑"),
         IconKey::Command => ("\u{f120}", "›"),
+        IconKey::Tools => ("\u{f0ad}", "⚒"),
+        IconKey::Ttft => ("\u{f251}", "⧖"),
+        IconKey::Speed => ("\u{f04c5}", "⇶"),
     };
     match tier {
         GlyphTier::Nerd => nerd,

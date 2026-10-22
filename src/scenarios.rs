@@ -22,7 +22,34 @@ pub struct Scenario {
     today: Option<f64>,
     /// A newer ccline known to be published.
     latest: Option<&'static str>,
+    /// What the companion mod would report; times are milliseconds before
+    /// the current render.
+    bridge: Option<&'static str>,
 }
+
+const NORMAL_BRIDGE: &str = r#"{"v": 1, "updated_at": 0,
+  "context": {"threshold": 167000, "auto": true, "window": 200000, "used": 124000,
+    "categories": [{"name": "System prompt", "kind": "used", "tokens": 3100},
+                   {"name": "System tools", "kind": "used", "tokens": 17900},
+                   {"name": "Memory files", "kind": "used", "tokens": 2400},
+                   {"name": "Messages", "kind": "used", "tokens": 100600},
+                   {"name": "Free space", "kind": "free", "tokens": 43000},
+                   {"name": "Autocompact buffer", "kind": "buffer", "tokens": 33000}]},
+  "turn": {"model": "claude-opus-4-8", "ttft_ms": 820, "tps": 74.2, "duration_ms": 41000, "output_tokens": 1400},
+  "tools": [{"name": "Bash", "since": -14000}],
+  "agents": [{"id": "a1", "type": "Explore", "status": "running", "description": "Explore test fixtures"}]}"#;
+
+const NEAR_FULL_BRIDGE: &str = r#"{"v": 1, "updated_at": 0,
+  "context": {"threshold": 167000, "auto": true, "window": 200000, "used": 182000,
+    "categories": [{"name": "System prompt", "kind": "used", "tokens": 3100},
+                   {"name": "System tools", "kind": "used", "tokens": 17900},
+                   {"name": "MCP tools", "kind": "used", "tokens": 9200},
+                   {"name": "Messages", "kind": "used", "tokens": 151800},
+                   {"name": "Free space", "kind": "free", "tokens": 0}]},
+  "turn": {"model": "claude-opus-4-8", "ttft_ms": 2400, "tps": 41.0, "duration_ms": 96000, "output_tokens": 3900},
+  "tools": [{"name": "Edit", "since": -3000}, {"name": "Bash", "since": -62000}],
+  "agents": [{"id": "a1", "type": "Explore", "status": "running"},
+             {"id": "a2", "type": "general-purpose", "status": "waiting"}]}"#;
 
 /// An earlier render, `ago` seconds before the current one.
 struct Hist {
@@ -94,6 +121,7 @@ pub const SCENARIOS: &[Scenario] = &[
         ],
         today: Some(4.85),
         latest: None,
+        bridge: Some(NORMAL_BRIDGE),
         json: r#"{
   "session_id": "s-normal", "prompt_id": "p-9", "transcript_path": "/home/u/.claude/projects/app/s.jsonl", "cwd": "/home/u/app",
   "model": {"id": "claude-opus-4-8", "display_name": "Opus 4.8"},
@@ -129,6 +157,7 @@ pub const SCENARIOS: &[Scenario] = &[
         history: &[],
         today: None,
         latest: Some("2.1.0"),
+        bridge: None,
         json: r#"{
   "session_id": "s-fresh", "cwd": "/home/u/app",
   "model": {"id": "claude-sonnet-5", "display_name": "Sonnet 5"},
@@ -160,6 +189,7 @@ pub const SCENARIOS: &[Scenario] = &[
         ],
         today: Some(31.6),
         latest: None,
+        bridge: Some(NEAR_FULL_BRIDGE),
         json: r#"{
   "session_id": "s-full", "prompt_id": "q-6", "cwd": "/home/u/app",
   "model": {"id": "claude-opus-4-8", "display_name": "Opus 4.8"},
@@ -200,6 +230,7 @@ pub const SCENARIOS: &[Scenario] = &[
         ],
         today: Some(12.4),
         latest: None,
+        bridge: None,
         json: r#"{
   "session_id": "s-big", "prompt_id": "b-4", "cwd": "/home/u/monorepo",
   "model": {"id": "claude-opus-5-5[1m]", "display_name": "Opus 5.5 (1M context)"},
@@ -238,6 +269,7 @@ pub const SCENARIOS: &[Scenario] = &[
         ],
         today: Some(0.84),
         latest: None,
+        bridge: None,
         json: r#"{
   "session_id": "s-kimi", "prompt_id": "k-4", "cwd": "/home/u/app",
   "model": {"id": "kimi-k2-turbo-preview", "display_name": "kimi-k2-turbo-preview"},
@@ -267,6 +299,7 @@ pub const SCENARIOS: &[Scenario] = &[
         ],
         today: Some(2.15),
         latest: None,
+        bridge: None,
         json: r#"{
   "session_id": "s-wt", "prompt_id": "w-3", "session_name": "Refactor the auth middleware", "cwd": "/home/u/app/.claude/worktrees/feature-x",
   "model": {"id": "claude-sonnet-5", "display_name": "Sonnet 5"},
@@ -293,6 +326,7 @@ pub const SCENARIOS: &[Scenario] = &[
         history: &[],
         today: None,
         latest: None,
+        bridge: None,
         json: r#"{
   "session_id": "s-tmp", "cwd": "/tmp/scratch",
   "model": {"id": "claude-haiku-4-5", "display_name": "Haiku 4.5"},
@@ -319,6 +353,7 @@ pub const SCENARIOS: &[Scenario] = &[
         history: &[],
         today: None,
         latest: None,
+        bridge: None,
         json: r#"{
   "session_id": "s-gw", "cwd": "/home/u/app",
   "model": {"id": "claude-sonnet-5", "display_name": "Sonnet 5"},
@@ -339,6 +374,7 @@ pub const SCENARIOS: &[Scenario] = &[
         history: &[],
         today: None,
         latest: None,
+        bridge: None,
         json: r#"{
   "session_id": "s-old", "cwd": "/home/u/app", "version": "2.1.140",
   "model": {"id": "claude-sonnet-4-5", "display_name": "Sonnet 4.5"},
@@ -389,6 +425,17 @@ impl Scenario {
         self.git.as_ref().map(GitSpec::info)
     }
 
+    /// The mod's bridge as it would read at `now`.
+    pub fn bridge(&self, now: i64) -> Option<crate::state::bridge::Bridge> {
+        let mut b: crate::state::bridge::Bridge = serde_json::from_str(self.bridge?).ok()?;
+        let at = now * 1000;
+        b.updated_at = at;
+        for t in &mut b.tools {
+            t.since += at;
+        }
+        Some(b)
+    }
+
     /// The input with timestamps moved from `BASE` to `now`.
     pub fn input(&self, now: i64) -> Input {
         let mut input = Input::parse(self.json).expect("built-in scenarios parse");
@@ -418,7 +465,7 @@ impl Scenario {
             samples,
             today_cost: self.today,
             latest_version: self.latest.map(str::to_string),
-            bridge: None,
+            bridge: self.bridge(now).map(std::rc::Rc::new),
         }
     }
 }
