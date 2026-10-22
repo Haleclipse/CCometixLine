@@ -51,6 +51,76 @@ const NEAR_FULL_BRIDGE: &str = r#"{"v": 1, "updated_at": 0,
   "agents": [{"id": "a1", "type": "Explore", "status": "running"},
              {"id": "a2", "type": "general-purpose", "status": "waiting"}]}"#;
 
+const FRESH_BRIDGE: &str = r#"{"v": 1, "updated_at": 0,
+  "context": {"threshold": 167000, "auto": true, "window": 200000, "used": 24000,
+    "categories": [{"name": "System prompt", "kind": "used", "tokens": 3100},
+                   {"name": "System tools", "kind": "used", "tokens": 17900},
+                   {"name": "Memory files", "kind": "used", "tokens": 1200},
+                   {"name": "Messages", "kind": "used", "tokens": 1800},
+                   {"name": "Free space", "kind": "free", "tokens": 143000},
+                   {"name": "Autocompact buffer", "kind": "buffer", "tokens": 33000}]},
+  "turn": {"model": "claude-sonnet-5", "ttft_ms": 1400, "tps": 88.0, "duration_ms": 9000, "output_tokens": 600},
+  "tools": [{"name": "Read", "since": -2000}],
+  "agents": [{"id": "a1", "type": "Explore", "status": "running"}]}"#;
+
+const BIG_BRIDGE: &str = r#"{"v": 1, "updated_at": 0,
+  "context": {"threshold": 967000, "auto": true, "window": 1000000, "used": 270000,
+    "categories": [{"name": "System prompt", "kind": "used", "tokens": 3100},
+                   {"name": "System tools", "kind": "used", "tokens": 17900},
+                   {"name": "MCP tools", "kind": "used", "tokens": 12000},
+                   {"name": "Memory files", "kind": "used", "tokens": 6000},
+                   {"name": "Messages", "kind": "used", "tokens": 231000},
+                   {"name": "Free space", "kind": "free", "tokens": 697000},
+                   {"name": "Autocompact buffer", "kind": "buffer", "tokens": 33000}]},
+  "turn": {"model": "claude-opus-5-5", "ttft_ms": 3100, "tps": 96.0, "duration_ms": 52000, "output_tokens": 900},
+  "tools": [{"name": "Grep", "since": -4000}],
+  "agents": [{"id": "a1", "type": "general-purpose", "status": "running"}]}"#;
+
+const THIRD_PARTY_BRIDGE: &str = r#"{"v": 1, "updated_at": 0,
+  "context": {"threshold": 167000, "auto": true, "window": 200000, "used": 104000,
+    "categories": [{"name": "System prompt", "kind": "used", "tokens": 3100},
+                   {"name": "System tools", "kind": "used", "tokens": 17900},
+                   {"name": "Messages", "kind": "used", "tokens": 83000},
+                   {"name": "Free space", "kind": "free", "tokens": 63000},
+                   {"name": "Autocompact buffer", "kind": "buffer", "tokens": 33000}]},
+  "turn": {"model": "kimi-k2-turbo-preview", "ttft_ms": 1100, "tps": 120.0, "duration_ms": 30000, "output_tokens": 800},
+  "tools": [{"name": "Bash", "since": -8000}],
+  "agents": [{"id": "a1", "type": "Explore", "status": "running"}]}"#;
+
+const WORKTREE_BRIDGE: &str = r#"{"v": 1, "updated_at": 0,
+  "context": {"threshold": 167000, "auto": true, "window": 200000, "used": 38000,
+    "categories": [{"name": "System prompt", "kind": "used", "tokens": 3100},
+                   {"name": "System tools", "kind": "used", "tokens": 17900},
+                   {"name": "Custom agents", "kind": "used", "tokens": 1500},
+                   {"name": "Messages", "kind": "used", "tokens": 15500},
+                   {"name": "Free space", "kind": "free", "tokens": 129000},
+                   {"name": "Autocompact buffer", "kind": "buffer", "tokens": 33000}]},
+  "turn": {"model": "claude-sonnet-5", "ttft_ms": 1600, "tps": 70.0, "duration_ms": 14000, "output_tokens": 500},
+  "tools": [{"name": "Edit", "since": -1500}],
+  "agents": [{"id": "a1", "type": "code-reviewer", "status": "running"}]}"#;
+
+const NON_GIT_BRIDGE: &str = r#"{"v": 1, "updated_at": 0,
+  "context": {"threshold": 167000, "auto": true, "window": 200000, "used": 9000,
+    "categories": [{"name": "System prompt", "kind": "used", "tokens": 3100},
+                   {"name": "System tools", "kind": "used", "tokens": 4000},
+                   {"name": "Messages", "kind": "used", "tokens": 1900},
+                   {"name": "Free space", "kind": "free", "tokens": 158000},
+                   {"name": "Autocompact buffer", "kind": "buffer", "tokens": 33000}]},
+  "turn": {"model": "claude-haiku-4-5", "ttft_ms": 500, "tps": 160.0, "duration_ms": 4000, "output_tokens": 200},
+  "tools": [{"name": "Read", "since": -1000}],
+  "agents": [{"id": "a1", "type": "Explore", "status": "running"}]}"#;
+
+const GATEWAY_BRIDGE: &str = r#"{"v": 1, "updated_at": 0,
+  "context": {"threshold": 167000, "auto": true, "window": 200000, "used": 80000,
+    "categories": [{"name": "System prompt", "kind": "used", "tokens": 3100},
+                   {"name": "System tools", "kind": "used", "tokens": 17900},
+                   {"name": "Messages", "kind": "used", "tokens": 59000},
+                   {"name": "Free space", "kind": "free", "tokens": 87000},
+                   {"name": "Autocompact buffer", "kind": "buffer", "tokens": 33000}]},
+  "turn": {"model": "claude-sonnet-5", "ttft_ms": 1300, "tps": 65.0, "duration_ms": 22000, "output_tokens": 700},
+  "tools": [{"name": "WebFetch", "since": -6000}],
+  "agents": [{"id": "a1", "type": "general-purpose", "status": "running"}]}"#;
+
 /// An earlier render, `ago` seconds before the current one.
 struct Hist {
     ago: i64,
@@ -145,7 +215,7 @@ pub const SCENARIOS: &[Scenario] = &[
     },
     Scenario {
         name: "fresh",
-        summary: "A new session before the first response",
+        summary: "A new session just after its first answer",
         git: Some(GitSpec {
             branch: "main",
             ahead: 0,
@@ -157,16 +227,21 @@ pub const SCENARIOS: &[Scenario] = &[
         history: &[],
         today: None,
         latest: Some("2.1.0"),
-        bridge: None,
+        bridge: Some(FRESH_BRIDGE),
         json: r#"{
   "session_id": "s-fresh", "cwd": "/home/u/app",
   "model": {"id": "claude-sonnet-5", "display_name": "Sonnet 5"},
   "workspace": {"current_dir": "/home/u/app", "project_dir": "/home/u/app", "added_dirs": []},
   "version": "2.1.305", "output_style": {"name": "default"},
-  "cost": {"total_cost_usd": 0, "total_duration_ms": 4000, "total_api_duration_ms": 0},
-  "context_window": {"total_input_tokens": 0, "total_output_tokens": 0, "context_window_size": 200000,
-    "used_percentage": null, "remaining_percentage": null, "current_usage": null},
-  "exceeds_200k_tokens": false, "effort": {"level": "medium"}, "thinking": {"enabled": true}, "fast_mode": false
+  "cost": {"total_cost_usd": 0.06, "total_duration_ms": 40000, "total_api_duration_ms": 9000,
+    "total_lines_added": 0, "total_lines_removed": 0},
+  "context_window": {"total_input_tokens": 24000, "total_output_tokens": 600, "context_window_size": 200000,
+    "used_percentage": 12, "remaining_percentage": 88,
+    "current_usage": {"input_tokens": 8, "output_tokens": 600, "cache_creation_input_tokens": 23992, "cache_read_input_tokens": 0}},
+  "exceeds_200k_tokens": false, "effort": {"level": "medium"}, "thinking": {"enabled": true}, "fast_mode": false,
+  "prompt_cache": {"warm": true, "caching_observed": true, "ttl": "5m", "expires_at": 1790813060,
+    "requests": 1, "misses": 0, "expected_rebuilds": 0, "hit_ratio": 0.0, "cache_write_tokens": 24000,
+    "miss_recache_tokens": 0, "last_miss_at": null, "last_miss_cause": null, "miss_causes": {}, "recache_tokens_if_cold": 24000}
 }"#,
     },
     Scenario {
@@ -230,7 +305,7 @@ pub const SCENARIOS: &[Scenario] = &[
         ],
         today: Some(12.4),
         latest: None,
-        bridge: None,
+        bridge: Some(BIG_BRIDGE),
         json: r#"{
   "session_id": "s-big", "prompt_id": "b-4", "cwd": "/home/u/monorepo",
   "model": {"id": "claude-opus-5-5[1m]", "display_name": "Opus 5.5 (1M context)"},
@@ -269,7 +344,7 @@ pub const SCENARIOS: &[Scenario] = &[
         ],
         today: Some(0.84),
         latest: None,
-        bridge: None,
+        bridge: Some(THIRD_PARTY_BRIDGE),
         json: r#"{
   "session_id": "s-kimi", "prompt_id": "k-4", "cwd": "/home/u/app",
   "model": {"id": "kimi-k2-turbo-preview", "display_name": "kimi-k2-turbo-preview"},
@@ -278,8 +353,11 @@ pub const SCENARIOS: &[Scenario] = &[
   "cost": {"total_cost_usd": 0.84, "total_duration_ms": 900000, "total_api_duration_ms": 300000},
   "context_window": {"total_input_tokens": 104000, "total_output_tokens": 800, "context_window_size": 200000,
     "used_percentage": 52, "remaining_percentage": 48,
-    "current_usage": {"input_tokens": 104000, "output_tokens": 800, "cache_creation_input_tokens": 0, "cache_read_input_tokens": 0}},
-  "exceeds_200k_tokens": false, "thinking": {"enabled": false}, "fast_mode": false
+    "current_usage": {"input_tokens": 4000, "output_tokens": 800, "cache_creation_input_tokens": 0, "cache_read_input_tokens": 100000}},
+  "exceeds_200k_tokens": false, "thinking": {"enabled": false}, "fast_mode": false,
+  "prompt_cache": {"warm": true, "caching_observed": true, "ttl": "5m", "expires_at": 1790812980,
+    "requests": 12, "misses": 1, "expected_rebuilds": 0, "hit_ratio": 0.88, "cache_write_tokens": 104000,
+    "miss_recache_tokens": 0, "last_miss_at": null, "last_miss_cause": null, "miss_causes": {}, "recache_tokens_if_cold": 104000}
 }"#,
     },
     Scenario {
@@ -299,7 +377,7 @@ pub const SCENARIOS: &[Scenario] = &[
         ],
         today: Some(2.15),
         latest: None,
-        bridge: None,
+        bridge: Some(WORKTREE_BRIDGE),
         json: r#"{
   "session_id": "s-wt", "prompt_id": "w-3", "session_name": "Refactor the auth middleware", "cwd": "/home/u/app/.claude/worktrees/feature-x",
   "model": {"id": "claude-sonnet-5", "display_name": "Sonnet 5"},
@@ -313,6 +391,9 @@ pub const SCENARIOS: &[Scenario] = &[
     "current_usage": {"input_tokens": 5, "output_tokens": 500, "cache_creation_input_tokens": 2000, "cache_read_input_tokens": 35995}},
   "exceeds_200k_tokens": false, "effort": {"level": "high"}, "thinking": {"enabled": true}, "fast_mode": false,
   "rate_limits": {"five_hour": {"used_percentage": 41, "resets_at": 1790823600}},
+  "prompt_cache": {"warm": true, "caching_observed": true, "ttl": "5m", "expires_at": 1790813010,
+    "requests": 9, "misses": 0, "expected_rebuilds": 0, "hit_ratio": 0.91, "cache_write_tokens": 38000,
+    "miss_recache_tokens": 0, "last_miss_at": null, "last_miss_cause": null, "miss_causes": {}, "recache_tokens_if_cold": 38000},
   "vim": {"mode": "INSERT"}, "agent": {"name": "code-reviewer"},
   "pr": {"number": 12, "url": "https://gitlab.com/group/team/app/-/merge_requests/12", "review_state": "draft", "kind": "mr"},
   "worktree": {"name": "feature-x", "path": "/home/u/app/.claude/worktrees/feature-x", "branch": "worktree-feature-x",
@@ -326,7 +407,7 @@ pub const SCENARIOS: &[Scenario] = &[
         history: &[],
         today: None,
         latest: None,
-        bridge: None,
+        bridge: Some(NON_GIT_BRIDGE),
         json: r#"{
   "session_id": "s-tmp", "cwd": "/tmp/scratch",
   "model": {"id": "claude-haiku-4-5", "display_name": "Haiku 4.5"},
@@ -335,8 +416,11 @@ pub const SCENARIOS: &[Scenario] = &[
   "cost": {"total_cost_usd": 0.02, "total_duration_ms": 61000, "total_api_duration_ms": 8000},
   "context_window": {"total_input_tokens": 9000, "total_output_tokens": 200, "context_window_size": 200000,
     "used_percentage": 5, "remaining_percentage": 95,
-    "current_usage": {"input_tokens": 9000, "output_tokens": 200, "cache_creation_input_tokens": 0, "cache_read_input_tokens": 0}},
-  "exceeds_200k_tokens": false, "thinking": {"enabled": false}, "fast_mode": false
+    "current_usage": {"input_tokens": 900, "output_tokens": 200, "cache_creation_input_tokens": 0, "cache_read_input_tokens": 8100}},
+  "exceeds_200k_tokens": false, "thinking": {"enabled": false}, "fast_mode": false,
+  "prompt_cache": {"warm": true, "caching_observed": true, "ttl": "5m", "expires_at": 1790812895,
+    "requests": 3, "misses": 0, "expected_rebuilds": 0, "hit_ratio": 0.4, "cache_write_tokens": 9000,
+    "miss_recache_tokens": 0, "last_miss_at": null, "last_miss_cause": null, "miss_causes": {}, "recache_tokens_if_cold": 9000}
 }"#,
     },
     Scenario {
@@ -353,7 +437,7 @@ pub const SCENARIOS: &[Scenario] = &[
         history: &[],
         today: None,
         latest: None,
-        bridge: None,
+        bridge: Some(GATEWAY_BRIDGE),
         json: r#"{
   "session_id": "s-gw", "cwd": "/home/u/app",
   "model": {"id": "claude-sonnet-5", "display_name": "Sonnet 5"},
@@ -364,7 +448,10 @@ pub const SCENARIOS: &[Scenario] = &[
     "used_percentage": 40, "remaining_percentage": 60,
     "current_usage": {"input_tokens": 10, "output_tokens": 700, "cache_creation_input_tokens": 1000, "cache_read_input_tokens": 78990}},
   "exceeds_200k_tokens": false, "effort": {"level": "medium"}, "thinking": {"enabled": true}, "fast_mode": false,
-  "rate_limits": {"spend_limit": {"used_percentage": 64, "resets_at": 1791849600, "used_usd": 320, "limit_usd": 500, "period": "monthly"}}
+  "rate_limits": {"spend_limit": {"used_percentage": 64, "resets_at": 1791849600, "used_usd": 320, "limit_usd": 500, "period": "monthly"}},
+  "prompt_cache": {"warm": true, "caching_observed": true, "ttl": "1h", "expires_at": 1790815200,
+    "requests": 30, "misses": 1, "expected_rebuilds": 0, "hit_ratio": 0.93, "cache_write_tokens": 80000,
+    "miss_recache_tokens": 0, "last_miss_at": null, "last_miss_cause": null, "miss_causes": {}, "recache_tokens_if_cold": 80000}
 }"#,
     },
     Scenario {

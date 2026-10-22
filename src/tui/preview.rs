@@ -57,6 +57,8 @@ pub struct Replay {
     pub now: i64,
     pub samples: Vec<Sample>,
     pub git: Option<GitInfo>,
+    /// What the companion mod wrote for the session, if it ran there.
+    pub bridge: Option<Rc<crate::state::bridge::Bridge>>,
 }
 
 impl Replay {
@@ -70,11 +72,18 @@ impl Replay {
             )
         });
         let last = s.samples.last().map(|x| x.t).unwrap_or(0);
+        let now = s.saved_at.max(last);
+        let bridge = input
+            .session_id
+            .as_deref()
+            .and_then(|id| crate::state::bridge::read(id, now * 1000))
+            .map(Rc::new);
         Some(Replay {
             input,
-            now: s.saved_at.max(last),
+            now,
             samples: s.samples.clone(),
             git,
+            bridge,
         })
     }
 }
@@ -222,6 +231,7 @@ impl Preview {
                     git: GitSource::Fixed(r.git.clone()),
                     state: StateView {
                         samples: r.samples.clone(),
+                        bridge: r.bridge.clone(),
                         ..StateView::default()
                     },
                     compact: AutoCompact::default(),

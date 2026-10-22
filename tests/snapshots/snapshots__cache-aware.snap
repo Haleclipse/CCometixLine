@@ -14,12 +14,15 @@ expression: render_preset(preset.name)
  Opus 4.8 · High · 󰉋 app · 󰊢 main ● ↑2 ·  62% · 124k                                                                                $1.20⏎
  ●●●●●○○○ warm 3:42 · rewarm ~$0.78 · 94% hit · 1× miss · last: tools changed                                                      $1.65/h⏎
 ── fresh @ 60
- Sonnet 5 · Med · 󰉋 app · 󰊢 main ✓ ·  0%⏎
-                                   󰚰 ]8;;https://github.com/Haleclipse/CCometixLine/releases/tag/v2.1.0\v2.1.0 available]8;;\ ·  $0⏎
+ Sonnet 5 · Med · 󰉋 app · 󰊢 main ✓ ·  12% · 24k⏎
+                                󰚰 ]8;;https://github.com/Haleclipse/CCometixLine/releases/tag/v2.1.0\v2.1.0 available]8;;\ ·  $0.06⏎
+ ●●●●●●○○ warm 4:20 · rewarm ~$0.09 · 0% hit⏎
 ── fresh @ 100
- Sonnet 5 · Med · 󰉋 app · 󰊢 main ✓ ·  0%                                 󰚰 ]8;;https://github.com/Haleclipse/CCometixLine/releases/tag/v2.1.0\v2.1.0 available]8;;\ ·  $0⏎
+ Sonnet 5 · Med · 󰉋 app · 󰊢 main ✓ ·  12% · 24k                       󰚰 ]8;;https://github.com/Haleclipse/CCometixLine/releases/tag/v2.1.0\v2.1.0 available]8;;\ ·  $0.06⏎
+ ●●●●●●○○ warm 4:20 · rewarm ~$0.09 · 0% hit⏎
 ── fresh @ 140
- Sonnet 5 · Med · 󰉋 app · 󰊢 main ✓ ·  0%                                                                         󰚰 ]8;;https://github.com/Haleclipse/CCometixLine/releases/tag/v2.1.0\v2.1.0 available]8;;\ ·  $0⏎
+ Sonnet 5 · Med · 󰉋 app · 󰊢 main ✓ ·  12% · 24k                                                               󰚰 ]8;;https://github.com/Haleclipse/CCometixLine/releases/tag/v2.1.0\v2.1.0 available]8;;\ ·  $0.06⏎
+ ●●●●●●○○ warm 4:20 · rewarm ~$0.09 · 0% hit⏎
 ── near-full @ 60
  Opus 4.8 · Max · 󰉋 app · 󰊢 feature/auth ⚠ ↓3⏎
  91% · 182k                                         $18.42⏎
@@ -43,35 +46,41 @@ expression: render_preset(preset.name)
  ●●●●●●○○ warm 45:00 · rewarm ~$2.70 · 97% hit                                                                                     $3.68/h⏎
 ── third-party @ 60
  Kimi K2 Turbo · 󰉋 app · 󰊢 main ● ·  81% · 104k     $0.84⏎
-                                                    $1.76/h⏎
+ ●●●●○○○○ warm 3:00 · 88% hit · 1× miss            $1.76/h⏎
 ── third-party @ 100
  Kimi K2 Turbo · 󰉋 app · 󰊢 main ● ·  81% · 104k                                             $0.84⏎
-                                                                                            $1.76/h⏎
+ ●●●●○○○○ warm 3:00 · 88% hit · 1× miss                                                    $1.76/h⏎
 ── third-party @ 140
  Kimi K2 Turbo · 󰉋 app · 󰊢 main ● ·  81% · 104k                                                                                     $0.84⏎
-                                                                                                                                    $1.76/h⏎
+ ●●●●○○○○ warm 3:00 · 88% hit · 1× miss                                                                                            $1.76/h⏎
 ── worktree @ 60
  Sonnet 5 · High · 󰉋 feature-x · 󰊢 worktree-feature-x ● ↑1⏎
  19% · 38k                                           $0.31⏎
-                                                    $1.80/h⏎
+ ●●●●●○○○ warm 3:30 · rewarm ~$0.14 · 91% hit      $1.80/h⏎
 ── worktree @ 100
  Sonnet 5 · High · 󰉋 feature-x · 󰊢 worktree-feature-x ● ↑1 ·  19% · 38k                     $0.31⏎
-                                                                                            $1.80/h⏎
+ ●●●●●○○○ warm 3:30 · rewarm ~$0.14 · 91% hit                                              $1.80/h⏎
 ── worktree @ 140
  Sonnet 5 · High · 󰉋 feature-x · 󰊢 worktree-feature-x ● ↑1 ·  19% · 38k                                                             $0.31⏎
-                                                                                                                                    $1.80/h⏎
+ ●●●●●○○○ warm 3:30 · rewarm ~$0.14 · 91% hit                                                                                      $1.80/h⏎
 ── non-git @ 60
  Haiku 4.5 · 󰉋 scratch ·  5% · 9k                   $0.02⏎
+ ●●○○○○○○ warm 1:35 · rewarm ~$0.01 · 40% hit⏎
 ── non-git @ 100
  Haiku 4.5 · 󰉋 scratch ·  5% · 9k                                                           $0.02⏎
+ ●●○○○○○○ warm 1:35 · rewarm ~$0.01 · 40% hit⏎
 ── non-git @ 140
  Haiku 4.5 · 󰉋 scratch ·  5% · 9k                                                                                                   $0.02⏎
+ ●●○○○○○○ warm 1:35 · rewarm ~$0.01 · 40% hit⏎
 ── gateway @ 60
  Sonnet 5 · Med · 󰉋 app · 󰊢 main ✓ ·  40% · 80k     $3.10⏎
+ ●●●●●○○○ warm 40:00 · rewarm ~$0.48 · 93% hit · 1× miss⏎
 ── gateway @ 100
  Sonnet 5 · Med · 󰉋 app · 󰊢 main ✓ ·  40% · 80k                                             $3.10⏎
+ ●●●●●○○○ warm 40:00 · rewarm ~$0.48 · 93% hit · 1× miss⏎
 ── gateway @ 140
  Sonnet 5 · Med · 󰉋 app · 󰊢 main ✓ ·  40% · 80k                                                                                     $3.10⏎
+ ●●●●●○○○ warm 40:00 · rewarm ~$0.48 · 93% hit · 1× miss⏎
 ── old-cc @ 60
 ccline needs Claude Code 2.1.153 or newer (running 2.1.140)⏎
 ── old-cc @ 100
