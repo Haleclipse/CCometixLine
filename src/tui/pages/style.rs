@@ -683,7 +683,7 @@ mod tests {
             Some("#112233")
         );
 
-        // Powerline join: arrow → round, on the skin pane's join row.
+        // Powerline join: flat → arrow, on the skin pane's join row.
         for _ in 0..3 {
             app.handle_key(key(KeyCode::BackTab));
         }
@@ -691,7 +691,7 @@ mod tests {
             app.handle_key(key(KeyCode::Down));
         }
         app.handle_key(key(KeyCode::Right));
-        assert_eq!(app.doc.config.powerline.join, crate::style::Edge::Round);
+        assert_eq!(app.doc.config.powerline.join, crate::style::Edge::Arrow);
         for _ in 0..3 {
             app.handle_key(key(KeyCode::Tab));
         }

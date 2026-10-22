@@ -2,7 +2,7 @@
 //! migration, and the `--theme` override.
 
 use crate::presets;
-use crate::style::{BarGlyphs, ColorDepth, Edges, FillStyle, GlyphTier, SkinKind, palette};
+use crate::style::{BarGlyphs, ColorDepth, Edge, Edges, FillStyle, GlyphTier, SkinKind, palette};
 use crate::widgets::{Coloring, WidgetKind};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::borrow::Cow;
@@ -361,10 +361,19 @@ pub fn apply_theme(config: Config, name: &str) -> Option<Config> {
         return Some(preset);
     }
     if let Some((_, pal, skin, glyphs)) = V1_THEMES.iter().find(|(n, ..)| *n == name) {
+        // v1 joined powerline segments with arrows and left the ends square.
+        let powerline = match skin {
+            SkinKind::Powerline => Edges {
+                join: Edge::Arrow,
+                end: Edge::Flat,
+            },
+            _ => config.powerline,
+        };
         return Some(Config {
             palette: pal.to_string(),
             skin: *skin,
             glyphs: *glyphs,
+            powerline,
             ..config
         });
     }
@@ -477,6 +486,11 @@ mod tests {
             (v1.palette.as_str(), v1.skin),
             ("powerline-rose-pine", SkinKind::Powerline)
         );
+        assert_eq!(
+            (v1.powerline.join, v1.powerline.end),
+            (Edge::Arrow, Edge::Flat)
+        );
+        assert_eq!(base.powerline.join, Edge::Flat);
         assert_eq!(v1.lines, base.lines);
         assert_eq!(
             apply_theme(base.clone(), "dracula").unwrap().palette,

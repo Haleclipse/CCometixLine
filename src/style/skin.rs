@@ -105,7 +105,6 @@ const PILL_RIGHT: &str = "\u{e0b4}";
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Edge {
-    #[default]
     Arrow,
     Round,
     /// `/`
@@ -115,18 +114,19 @@ pub enum Edge {
     Flame,
     Pixel,
     /// No glyph: segments meet edge to edge, lines stop square.
+    #[default]
     Flat,
 }
 
 impl Edge {
     pub const ALL: [Edge; 7] = [
+        Edge::Flat,
         Edge::Arrow,
         Edge::Round,
         Edge::Slant,
         Edge::Backslant,
         Edge::Flame,
         Edge::Pixel,
-        Edge::Flat,
     ];
 
     /// The glyph pointing right (left side of the line) and left (right
@@ -152,11 +152,11 @@ pub struct Edges {
     pub end: Edge,
 }
 
-/// As in v1: arrows between segments, square ends.
+/// No glyphs: segments are told apart by their colors alone.
 impl Default for Edges {
     fn default() -> Self {
         Edges {
-            join: Edge::Arrow,
+            join: Edge::Flat,
             end: Edge::Flat,
         }
     }
