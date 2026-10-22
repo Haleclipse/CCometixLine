@@ -322,6 +322,7 @@ impl LayoutPage {
             loc,
             meta,
         };
+        let change = inspector::change(field, meta);
         match key.code {
             KeyCode::Up if self.field == 0 => return Outcome::Ignored,
             KeyCode::Up => self.field -= 1,
@@ -331,7 +332,7 @@ impl LayoutPage {
                 let forward = key.code == KeyCode::Right;
                 self.edit_item(doc, loc, |c| inspector::cycle(field, c, meta, forward));
             }
-            KeyCode::Enter | KeyCode::Char(' ') => match inspector::change(field, meta) {
+            KeyCode::Enter | KeyCode::Char(' ') => match change {
                 Change::Cycle => {
                     self.edit_item(doc, loc, |c| inspector::cycle(field, c, meta, true));
                 }
@@ -347,20 +348,28 @@ impl LayoutPage {
                 Change::Levels => {
                     return Outcome::Open(Box::new(dialogs::LevelsDialog::new(item, &cfg)));
                 }
-                Change::Color => {
+                Change::Color | Change::TextColor => {
                     let target = self.target;
+                    let text = change == Change::TextColor;
                     let apply = Box::new(move |doc: &mut Doc, value: String| {
                         doc.edit(|c, _| {
                             edit::edit_lines(c, target, |lines| {
-                                edit::edit_item(lines, loc, |cfg| cfg.color = Some(value))
+                                edit::edit_item(lines, loc, |cfg| {
+                                    if text {
+                                        cfg.fg = Some(value);
+                                    } else {
+                                        cfg.color = Some(value);
+                                    }
+                                })
                             })
                         });
                     });
-                    return Outcome::Open(Box::new(ColorDialog::custom(
-                        meta.id.to_string(),
-                        cfg.color.as_deref(),
-                        apply,
-                    )));
+                    let (title, current) = if text {
+                        (format!("{} text", meta.id), cfg.fg.as_deref())
+                    } else {
+                        (meta.id.to_string(), cfg.color.as_deref())
+                    };
+                    return Outcome::Open(Box::new(ColorDialog::custom(title, current, apply)));
                 }
             },
             KeyCode::Delete | KeyCode::Backspace => {

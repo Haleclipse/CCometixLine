@@ -81,7 +81,7 @@ impl Presets {
         for (i, f) in FILTERS.iter().enumerate() {
             let on = i == self.filter;
             spans.push(Span::styled(
-                format!("{} {f}  ", if on { "(•)" } else { "( )" }),
+                format!("{} {f}  ", ui::radio(on)),
                 if on { ui::accent() } else { Style::default() },
             ));
         }
@@ -299,7 +299,7 @@ mod tests {
         }
         let s = screen(&mut app, 112, 33);
         assert!(
-            s.contains("(•) cache") && s.contains("Cache-aware") && !s.contains("Classic"),
+            s.contains("● cache") && s.contains("Cache-aware") && !s.contains("Classic"),
             "{s}"
         );
         app.handle_key(key(KeyCode::Enter));

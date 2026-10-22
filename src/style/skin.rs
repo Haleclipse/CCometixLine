@@ -157,6 +157,19 @@ fn ink_on(bg: Option<Color>, theme: &Theme) -> Option<Color> {
     readable(shade(bg, on_fill, INK).or(on_fill), on_fill, bg)
 }
 
+/// The background and text a category's segments get, as `paint` works
+/// them out for an item without colors of its own.
+pub fn segment_colors(category: Category, theme: &Theme) -> (Option<Color>, Option<Color>) {
+    let view = ItemView {
+        pieces: &[],
+        category,
+        severity: Severity::Normal,
+        color: None,
+        fg: None,
+    };
+    segment(&view, theme)
+}
+
 /// A filled item's background and text. In order: the palette's segment
 /// colors for the category (unless the item has its own color), then the
 /// fill style; colors worked out rather than set are kept readable. A

@@ -1,10 +1,11 @@
-//! 4 Style: skin, palette, glyph tier and color depth, and per-token color
-//! overrides on top of the palette.
+//! 4 Style: skin, palette, glyph tier, color depth and fill style, and
+//! per-token color overrides on top of the palette, including each
+//! category's segment background and text.
 
 use super::{Cx, Env, Outcome, Page};
 use crate::config::{Config, DepthSetting, ItemSpec, LineConfig};
-use crate::style::palette::{self, Palette, TOKENS, Token};
-use crate::style::{GlyphTier, SkinKind};
+use crate::style::palette::{self, Category, Palette, TOKENS, Token};
+use crate::style::{FillStyle, GlyphTier, SkinKind};
 use crate::tui::dialogs::{ColorDialog, ColorTarget, FontCheck};
 use crate::tui::doc::Doc;
 use crate::tui::ui;
@@ -24,6 +25,9 @@ const SKINS: [SkinKind; 4] = [
 /// Separators for the plain skin; `None` is the skin's own.
 const SEPARATORS: [Option<&str>; 5] = [None, Some(" | "), Some(" · "), Some(" / "), Some("  ")];
 const TIERS: [GlyphTier; 3] = [GlyphTier::Nerd, GlyphTier::Unicode, GlyphTier::Ascii];
+const FILLS: [FillStyle; 2] = [FillStyle::Solid, FillStyle::Tinted];
+/// Rows of the glyphs & color pane; the last opens the font check.
+const LOOK_ROWS: usize = 4;
 const DEPTHS: [DepthSetting; 5] = [
     DepthSetting::Auto,
     DepthSetting::TrueColor,
@@ -44,8 +48,10 @@ const SWATCHES: [Token; 8] = [
 ];
 /// Semantic tokens come first in `TOKENS`; the rest are categories.
 const SEMANTIC: usize = 8;
-/// Columns of one token cell: marker, name, swatch, value, override mark.
-const TOKEN_CELL: usize = 2 + 10 + 1 + 15 + 1;
+/// Columns of a semantic cell: marker, name, swatch, value, mark.
+const SEMANTIC_CELL: usize = 2 + 9 + 1 + 9 + 1;
+/// The category table's columns: the color, then segment bg and fg.
+const SEGMENT_COLUMNS: [&str; 3] = ["color", "bg", "fg"];
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 enum Pane {
@@ -65,7 +71,10 @@ pub struct StylePage {
     skin_row: usize,
     palette_row: usize,
     look_row: usize,
-    token: usize,
+    /// Token cursor: column 0 is the semantic list, 1–3 the category
+    /// table's color, bg and fg.
+    tcol: usize,
+    trow: usize,
     palettes: Vec<String>,
 }
 
@@ -99,6 +108,27 @@ fn effective_palette(config: &Config) -> Palette {
         }
     }
     p
+}
+
+/// The token at a cursor position in the tokens pane.
+fn token_at(col: usize, row: usize) -> Token {
+    if col == 0 {
+        return TOKENS[row.min(SEMANTIC - 1)];
+    }
+    let cat = Category::ALL[row.min(Category::ALL.len() - 1)];
+    match col {
+        1 => Token::from(cat),
+        2 => Token::SegBg(cat),
+        _ => Token::SegFg(cat),
+    }
+}
+
+/// Where a token's color comes from.
+enum Source {
+    Palette,
+    Override,
+    /// Worked out from the fill style.
+    Auto,
 }
 
 fn cycle<T: PartialEq + Copy>(all: &[T], current: T, forward: bool) -> T {
@@ -140,11 +170,7 @@ impl StylePage {
             .enumerate()
             .map(|(i, skin)| {
                 let (marker, style) = self.row_marker(Pane::Skin, i, self.skin_row, cx);
-                let radio = if cx.doc.config.skin == *skin {
-                    "(•)"
-                } else {
-                    "( )"
-                };
+                let radio = ui::radio(cx.doc.config.skin == *skin);
                 // A sample drawn by the real painter: three items in this skin.
                 let mut sample = cx.doc.config.clone();
                 sample.skin = *skin;
@@ -196,16 +222,11 @@ impl StylePage {
             .take(rows)
             .map(|(i, name)| {
                 let (marker, style) = self.row_marker(Pane::Palette, i, self.palette_row, cx);
-                let radio = if cx.doc.config.palette == *name {
-                    "(•)"
-                } else {
-                    "( )"
-                };
+                let radio = ui::radio(cx.doc.config.palette == *name);
                 let p = Palette::load(name).unwrap_or_else(palette::terminal);
-                let mut spans = vec![marker, Span::styled(format!("{radio} {name:<18}"), style)];
+                let mut spans = vec![marker, Span::styled(format!("{radio} {name:<22}"), style)];
                 for t in SWATCHES {
                     spans.push(ui::swatch(p.color(t), depth));
-                    spans.push(Span::raw(" "));
                 }
                 if p.light {
                     spans.push(Span::styled(" light", ui::muted()));
@@ -235,10 +256,15 @@ impl StylePage {
             GlyphTier::Unicode => "◆ ◔ ⎇ ▰, no special font",
             GlyphTier::Ascii => "plain ASCII, any terminal",
         };
-        let (marker, style) = self.row_marker(Pane::Look, 2, self.look_row, cx);
+        let fill_note = match c.fill {
+            FillStyle::Solid => "color behind dark text",
+            FillStyle::Tinted => "colored text on dark",
+        };
+        let (marker, style) = self.row_marker(Pane::Look, 3, self.look_row, cx);
         let lines = vec![
             row(0, "Glyph tier", lower(c.glyphs), tier_note),
             row(1, "Color depth", depth_label(c.color_depth), ""),
+            row(2, "Fill", lower(c.fill), fill_note),
             Line::from(vec![
                 marker,
                 Span::styled(format!("{:<13}", "Font check"), style),
@@ -254,58 +280,136 @@ impl StylePage {
 
     fn render_tokens(&self, f: &mut Frame, area: Rect, cx: &Cx) {
         let depth = cx.preview.depth(cx.doc);
-        let p = effective_palette(&cx.doc.config);
-        let overridden = cx.doc.config.palette_overrides.len();
-        let cell = |i: usize| -> Vec<Span<'static>> {
-            let t = TOKENS[i];
-            let (marker, style) = self.row_marker(Pane::Tokens, i, self.token, cx);
-            let value = p
-                .get(t)
+        let config = &cx.doc.config;
+        let p = effective_palette(config);
+        let theme = crate::statusline::theme(config);
+        let overrides = &config.palette_overrides;
+        let focused = cx.focused && self.pane == Pane::Tokens;
+        // The color a token shows as, and where it comes from.
+        let resolve = |t: Token| -> (Option<crate::style::Color>, Source) {
+            let source = if overrides.contains_key(t.name()) {
+                Source::Override
+            } else if p.get(t).is_some() || !matches!(t, Token::SegBg(_) | Token::SegFg(_)) {
+                Source::Palette
+            } else {
+                Source::Auto
+            };
+            let color = match (t, &source) {
+                (Token::SegBg(c), Source::Auto) => crate::style::skin::segment_colors(c, &theme).0,
+                (Token::SegFg(c), Source::Auto) => crate::style::skin::segment_colors(c, &theme).1,
+                _ => p.get(t),
+            };
+            (color, source)
+        };
+        let mark = |s: &Source| match s {
+            Source::Override => Span::styled("*", Style::default().fg(ui::WARN)),
+            Source::Auto => Span::styled("·", ui::muted()),
+            Source::Palette => Span::raw(" "),
+        };
+        let on = |col: usize, row: usize| focused && self.tcol == col && self.trow == row;
+
+        let semantic = |r: usize| -> Vec<Span<'static>> {
+            let t = TOKENS[r];
+            let (color, source) = resolve(t);
+            let sel = on(0, r);
+            let value = color
                 .map(|c| c.notation())
                 .unwrap_or_else(|| "default".into());
-            let mark = if cx.doc.config.palette_overrides.contains_key(t.name()) {
-                "*"
-            } else {
-                " "
-            };
             vec![
-                marker,
-                Span::styled(format!("{:<10}", t.name()), style),
-                ui::swatch(p.get(t), depth),
-                Span::raw(format!(" {value:<14}")),
-                Span::styled(mark, Style::default().fg(ui::WARN)),
+                Span::styled(if sel { ui::SELECTED } else { "  " }, ui::accent()),
+                Span::styled(
+                    format!("{:<9}", t.name()),
+                    if sel { ui::accent() } else { Style::default() },
+                ),
+                ui::swatch(color, depth),
+                Span::raw(format!(" {:<8}", crate::render::width::truncate(&value, 8))),
+                mark(&source),
             ]
         };
-        let rows = TOKENS.len() - SEMANTIC;
-        let mut lines = vec![Line::styled(
-            format!("  {:<w$}{}", "Semantic", "Category", w = TOKEN_CELL),
-            ui::muted(),
-        )];
-        for r in 0..rows {
-            let mut spans = if r < SEMANTIC {
-                cell(r)
+        let category = |r: usize| -> Vec<Span<'static>> {
+            let cat = Category::ALL[r];
+            let row_on = focused && self.tcol > 0 && self.trow == r;
+            let name = Token::from(cat);
+            let name = if cat == Category::Custom {
+                "custom"
             } else {
-                vec![Span::raw(" ".repeat(TOKEN_CELL))]
+                name.name()
+            };
+            let mut spans = vec![
+                Span::styled(if row_on { ui::SELECTED } else { "  " }, ui::accent()),
+                Span::styled(
+                    format!("{name:<10}"),
+                    if row_on {
+                        ui::accent()
+                    } else {
+                        Style::default()
+                    },
+                ),
+            ];
+            for col in 1..=3 {
+                let (color, source) = resolve(token_at(col, r));
+                let sel = on(col, r);
+                let edge = |c: &'static str| Span::styled(if sel { c } else { " " }, ui::accent());
+                spans.push(edge("‹"));
+                spans.push(ui::swatch(color, depth));
+                spans.push(edge("›"));
+                spans.push(mark(&source));
+                spans.push(Span::raw("  "));
+            }
+            spans
+        };
+
+        let mut lines = vec![Line::from(vec![
+            Span::styled(
+                format!("  {:<w$}", "Semantic", w = SEMANTIC_CELL),
+                ui::muted(),
+            ),
+            Span::styled(
+                format!(
+                    "    {:<10}{}",
+                    "Category",
+                    SEGMENT_COLUMNS.map(|c| format!(" {c:<5}")).concat()
+                ),
+                ui::muted(),
+            ),
+        ])];
+        for r in 0..Category::ALL.len() {
+            let mut spans = if r < SEMANTIC {
+                semantic(r)
+            } else {
+                vec![Span::raw(" ".repeat(SEMANTIC_CELL))]
             };
             spans.push(Span::raw("  "));
-            spans.extend(cell(SEMANTIC + r));
+            spans.extend(category(r));
             lines.push(Line::from(spans));
         }
-        let hints = if cx.focused && self.pane == Pane::Tokens {
-            ui::hints(&[
-                ("enter", "edit"),
-                ("del", "palette value"),
-                ("←→", "column"),
-            ])
-        } else {
-            Line::raw("")
+
+        // The selected token in full.
+        let t = token_at(self.tcol, self.trow);
+        let (color, source) = resolve(t);
+        let from = match source {
+            Source::Override => "your override",
+            Source::Palette if color.is_none() => "terminal default",
+            Source::Palette => "from the palette",
+            Source::Auto => "auto, from the fill style",
         };
+        // On the bottom border, so the table keeps every row.
+        let detail = Line::from(vec![
+            Span::styled(format!(" {} ", t.name()), ui::title()),
+            ui::swatch(color, depth),
+            Span::styled(
+                format!(" {}  ", color.map(|c| c.notation()).unwrap_or_default()),
+                Style::default().fg(ratatui::style::Color::Reset),
+            ),
+            Span::styled(format!("{from} "), ui::muted()),
+        ]);
+        let overridden = overrides.len();
         let block = self
             .block("Tokens", Pane::Tokens, cx)
             .title_top(
                 Line::styled(format!(" {overridden} overridden "), ui::muted()).right_aligned(),
             )
-            .title_bottom(hints);
+            .title_bottom(detail);
         f.render_widget(Paragraph::new(lines).block(block), area);
     }
 
@@ -388,45 +492,65 @@ impl Page for StylePage {
             }
             Pane::Look => match key.code {
                 KeyCode::Up => return Self::up(&mut self.look_row),
-                KeyCode::Down => self.look_row = (self.look_row + 1).min(2),
-                KeyCode::Enter if self.look_row == 2 => return Outcome::Open(Box::new(FontCheck)),
+                KeyCode::Down => self.look_row = (self.look_row + 1).min(LOOK_ROWS - 1),
+                KeyCode::Enter if self.look_row == LOOK_ROWS - 1 => {
+                    return Outcome::Open(Box::new(FontCheck));
+                }
                 KeyCode::Enter | KeyCode::Char(' ') | KeyCode::Left | KeyCode::Right => match self
                     .look_row
                 {
                     0 => doc.edit(|c, _| c.glyphs = cycle(&TIERS, c.glyphs, forward)),
                     1 => doc.edit(|c, _| c.color_depth = cycle(&DEPTHS, c.color_depth, forward)),
+                    2 => doc.edit(|c, _| c.fill = cycle(&FILLS, c.fill, forward)),
                     _ => return Outcome::Open(Box::new(FontCheck)),
                 },
                 _ => return Outcome::Ignored,
             },
-            Pane::Tokens => match key.code {
-                KeyCode::Up => return Self::up(&mut self.token),
-                KeyCode::Down => self.token = (self.token + 1).min(TOKENS.len() - 1),
-                KeyCode::Left if self.token >= SEMANTIC => {
-                    self.token = (self.token - SEMANTIC).min(SEMANTIC - 1);
-                }
-                KeyCode::Right if self.token < SEMANTIC => self.token += SEMANTIC,
-                KeyCode::Left | KeyCode::Right => {}
-                KeyCode::Enter => {
-                    let t = TOKENS[self.token];
-                    let current = effective_palette(&doc.config).get(t);
-                    return Outcome::Open(Box::new(ColorDialog::new(
-                        ColorTarget::Token(t),
-                        current,
-                    )));
-                }
-                KeyCode::Delete | KeyCode::Backspace => {
-                    let name = TOKENS[self.token].name();
-                    if !doc.config.palette_overrides.contains_key(name) {
-                        return Outcome::Toast(format!("{name} already follows the palette"));
+            Pane::Tokens => {
+                let rows = |col: usize| {
+                    if col == 0 {
+                        SEMANTIC
+                    } else {
+                        Category::ALL.len()
                     }
-                    doc.edit(|c, _| {
-                        c.palette_overrides.remove(name);
-                    });
-                    return Outcome::Toast(format!("{name} follows the palette again"));
+                };
+                match key.code {
+                    KeyCode::Up => return Self::up(&mut self.trow),
+                    KeyCode::Down => self.trow = (self.trow + 1).min(rows(self.tcol) - 1),
+                    KeyCode::Left => {
+                        self.tcol = self.tcol.saturating_sub(1);
+                        self.trow = self.trow.min(rows(self.tcol) - 1);
+                    }
+                    KeyCode::Right => self.tcol = (self.tcol + 1).min(3),
+                    KeyCode::Enter => {
+                        let t = token_at(self.tcol, self.trow);
+                        let mut current = effective_palette(&doc.config).get(t);
+                        if current.is_none() {
+                            let theme = crate::statusline::theme(&doc.config);
+                            current = match t {
+                                Token::SegBg(c) => crate::style::skin::segment_colors(c, &theme).0,
+                                Token::SegFg(c) => crate::style::skin::segment_colors(c, &theme).1,
+                                _ => None,
+                            };
+                        }
+                        return Outcome::Open(Box::new(ColorDialog::new(
+                            ColorTarget::Token(t),
+                            current,
+                        )));
+                    }
+                    KeyCode::Delete | KeyCode::Backspace => {
+                        let name = token_at(self.tcol, self.trow).name();
+                        if !doc.config.palette_overrides.contains_key(name) {
+                            return Outcome::Toast(format!("{name} already follows the palette"));
+                        }
+                        doc.edit(|c, _| {
+                            c.palette_overrides.remove(name);
+                        });
+                        return Outcome::Toast(format!("{name} follows the palette again"));
+                    }
+                    _ => return Outcome::Ignored,
                 }
-                _ => return Outcome::Ignored,
-            },
+            }
         }
         Outcome::Consumed
     }
@@ -466,7 +590,7 @@ mod tests {
             "Glyphs & color",
             "Tokens",
             "catppuccin-mocha",
-            "(•) plain",
+            "● plain",
             "0 overridden",
         ] {
             assert!(s.contains(text), "{text}: {s}");
@@ -514,6 +638,34 @@ mod tests {
         assert!(app.doc.config.palette_overrides.is_empty());
         app.handle_key(ctrl('z'));
         assert_eq!(app.doc.config.palette_overrides.len(), 1);
+
+        // A category's segment background, in the table's bg column.
+        app.handle_key(key(KeyCode::Right));
+        app.handle_key(key(KeyCode::Right));
+        assert!(screen(&mut app, 112, 33).contains("workspace.bg"));
+        app.handle_key(key(KeyCode::Enter));
+        for _ in 0..7 {
+            app.handle_key(key(KeyCode::Backspace));
+        }
+        for c in "#112233".chars() {
+            app.handle_key(key(KeyCode::Char(c)));
+        }
+        app.handle_key(key(KeyCode::Enter));
+        assert_eq!(
+            app.doc
+                .config
+                .palette_overrides
+                .get("workspace.bg")
+                .map(String::as_str),
+            Some("#112233")
+        );
+
+        // Fill: solid → tinted.
+        app.handle_key(key(KeyCode::BackTab));
+        app.handle_key(key(KeyCode::Down));
+        app.handle_key(key(KeyCode::Down));
+        app.handle_key(key(KeyCode::Right));
+        assert_eq!(app.doc.config.fill, crate::style::FillStyle::Tinted);
         std::fs::remove_dir_all(&dir).unwrap();
     }
 }

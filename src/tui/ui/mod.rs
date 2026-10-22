@@ -129,6 +129,11 @@ pub fn swatch(
     }
 }
 
+/// The mark for a choice: `●` picked, `○` not.
+pub fn radio(on: bool) -> &'static str {
+    if on { "●" } else { "○" }
+}
+
 /// `‹value›` for a setting cycled with keys.
 pub fn choice(value: &str) -> Span<'static> {
     Span::styled(format!("‹{value}›"), accent())

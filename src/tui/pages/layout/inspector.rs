@@ -22,6 +22,8 @@ pub enum Field {
     Template(Level),
     Icon,
     Color,
+    /// Text color (`fg`).
+    Text,
     Levels,
     Coloring,
     Priority,
@@ -38,6 +40,7 @@ pub enum Change {
     Widget,
     Icon,
     Color,
+    TextColor,
     Levels,
 }
 
@@ -101,6 +104,7 @@ pub fn fields(cfg: &ItemConfig, meta: &MetricMeta) -> Vec<Field> {
     f.extend(Level::ALL.map(Field::Template));
     f.push(Field::Icon);
     f.push(Field::Color);
+    f.push(Field::Text);
     if !meta.levels.is_empty() || cfg.levels.is_some() {
         f.push(Field::Levels);
     }
@@ -122,6 +126,7 @@ pub fn label(field: Field, meta: &MetricMeta) -> String {
         Field::Template(Level::Minimal) => "Minimal".into(),
         Field::Icon => "Icon".into(),
         Field::Color => "Color".into(),
+        Field::Text => "Text".into(),
         Field::Levels => "Levels".into(),
         Field::Coloring => "Coloring".into(),
         Field::Priority => "Priority".into(),
@@ -138,6 +143,7 @@ pub fn change(field: Field, meta: &MetricMeta) -> Change {
         Field::Widget => Change::Widget,
         Field::Icon => Change::Icon,
         Field::Color => Change::Color,
+        Field::Text => Change::TextColor,
         Field::Levels => Change::Levels,
         Field::Bar | Field::Cells | Field::Coloring | Field::Priority => Change::Cycle,
     }
@@ -151,6 +157,7 @@ pub fn cycles(field: Field, meta: &MetricMeta) -> bool {
         | Field::Bar
         | Field::Cells
         | Field::Color
+        | Field::Text
         | Field::Coloring
         | Field::Priority => true,
         Field::Template(_) | Field::Icon | Field::Levels => false,
@@ -212,6 +219,7 @@ pub fn is_set(field: Field, cfg: &ItemConfig, meta: &MetricMeta) -> bool {
         Field::Template(l) => template(cfg, l).is_some(),
         Field::Icon => cfg.icon.is_some(),
         Field::Color => cfg.color.is_some(),
+        Field::Text => cfg.fg.is_some(),
         Field::Levels => cfg.levels.is_some(),
         Field::Coloring => cfg.coloring.is_some(),
         Field::Priority => cfg.priority.is_some(),
@@ -271,14 +279,19 @@ pub fn cycle(field: Field, cfg: &mut ItemConfig, meta: &MetricMeta, forward: boo
             };
             cfg.priority = unless_default(next, meta.priority);
         }
-        Field::Color => {
-            // No color (the category's), then each palette token.
+        Field::Color | Field::Text => {
+            // Unset (the category's or worked out), then each palette token.
             let names: Vec<Option<&str>> = std::iter::once(None)
                 .chain(TOKENS.iter().map(|t| Some(t.name())))
                 .collect();
-            let current = color_name(cfg).filter(|c| Token::parse(c).is_some());
+            let slot = if field == Field::Color {
+                &mut cfg.color
+            } else {
+                &mut cfg.fg
+            };
+            let current = slot.as_deref().filter(|c| Token::parse(c).is_some());
             let next = step(&names, current, forward);
-            cfg.color = next.map(str::to_string);
+            *slot = next.map(str::to_string);
         }
         Field::Template(_) | Field::Icon | Field::Levels => {}
     }
@@ -352,6 +365,7 @@ pub fn reset(field: Field, cfg: &mut ItemConfig, meta: &MetricMeta) {
         Field::Template(l) => *template_mut(cfg, l) = None,
         Field::Icon => cfg.icon = None,
         Field::Color => cfg.color = None,
+        Field::Text => cfg.fg = None,
         Field::Levels => cfg.levels = None,
         Field::Coloring => cfg.coloring = None,
         Field::Priority => cfg.priority = None,
@@ -420,8 +434,13 @@ pub fn value(field: Field, cfg: &ItemConfig, meta: &MetricMeta, look: &Look) -> 
                 v
             }
         },
-        Field::Color => match color_name(cfg) {
-            None => muted("category"),
+        Field::Color | Field::Text => match if field == Field::Color {
+            color_name(cfg)
+        } else {
+            cfg.fg.as_deref()
+        } {
+            None if field == Field::Color => muted("category"),
+            None => muted("auto"),
             Some(name) => {
                 let color = match Token::parse(name) {
                     Some(t) => look.palette.color(t),
@@ -540,6 +559,10 @@ mod tests {
         assert_eq!(c.color.as_deref(), Some("ok"));
         cycle(Field::Color, &mut c, git, false);
         assert_eq!(c.color, None);
+        cycle(Field::Text, &mut c, git, false);
+        assert_eq!(c.fg.as_deref(), Some("system"));
+        reset(Field::Text, &mut c, git);
+        assert_eq!(c.fg, None);
 
         let dir = meta("dir");
         let mut d = bare("dir");
