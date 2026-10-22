@@ -3,6 +3,7 @@
 
 mod color;
 mod commands;
+mod companion;
 mod fonts;
 mod form;
 mod help;
@@ -19,6 +20,7 @@ use ratatui::layout::Rect;
 
 pub use color::{ColorDialog, Target as ColorTarget};
 pub use commands::Commands;
+pub use companion::ModSteps;
 pub use fonts::FontCheck;
 pub use help::Help;
 pub use prompts::{Conflict, Quit};

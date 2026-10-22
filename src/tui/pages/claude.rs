@@ -4,8 +4,9 @@
 
 use super::{Cx, Env, Outcome, Page, PageId};
 use crate::cc_settings::{self, Settings, StatusLine};
+use crate::companion::{self, Status};
 use crate::state::update;
-use crate::tui::dialogs::{SettingsDiff, shown_path};
+use crate::tui::dialogs::{ModSteps, SettingsDiff, shown_path};
 use crate::tui::doc::Doc;
 use crate::tui::ui;
 use crate::version::Version;
@@ -21,13 +22,15 @@ use std::path::Path;
 enum Pane {
     #[default]
     StatusLine,
+    Mod,
     Agents,
     Updates,
 }
 
-const PANES: [Pane; 3] = [Pane::StatusLine, Pane::Agents, Pane::Updates];
+/// In the order they sit on screen: left to right, top to bottom.
+const PANES: [Pane; 4] = [Pane::StatusLine, Pane::Mod, Pane::Agents, Pane::Updates];
 /// Rows per pane; the status line's last row applies the draft.
-const ROWS: [usize; 3] = [5, 2, 3];
+const ROWS: [usize; 4] = [5, 2, 2, 3];
 const REFRESH: [Option<u64>; 7] = [
     None,
     Some(1),
@@ -51,13 +54,14 @@ fn label_width(pane: Pane) -> usize {
         Pane::StatusLine => 17,
         Pane::Agents => 16,
         Pane::Updates => 13,
+        Pane::Mod => 9,
     }
 }
 
 #[derive(Default)]
 pub struct ClaudePage {
     pane: Pane,
-    rows: [usize; 3],
+    rows: [usize; 4],
     /// The file as read, or why it can't be used.
     base: Option<Result<Settings, String>>,
     /// Changes not yet written.
@@ -349,34 +353,88 @@ impl ClaudePage {
     }
 
     fn render_mod(&self, f: &mut Frame, area: Rect, cx: &Cx) {
-        let block = self.block("Companion mod".into(), None, cx);
+        let pane = Pane::Mod;
+        let block = self.block("Companion mod".into(), Some(pane), cx);
         let width = block.inner(area).width as usize;
+        let at = (cx, width);
+        let ok = |t: String| Span::styled(t, Style::default().fg(ui::OK));
+        let warn = |t: String| Span::styled(t, Style::default().fg(ui::WARN));
+        let status = match companion::status() {
+            Status::NotInstalled => vec![
+                Span::styled("not installed", ui::muted()),
+                Span::styled("  enter installs", ui::muted()),
+            ],
+            Status::Outdated(i) => vec![
+                warn(format!(
+                    "{} installed, {} here",
+                    i.version.as_deref().unwrap_or("?"),
+                    companion::version()
+                )),
+                Span::styled("  enter updates", ui::muted()),
+            ],
+            Status::Current(_) => vec![ok(format!("installed {} ✓", companion::version()))],
+        };
         let needs = match cx.env.cc_version() {
-            Some(v) if v >= MODS => Span::styled(
-                format!("Claude Code ≥ {MODS}  ✓"),
-                Style::default().fg(ui::OK),
-            ),
-            Some(v) => Span::styled(
-                format!("Claude Code ≥ {MODS}, running {v}"),
-                Style::default().fg(ui::WARN),
-            ),
+            Some(v) if v >= MODS => ok(format!("Claude Code ≥ {MODS} ✓")),
+            Some(v) => warn(format!("Claude Code ≥ {MODS}, running {v}")),
             None => Span::raw(format!("Claude Code ≥ {MODS}")),
         };
-        let pane = Pane::Updates;
+        // Whether the mod wrote anything for the last session seen.
+        let session = cx
+            .env
+            .session
+            .as_ref()
+            .and_then(|s| s.last_input.as_ref())
+            .and_then(|i| i.get("session_id")?.as_str().map(str::to_string));
+        let now_ms = chrono::Utc::now().timestamp_millis();
+        let bridge = match session.and_then(|id| crate::state::bridge::read(&id, now_ms)) {
+            Some(b) => ok(format!(
+                "live, {} ago",
+                crate::metrics::fmt::duration_ms((now_ms - b.updated_at).max(0) as u64)
+            )),
+            None => Span::styled("no data for the last session", ui::muted()),
+        };
+        let installed = !matches!(companion::status(), Status::NotInstalled);
         let text = vec![
-            Self::info(
+            self.row(pane, 0, "status", status, at),
+            self.row(
                 pane,
-                "status",
-                Span::styled("coming in a later release", ui::muted()),
-                width,
+                1,
+                "remove",
+                vec![Span::styled(
+                    if installed { "enter removes it" } else { "—" },
+                    ui::muted(),
+                )],
+                at,
             ),
             Self::info(pane, "needs", needs, width),
-            Self::info(pane, "adds", Span::raw("context breakdown"), width),
-            Self::info(pane, "", Span::raw("live tools and agents"), width),
-            Self::info(pane, "", Span::raw("time to first token"), width),
-            Self::info(pane, "", Span::raw("the exact auto-compact point"), width),
+            Self::info(pane, "bridge", bridge, width),
+            Self::info(
+                pane,
+                "adds",
+                Span::raw("context by kind, exact compact point,"),
+                width,
+            ),
+            Self::info(
+                pane,
+                "",
+                Span::raw("running tools and agents, turn timing"),
+                width,
+            ),
         ];
         f.render_widget(Paragraph::new(text).block(block), area);
+    }
+
+    fn handle_mod(&mut self, key: KeyEvent) -> Outcome {
+        let installed = !matches!(companion::status(), Status::NotInstalled);
+        match (self.rows[Pane::Mod as usize], key.code) {
+            (0, KeyCode::Enter) => Outcome::Open(Box::new(ModSteps { install: true })),
+            (1, KeyCode::Enter) if installed => {
+                Outcome::Open(Box::new(ModSteps { install: false }))
+            }
+            (1, KeyCode::Enter) => Outcome::Toast("The companion mod isn't installed".into()),
+            _ => Outcome::Ignored,
+        }
     }
 
     fn handle_status_line(&mut self, key: KeyEvent) -> Outcome {
@@ -487,8 +545,9 @@ impl Page for ClaudePage {
         let p = self.pane as usize;
         match key.code {
             KeyCode::Tab | KeyCode::BackTab => {
-                let step = if key.code == KeyCode::Tab { 1 } else { 2 };
-                self.pane = PANES[(p + step) % 3];
+                let n = PANES.len();
+                let step = if key.code == KeyCode::Tab { 1 } else { n - 1 };
+                self.pane = PANES[(p + step) % n];
                 return Outcome::Consumed;
             }
             KeyCode::Up if self.rows[p] == 0 => return Outcome::Ignored,
@@ -503,11 +562,12 @@ impl Page for ClaudePage {
             KeyCode::Char('a') => return self.review(),
             _ => {}
         }
-        if self.pane != Pane::Updates && self.base().is_none() {
+        if matches!(self.pane, Pane::StatusLine | Pane::Agents) && self.base().is_none() {
             return Outcome::Ignored;
         }
         match self.pane {
             Pane::StatusLine => self.handle_status_line(key),
+            Pane::Mod => self.handle_mod(key),
             Pane::Agents => self.handle_agents(key),
             Pane::Updates => self.handle_updates(key, doc),
         }
@@ -586,6 +646,16 @@ mod tests {
         assert_eq!(line.refresh_interval, Some(2));
         assert!(dir.join("settings.json.ccline-bak").exists());
         assert!(screen(&mut app, 112, 33).contains("no changes"));
+
+        // The companion mod pane shows the commands before running any.
+        app.handle_key(key(KeyCode::Tab));
+        app.handle_key(key(KeyCode::Enter));
+        let s = screen(&mut app, 112, 33);
+        assert!(
+            s.contains("Install the companion mod") && s.contains("ccline@ccline"),
+            "{s}"
+        );
+        app.handle_key(key(KeyCode::Char('n')));
 
         // The agent panel uses the same command.
         app.handle_key(key(KeyCode::Tab));

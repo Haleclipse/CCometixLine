@@ -194,6 +194,10 @@ pub fn shown(argv: &[String]) -> String {
 
 /// Run `steps` in order, stopping at the first that fails.
 pub fn run(steps: &[Vec<String>]) -> Result<(), String> {
+    // Tests never reach the person's own Claude Code.
+    if cfg!(test) && std::env::var_os("CCLINE_CLAUDE").is_none() {
+        return Err("tests run no `claude` unless CCLINE_CLAUDE says which".into());
+    }
     for argv in steps {
         let mut cmd = Command::new(&argv[0]);
         cmd.args(&argv[1..]);
