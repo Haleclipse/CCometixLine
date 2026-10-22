@@ -1,4 +1,4 @@
-use super::{Ctx, LEVELS, Metric, MetricMeta, Options, Reading};
+use super::{Ctx, LEVELS, Metric, MetricMeta, OptKind, OptSpec, Options, Reading};
 use crate::style::{Category, IconKey};
 use crate::widgets::WidgetKind;
 
@@ -34,56 +34,27 @@ pub(super) fn metrics() -> Vec<Metric> {
         Metric {
             meta: MetricMeta {
                 priority: 5,
+                options: &[OptSpec {
+                    key: "effort",
+                    kind: OptKind::Flag,
+                    default: "true",
+                    summary: "Add the reasoning effort while thinking is on",
+                }],
                 ..meta(
                     "model",
                     Category::Identity,
                     "Model",
-                    "Model name, corrected by the model registry",
+                    "Model name, corrected by the model registry, with its reasoning effort",
                     IconKey::Model,
-                    ["{name}", "{name}", "{family}"],
-                    &["name", "family", "id"],
+                    [
+                        "{name}[ · {effort}]",
+                        "{name}[ · {effort_short}]",
+                        "{family}",
+                    ],
+                    &["name", "family", "id", "effort", "effort_short"],
                 )
             },
             compute: model,
-        },
-        Metric {
-            meta: MetricMeta {
-                widget: WidgetKind::Text,
-                ..meta(
-                    "effort",
-                    Category::Identity,
-                    "Effort",
-                    "Reasoning effort level",
-                    IconKey::Effort,
-                    ["{level}", "{level}", "{short}"],
-                    &["level", "short"],
-                )
-            },
-            compute: effort,
-        },
-        Metric {
-            meta: meta(
-                "thinking",
-                Category::Identity,
-                "Thinking",
-                "Shown while extended thinking is on",
-                IconKey::Thinking,
-                ["thinking", "think", "T"],
-                &[],
-            ),
-            compute: thinking,
-        },
-        Metric {
-            meta: meta(
-                "fast",
-                Category::Identity,
-                "Fast mode",
-                "Shown while fast mode is on",
-                IconKey::Fast,
-                ["fast", "fast", "F"],
-                &[],
-            ),
-            compute: fast,
         },
         Metric {
             meta: MetricMeta {
@@ -176,41 +147,37 @@ pub(super) fn metrics() -> Vec<Metric> {
     ]
 }
 
-fn model(ctx: &Ctx, _: &Options) -> Option<Reading> {
+fn model(ctx: &Ctx, opts: &Options) -> Option<Reading> {
     let resolved = ctx.model()?;
     let family = resolved.name.split_whitespace().next().unwrap_or_default();
-    Some(
-        Reading::default()
-            .set("name", &resolved.name)
-            .set("family", family)
-            .set("id", ctx.input.model_id().unwrap_or_default()),
-    )
+    let mut r = Reading::default()
+        .set("name", &resolved.name)
+        .set("family", family)
+        .set("id", ctx.input.model_id().unwrap_or_default());
+    let with_effort = opts.get("effort").and_then(|v| v.as_bool()).unwrap_or(true);
+    if with_effort && let Some((long, short)) = effort(ctx) {
+        r = r.set("effort", long).set("effort_short", short);
+    }
+    Some(r)
 }
 
-fn effort(ctx: &Ctx, _: &Options) -> Option<Reading> {
+/// The reasoning effort, `high` and `H`, for models that have one. Thinking
+/// and effort go together: with thinking off there is none to show.
+fn effort(ctx: &Ctx) -> Option<(String, String)> {
+    if ctx.input.thinking.as_ref().and_then(|t| t.enabled) == Some(false) {
+        return None;
+    }
     let level = ctx.input.effort.as_ref()?.level.as_deref()?.to_lowercase();
-    let (short, ratio) = match level.as_str() {
-        "low" => ("L", 0.2),
-        "medium" => ("M", 0.4),
-        "high" => ("H", 0.6),
-        "xhigh" => ("XH", 0.8),
-        "max" => ("MAX", 1.0),
-        _ => ("?", 0.5),
-    };
-    Some(
-        Reading::default()
-            .set("level", &level)
-            .set("short", short)
-            .ratio(ratio),
-    )
-}
-
-fn thinking(ctx: &Ctx, _: &Options) -> Option<Reading> {
-    (ctx.input.thinking.as_ref()?.enabled == Some(true)).then(Reading::default)
-}
-
-fn fast(ctx: &Ctx, _: &Options) -> Option<Reading> {
-    (ctx.input.fast_mode == Some(true)).then(Reading::default)
+    let short = match level.as_str() {
+        "low" => "L",
+        "medium" => "M",
+        "high" => "H",
+        "xhigh" => "XH",
+        "max" => "MAX",
+        other => other,
+    }
+    .to_string();
+    Some((level, short))
 }
 
 fn output_style(ctx: &Ctx, opts: &Options) -> Option<Reading> {
@@ -261,4 +228,52 @@ fn update(ctx: &Ctx, _: &Options) -> Option<Reading> {
             .set("current", format!("v{CURRENT}"))
             .link(Some(format!("{RELEASES}/tag/v{latest}"))),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::input::Input;
+    use crate::metrics::{find, read};
+    use crate::models::Registry;
+    use crate::style::GlyphTier;
+    use chrono::FixedOffset;
+
+    /// The model item at `level` (0 full, 1 compact) for `json`.
+    fn model_text(json: &str, opts: &str, level: usize) -> String {
+        let input = Input::parse(json).unwrap();
+        let reg = Registry::default();
+        let ctx = Ctx::new(
+            &input,
+            &reg,
+            0,
+            FixedOffset::east_opt(0).unwrap(),
+            GlyphTier::Unicode,
+        );
+        let m = find("model").unwrap();
+        let opts: Options = toml::from_str(opts).unwrap();
+        let r = read(m, &ctx, &opts).unwrap();
+        crate::widgets::template::render(m.meta.templates[level], &r)
+            .iter()
+            .map(|p| p.text.as_str())
+            .collect()
+    }
+
+    const OPUS: &str = r#""model": {"id": "claude-opus-4-8", "display_name": "Opus 4.8"}"#;
+
+    #[test]
+    fn model_carries_the_effort_while_thinking() {
+        let on = format!(
+            r#"{{{OPUS}, "effort": {{"level": "high"}}, "thinking": {{"enabled": true}}}}"#
+        );
+        assert_eq!(model_text(&on, "", 0), "Opus 4.8 · high");
+        assert_eq!(model_text(&on, "", 1), "Opus 4.8 · H");
+        assert_eq!(model_text(&on, "effort = false", 0), "Opus 4.8");
+        let off = format!(
+            r#"{{{OPUS}, "effort": {{"level": "high"}}, "thinking": {{"enabled": false}}}}"#
+        );
+        assert_eq!(model_text(&off, "", 0), "Opus 4.8");
+        let none = format!(r#"{{{OPUS}}}"#);
+        assert_eq!(model_text(&none, "", 0), "Opus 4.8");
+    }
 }

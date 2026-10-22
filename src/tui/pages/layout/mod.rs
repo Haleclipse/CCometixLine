@@ -655,7 +655,7 @@ mod tests {
         app.handle_key(key(KeyCode::Down));
         app.handle_key(key(KeyCode::Enter));
         let mut want = left.clone();
-        want.insert(1, "effort".into());
+        want.insert(1, "output_style".into());
         assert_eq!(ids(&app.doc.config.lines[0]).0, want);
         // Enter again takes it off rather than adding a second one; toggling
         // on and off keeps it in the same place every time.
@@ -673,13 +673,13 @@ mod tests {
         }
         let (l, r) = ids(&app.doc.config.lines[0]);
         assert_eq!(l, left);
-        assert_eq!(r[0], "effort");
+        assert_eq!(r[0], "output_style");
         assert_eq!(r[1..], right[..]);
 
         // Inspector: widget text → bar on the selected effort.
         app.handle_key(key(KeyCode::Enter));
         let s = screen(&mut app, 112, 33);
-        assert!(s.contains("Reasoning effort level"), "{s}");
+        assert!(s.contains("Output style name"), "{s}");
         app.handle_key(key(KeyCode::Right));
         assert!(matches!(
             &app.doc.config.lines[0].right[0],
@@ -688,7 +688,7 @@ mod tests {
         app.handle_key(key(KeyCode::Delete));
         assert_eq!(
             app.doc.config.lines[0].right[0],
-            ItemSpec::Id("effort".into())
+            ItemSpec::Id("output_style".into())
         );
 
         // Remove it, then undo the removal.
@@ -696,7 +696,7 @@ mod tests {
         app.handle_key(key(KeyCode::Char('x')));
         assert_eq!(ids(&app.doc.config.lines[0]), (left.clone(), right.clone()));
         app.handle_key(ctrl('z'));
-        assert_eq!(ids(&app.doc.config.lines[0]).1[0], "effort");
+        assert_eq!(ids(&app.doc.config.lines[0]).1[0], "output_style");
 
         // A new line below; the "+ new line" row adds one too.
         let n = app.doc.config.lines.len();

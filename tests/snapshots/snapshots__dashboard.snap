@@ -3,58 +3,58 @@ source: tests/snapshots.rs
 expression: render_preset(preset.name)
 ---
 ── normal @ 60
-  Opus 4.8   󰉋 app   󰊢 main ● ↑2            $1.20 ⏎
+  Opus 4.8 · high   󰉋 app   󰊢 main ● ↑2     $1.20 ⏎
   ▕██████▎   ▏ 62% · 124k    ▁▂▃▄▅▆▆▇█ +12k ⏎
  󰪞 ▀▀▀▀▀▀▀▀ 26% · 02:07 ⇣32%            3:42 · 94% hit ⏎
  ± +128 -34    ]8;;https://github.com/acme/app/pull/1287\#1287 pending]8;;\                󱦻 30m30s ⏎
 ── normal @ 100
-  Opus 4.8   󰉋 app   󰊢 main ● ↑2                                                    $1.20 ⏎
+  Opus 4.8 · high   󰉋 app   󰊢 main ● ↑2                                             $1.20 ⏎
   ▕██████▎   ▏ 62% · 124k    ▁▂▃▄▅▆▆▇█ +12k   󰪞 ▀▀▀▀▀▀▀▀ 26% · 02:07 ⇣32% ⏎
                                                                                   3:42 · 94% hit ⏎
  ± +128 -34    ]8;;https://github.com/acme/app/pull/1287\#1287 pending]8;;\                                                        󱦻 30m30s ⏎
 ── normal @ 140
-  Opus 4.8   󰉋 app   󰊢 main ● ↑2                                                                                            $1.20 ⏎
+  Opus 4.8 · high   󰉋 app   󰊢 main ● ↑2                                                                                     $1.20 ⏎
   ▕██████▎   ▏ 62% · 124k    ▁▂▃▄▅▆▆▇█ +12k   󰪞 ▀▀▀▀▀▀▀▀ 26% · 02:07 ⇣32%                                         3:42 · 94% hit ⏎
  ± +128 -34    ]8;;https://github.com/acme/app/pull/1287\#1287 pending]8;;\                                                                                                󱦻 30m30s ⏎
 ── fresh @ 60
-  Sonnet 5   󰉋 app   󰊢 main ✓ ⏎
+  Sonnet 5 · medium   󰉋 app   󰊢 main ✓ ⏎
                               󰚰 ]8;;https://github.com/Haleclipse/CCometixLine/releases/tag/v2.1.0\v2.1.0 available]8;;\    $0 ⏎
   ▕          ▏ 0% ⏎
                                                      󱦻 4s ⏎
 ── fresh @ 100
-  Sonnet 5   󰉋 app   󰊢 main ✓                                  󰚰 ]8;;https://github.com/Haleclipse/CCometixLine/releases/tag/v2.1.0\v2.1.0 available]8;;\    $0 ⏎
+  Sonnet 5 · medium   󰉋 app   󰊢 main ✓                         󰚰 ]8;;https://github.com/Haleclipse/CCometixLine/releases/tag/v2.1.0\v2.1.0 available]8;;\    $0 ⏎
   ▕          ▏ 0% ⏎
                                                                                              󱦻 4s ⏎
 ── fresh @ 140
-  Sonnet 5   󰉋 app   󰊢 main ✓                                                                          󰚰 ]8;;https://github.com/Haleclipse/CCometixLine/releases/tag/v2.1.0\v2.1.0 available]8;;\    $0 ⏎
+  Sonnet 5 · medium   󰉋 app   󰊢 main ✓                                                                 󰚰 ]8;;https://github.com/Haleclipse/CCometixLine/releases/tag/v2.1.0\v2.1.0 available]8;;\    $0 ⏎
   ▕          ▏ 0% ⏎
                                                                                                                                      󱦻 4s ⏎
 ── near-full @ 60
-  Opus 4.8   󰉋 app   󰊢 feature/auth ⚠ ↓3 ⏎
+  Opus 4.8 · max   󰉋 app   󰊢 feature/auth ⚠ ↓3 ⏎
                                                   $18.42 ⏎
   ▕█████████▏▏ 91% · 182k    ▁▃▅▆▇█ +11k ⏎
  󰪞 ▀▀▀▀▀▀▀▀ 88% · 00:30 ⇣2%      cold ~$1.14 · 71% hit ⏎
  ± +1450 -610    ]8;;https://github.com/acme/app/pull/1288\#1288 changes]8;;\                  󱦻 4h ⏎
 ── near-full @ 100
-  Opus 4.8   󰉋 app   󰊢 feature/auth ⚠ ↓3                                           $18.42 ⏎
+  Opus 4.8 · max   󰉋 app   󰊢 feature/auth ⚠ ↓3                                     $18.42 ⏎
   ▕█████████▏▏ 91% · 182k    ▁▃▅▆▇█ +11k   󰪞 ▀▀▀▀▀▀▀▀ 88% · 00:30 ⇣2% ⏎
                                                                            cold ~$1.14 · 71% hit ⏎
  ± +1450 -610    ]8;;https://github.com/acme/app/pull/1288\#1288 changes]8;;\                                                          󱦻 4h ⏎
 ── near-full @ 140
-  Opus 4.8   󰉋 app   󰊢 feature/auth ⚠ ↓3                                                                                   $18.42 ⏎
+  Opus 4.8 · max   󰉋 app   󰊢 feature/auth ⚠ ↓3                                                                             $18.42 ⏎
   ▕█████████▏▏ 91% · 182k    ▁▃▅▆▇█ +11k   󰪞 ▀▀▀▀▀▀▀▀ 88% · 00:30 ⇣2%                                      cold ~$1.14 · 71% hit ⏎
  ± +1450 -610    ]8;;https://github.com/acme/app/pull/1288\#1288 changes]8;;\                                                                                                  󱦻 4h ⏎
 ── big-context @ 60
-  Opus 5.5 1M   󰉋 api   󰊢 main ✓            $7.74 ⏎
+  Opus 5.5 1M · xhigh   󰉋 api   󰊢 main ✓    $7.74 ⏎
   ▕██▊       ▏ 27% · 270k    ▁▄▆█ +22k ⏎
  󰪞 ▀▀▀▀▀▀▀▀ 4% · 04:30 ⇣6%             45:00 · 97% hit ⏎
  ± +40 -2    ]8;;https://github.com/acme/monorepo/pull/77\#77 approved]8;;\                    󱦻 1h30m ⏎
 ── big-context @ 100
-  Opus 5.5 1M   󰉋 api   󰊢 main ✓                                                    $7.74 ⏎
+  Opus 5.5 1M · xhigh   󰉋 api   󰊢 main ✓                                            $7.74 ⏎
   ▕██▊       ▏ 27% · 270k    ▁▄▆█ +22k   󰪞 ▀▀▀▀▀▀▀▀ 4% · 04:30 ⇣6%       45:00 · 97% hit ⏎
  ± +40 -2    ]8;;https://github.com/acme/monorepo/pull/77\#77 approved]8;;\                                                            󱦻 1h30m ⏎
 ── big-context @ 140
-  Opus 5.5 1M   󰉋 api   󰊢 main ✓                                                                                            $7.74 ⏎
+  Opus 5.5 1M · xhigh   󰉋 api   󰊢 main ✓                                                                                    $7.74 ⏎
   ▕██▊       ▏ 27% · 270k    ▁▄▆█ +22k   󰪞 ▀▀▀▀▀▀▀▀ 4% · 04:30 ⇣6%                                               45:00 · 97% hit ⏎
  ± +40 -2    ]8;;https://github.com/acme/monorepo/pull/77\#77 approved]8;;\                                                                                                    󱦻 1h30m ⏎
 ── third-party @ 60
@@ -70,17 +70,17 @@ expression: render_preset(preset.name)
   ▕████████▏ ▏ 81% · 104k    ▁▅▇█ +9k ⏎
                                                                                                                                     󱦻 15m ⏎
 ── worktree @ 60
-  Sonnet 5   󰉋 feature-x   󰊢 worktree-feature-x ● ↑1 ⏎
-                                                   $0.31 ⏎
+  Sonnet 5 · high   󰉋 feature-x ⏎
+ 󰊢 worktree-feature-x ● ↑1                       $0.31 ⏎
   ▕█▉        ▏ 19% · 38k    ▁▅█ +8k ⏎
  󰪞 ▀▀▀▀▀▀▀▀ 41% · 03:00 ⇡1% ⏎
  ± +12    ]8;;https://gitlab.com/group/team/app/-/merge_requests/12\!12 draft]8;;\    feature-x             󱦻 7m ⏎
 ── worktree @ 100
-  Sonnet 5   󰉋 feature-x   󰊢 worktree-feature-x ● ↑1                                $0.31 ⏎
+  Sonnet 5 · high   󰉋 feature-x   󰊢 worktree-feature-x ● ↑1                         $0.31 ⏎
   ▕█▉        ▏ 19% · 38k    ▁▅█ +8k   󰪞 ▀▀▀▀▀▀▀▀ 41% · 03:00 ⇡1% ⏎
  ± +12    ]8;;https://gitlab.com/group/team/app/-/merge_requests/12\!12 draft]8;;\    feature-x                                                     󱦻 7m ⏎
 ── worktree @ 140
-  Sonnet 5   󰉋 feature-x   󰊢 worktree-feature-x ● ↑1                                                                        $0.31 ⏎
+  Sonnet 5 · high   󰉋 feature-x   󰊢 worktree-feature-x ● ↑1                                                                 $0.31 ⏎
   ▕█▉        ▏ 19% · 38k    ▁▅█ +8k   󰪞 ▀▀▀▀▀▀▀▀ 41% · 03:00 ⇡1% ⏎
  ± +12    ]8;;https://gitlab.com/group/team/app/-/merge_requests/12\!12 draft]8;;\    feature-x                                                                                             󱦻 7m ⏎
 ── non-git @ 60
@@ -96,15 +96,15 @@ expression: render_preset(preset.name)
   ▕▌         ▏ 5% · 9k ⏎
                                                                                                                                    󱦻 1m1s ⏎
 ── gateway @ 60
-  Sonnet 5   󰉋 app   󰊢 main ✓               $3.10 ⏎
+  Sonnet 5 · medium   󰉋 app   󰊢 main ✓      $3.10 ⏎
   ▕████      ▏ 40% · 80k ⏎
                                                     󱦻 40m ⏎
 ── gateway @ 100
-  Sonnet 5   󰉋 app   󰊢 main ✓                                                       $3.10 ⏎
+  Sonnet 5 · medium   󰉋 app   󰊢 main ✓                                              $3.10 ⏎
   ▕████      ▏ 40% · 80k ⏎
                                                                                             󱦻 40m ⏎
 ── gateway @ 140
-  Sonnet 5   󰉋 app   󰊢 main ✓                                                                                               $3.10 ⏎
+  Sonnet 5 · medium   󰉋 app   󰊢 main ✓                                                                                      $3.10 ⏎
   ▕████      ▏ 40% · 80k ⏎
                                                                                                                                     󱦻 40m ⏎
 ── old-cc @ 60

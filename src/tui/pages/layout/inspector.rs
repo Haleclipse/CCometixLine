@@ -196,6 +196,13 @@ fn set_opt(cfg: &mut ItemConfig, spec: &OptSpec, value: Option<toml::Value>) {
     }
 }
 
+/// A flag option's value, its default when unset.
+fn flag(cfg: &ItemConfig, spec: &OptSpec) -> bool {
+    opt(cfg, spec)
+        .and_then(|v| v.as_bool())
+        .unwrap_or(spec.default == "true")
+}
+
 fn opt_text(cfg: &ItemConfig, spec: &OptSpec) -> String {
     match opt(cfg, spec) {
         Some(toml::Value::String(s)) => s.clone(),
@@ -233,8 +240,13 @@ pub fn cycle(field: Field, cfg: &mut ItemConfig, meta: &MetricMeta, forward: boo
             let spec = &meta.options[i];
             match spec.kind {
                 OptKind::Flag => {
-                    let on = opt(cfg, spec).and_then(|v| v.as_bool()).unwrap_or(false);
-                    set_opt(cfg, spec, (!on).then_some(toml::Value::Boolean(true)));
+                    let on = !flag(cfg, spec);
+                    let default = spec.default == "true";
+                    set_opt(
+                        cfg,
+                        spec,
+                        (on != default).then_some(toml::Value::Boolean(on)),
+                    );
                 }
                 OptKind::Choice(values) => {
                     let current = opt_text(cfg, spec);
@@ -404,10 +416,7 @@ pub fn value(field: Field, cfg: &ItemConfig, meta: &MetricMeta, look: &Look) -> 
         Field::Opt(i) => {
             let spec = &meta.options[i];
             match spec.kind {
-                OptKind::Flag => {
-                    let on = opt(cfg, spec).and_then(|v| v.as_bool()).unwrap_or(false);
-                    vec![ui::choice(if on { "on" } else { "off" })]
-                }
+                OptKind::Flag => vec![ui::choice(if flag(cfg, spec) { "on" } else { "off" })],
                 OptKind::Choice(_) => vec![ui::choice(&opt_text(cfg, spec))],
                 OptKind::Text | OptKind::Number => match opt(cfg, spec) {
                     Some(_) => plain(opt_text(cfg, spec)),
@@ -563,6 +572,17 @@ mod tests {
         assert_eq!(c.fg.as_deref(), Some("system"));
         reset(Field::Text, &mut c, git);
         assert_eq!(c.fg, None);
+
+        // A flag that defaults to on stores only its turning off.
+        let model = meta("model");
+        let mut m = bare("model");
+        cycle(Field::Opt(0), &mut m, model, true);
+        assert_eq!(
+            opt(&m, &model.options[0]),
+            Some(&toml::Value::Boolean(false))
+        );
+        cycle(Field::Opt(0), &mut m, model, true);
+        assert_eq!(opt(&m, &model.options[0]), None);
 
         let dir = meta("dir");
         let mut d = bare("dir");

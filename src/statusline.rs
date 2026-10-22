@@ -349,7 +349,7 @@ mod tests {
         assert_eq!(
             out,
             vec![
-                "\u{e26d} Opus 4.8 | \u{f024b} app | \u{f02a2} main ● ↑2 | \u{f49b} 62% · 124k tokens"
+                "\u{e26d} Opus 4.8 · high | \u{f024b} app | \u{f02a2} main ● ↑2 | \u{f49b} 62% · 124k tokens"
             ]
         );
     }

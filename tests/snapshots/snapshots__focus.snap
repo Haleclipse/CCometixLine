@@ -3,37 +3,37 @@ source: tests/snapshots.rs
 expression: render_preset(preset.name)
 ---
 ── normal @ 60
-◔ ▕████████████▍       ▏ 62% · 124k               ◆ Opus 4.8⏎
+◔ ▕████████████▍       ▏ 62% · 124k        ◆ Opus 4.8 · high⏎
 ∿ ▁▂▃▄▅▆▆▇█ +12k │ 43k to compact · ~5 turns⏎
 ── normal @ 100
-◔ ▕████████████▍       ▏ 62% · 124k                                                       ◆ Opus 4.8⏎
+◔ ▕████████████▍       ▏ 62% · 124k                                                ◆ Opus 4.8 · high⏎
 ∿ ▁▂▃▄▅▆▆▇█ +12k │ 43k to compact · ~5 turns⏎
 ── normal @ 140
-◔ ▕████████████▍       ▏ 62% · 124k                                                                                               ◆ Opus 4.8⏎
+◔ ▕████████████▍       ▏ 62% · 124k                                                                                        ◆ Opus 4.8 · high⏎
 ∿ ▁▂▃▄▅▆▆▇█ +12k │ 43k to compact · ~5 turns⏎
 ── fresh @ 60
-◔ ▕                    ▏ 0%                       ◆ Sonnet 5⏎
+◔ ▕                    ▏ 0%              ◆ Sonnet 5 · medium⏎
 ── fresh @ 100
-◔ ▕                    ▏ 0%                                                               ◆ Sonnet 5⏎
+◔ ▕                    ▏ 0%                                                      ◆ Sonnet 5 · medium⏎
 ── fresh @ 140
-◔ ▕                    ▏ 0%                                                                                                       ◆ Sonnet 5⏎
+◔ ▕                    ▏ 0%                                                                                              ◆ Sonnet 5 · medium⏎
 ── near-full @ 60
-◔ ▕██████████████████▎ ▏ 91% · 182k               ◆ Opus 4.8⏎
+◔ ▕██████████████████▎ ▏ 91% · 182k         ◆ Opus 4.8 · max⏎
 ∿ ▁▃▅▆▇█ +11k │ compact due⏎
 ── near-full @ 100
-◔ ▕██████████████████▎ ▏ 91% · 182k                                                       ◆ Opus 4.8⏎
+◔ ▕██████████████████▎ ▏ 91% · 182k                                                 ◆ Opus 4.8 · max⏎
 ∿ ▁▃▅▆▇█ +11k │ compact due⏎
 ── near-full @ 140
-◔ ▕██████████████████▎ ▏ 91% · 182k                                                                                               ◆ Opus 4.8⏎
+◔ ▕██████████████████▎ ▏ 91% · 182k                                                                                         ◆ Opus 4.8 · max⏎
 ∿ ▁▃▅▆▇█ +11k │ compact due⏎
 ── big-context @ 60
-◔ ▕█████▍              ▏ 27% · 270k            ◆ Opus 5.5 1M⏎
+◔ ▕█████▍              ▏ 27% · 270k    ◆ Opus 5.5 1M · xhigh⏎
 ∿ ▁▄▆█ +22k │ 697k to compact · ~21 turns⏎
 ── big-context @ 100
-◔ ▕█████▍              ▏ 27% · 270k                                                    ◆ Opus 5.5 1M⏎
+◔ ▕█████▍              ▏ 27% · 270k                                            ◆ Opus 5.5 1M · xhigh⏎
 ∿ ▁▄▆█ +22k │ 697k to compact · ~21 turns⏎
 ── big-context @ 140
-◔ ▕█████▍              ▏ 27% · 270k                                                                                            ◆ Opus 5.5 1M⏎
+◔ ▕█████▍              ▏ 27% · 270k                                                                                    ◆ Opus 5.5 1M · xhigh⏎
 ∿ ▁▄▆█ +22k │ 697k to compact · ~21 turns⏎
 ── third-party @ 60
 ◔ ▕████████████████▎   ▏ 81% · 104k          ◆ Kimi K2 Turbo⏎
@@ -45,13 +45,13 @@ expression: render_preset(preset.name)
 ◔ ▕████████████████▎   ▏ 81% · 104k                                                                                          ◆ Kimi K2 Turbo⏎
 ∿ ▁▅▇█ +9k │ 24k to compact · ~2 turns⏎
 ── worktree @ 60
-◔ ▕███▊                ▏ 19% · 38k                ◆ Sonnet 5⏎
+◔ ▕███▊                ▏ 19% · 38k         ◆ Sonnet 5 · high⏎
 ∿ ▁▅█ +8k │ 129k to compact⏎
 ── worktree @ 100
-◔ ▕███▊                ▏ 19% · 38k                                                        ◆ Sonnet 5⏎
+◔ ▕███▊                ▏ 19% · 38k                                                 ◆ Sonnet 5 · high⏎
 ∿ ▁▅█ +8k │ 129k to compact⏎
 ── worktree @ 140
-◔ ▕███▊                ▏ 19% · 38k                                                                                                ◆ Sonnet 5⏎
+◔ ▕███▊                ▏ 19% · 38k                                                                                         ◆ Sonnet 5 · high⏎
 ∿ ▁▅█ +8k │ 129k to compact⏎
 ── non-git @ 60
 ◔ ▕█                   ▏ 5% · 9k                 ◆ Haiku 4.5⏎
@@ -63,13 +63,13 @@ expression: render_preset(preset.name)
 ◔ ▕█                   ▏ 5% · 9k                                                                                                 ◆ Haiku 4.5⏎
 158k to compact⏎
 ── gateway @ 60
-◔ ▕████████            ▏ 40% · 80k                ◆ Sonnet 5⏎
+◔ ▕████████            ▏ 40% · 80k       ◆ Sonnet 5 · medium⏎
 87k to compact⏎
 ── gateway @ 100
-◔ ▕████████            ▏ 40% · 80k                                                        ◆ Sonnet 5⏎
+◔ ▕████████            ▏ 40% · 80k                                               ◆ Sonnet 5 · medium⏎
 87k to compact⏎
 ── gateway @ 140
-◔ ▕████████            ▏ 40% · 80k                                                                                                ◆ Sonnet 5⏎
+◔ ▕████████            ▏ 40% · 80k                                                                                       ◆ Sonnet 5 · medium⏎
 87k to compact⏎
 ── old-cc @ 60
 ccline needs Claude Code 2.1.153 or newer (running 2.1.140)⏎
