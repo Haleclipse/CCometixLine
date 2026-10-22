@@ -39,6 +39,7 @@ pub fn theme(config: &Config) -> Theme {
         skin: config.skin,
         glyphs: config.glyphs,
         separator: config.separator.clone(),
+        fill: config.fill,
     }
 }
 
@@ -168,6 +169,7 @@ pub fn item_levels(
             category: laid.category,
             severity: laid.severity,
             color: laid.color,
+            fg: laid.fg,
         };
         Some(compose(&[view], Side::Left, &theme))
     }))
@@ -266,15 +268,18 @@ fn lay_item(cfg: &ItemConfig, ctx: &Ctx, theme: &Theme) -> Option<LaidItem> {
     if variants.iter().all(Option::is_none) {
         return None;
     }
-    let color = cfg.color.as_deref().and_then(|c| match Token::parse(c) {
+    let resolve = |c: &str| match Token::parse(c) {
         Some(t) => theme.palette.color(t),
         None => Color::parse(c),
-    });
+    };
+    let color = cfg.color.as_deref().and_then(resolve);
+    let fg = cfg.fg.as_deref().and_then(resolve);
     Some(LaidItem {
         variants,
         category: meta.category,
         severity: widgets::severity(&reading, &props.levels),
         color,
+        fg,
         priority: cfg.priority.unwrap_or(meta.priority).clamp(1, 5),
     })
 }
@@ -353,11 +358,11 @@ mod tests {
             left: vec![
                 id("model"),
                 id("vim"),
-                ItemSpec::Item(ItemConfig {
+                ItemSpec::Item(Box::new(ItemConfig {
                     metric: "git".into(),
                     priority: Some(1),
                     ..ItemConfig::default()
-                }),
+                })),
             ],
             right: vec![id("cost")],
         };

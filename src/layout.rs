@@ -13,6 +13,7 @@ pub struct LaidItem {
     pub category: Category,
     pub severity: Severity,
     pub color: Option<Color>,
+    pub fg: Option<Color>,
     /// 1 (dropped first) to 5 (kept longest).
     pub priority: u8,
 }
@@ -55,6 +56,7 @@ impl Slot<'_> {
             category: self.item.category,
             severity: self.item.severity,
             color: self.item.color,
+            fg: self.item.fg,
         })
     }
 }
@@ -190,6 +192,7 @@ mod tests {
             skin: SkinKind::Plain,
             glyphs: GlyphTier::Unicode,
             separator: Some(" | ".into()),
+            fill: crate::style::FillStyle::Solid,
         }
     }
 
@@ -200,6 +203,7 @@ mod tests {
             category: Category::Identity,
             severity: Severity::Normal,
             color: None,
+            fg: None,
             priority,
         }
     }

@@ -2,7 +2,7 @@
 //! migration, and the `--theme` override.
 
 use crate::presets;
-use crate::style::{BarGlyphs, ColorDepth, GlyphTier, SkinKind, palette};
+use crate::style::{BarGlyphs, ColorDepth, FillStyle, GlyphTier, SkinKind, palette};
 use crate::widgets::{Coloring, WidgetKind};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::borrow::Cow;
@@ -82,7 +82,7 @@ pub struct LayoutConfig {
 #[serde(untagged)]
 pub enum ItemSpec {
     Id(String),
-    Item(ItemConfig),
+    Item(Box<ItemConfig>),
 }
 
 impl ItemSpec {
@@ -92,7 +92,7 @@ impl ItemSpec {
                 metric: id.clone(),
                 ..ItemConfig::default()
             }),
-            ItemSpec::Item(c) => Cow::Borrowed(c),
+            ItemSpec::Item(c) => Cow::Borrowed(c.as_ref()),
         }
     }
 }
@@ -117,9 +117,14 @@ pub struct ItemConfig {
     /// Icon glyph; `""` for none.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub icon: Option<String>,
-    /// A palette token name or a color (`#rrggbb`, `256:n`, `16:n`, name).
+    /// A palette token name or a color (`#rrggbb`, `256:n`, `16:n`, name):
+    /// the item's color, which filled skins use as the background.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub color: Option<String>,
+    /// Text color, the same way: on the background in filled skins, next
+    /// to the icon in the others.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fg: Option<String>,
     /// Thresholds in percent, e.g. `[[50, "warn"], [80, "crit"]]`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub levels: Option<Vec<(f64, String)>>,
@@ -178,6 +183,8 @@ pub struct Config {
     pub preset: Option<String>,
     pub palette: String,
     pub skin: SkinKind,
+    /// How pill and powerline segments are colored.
+    pub fill: FillStyle,
     pub glyphs: GlyphTier,
     pub color_depth: DepthSetting,
     /// Separator for the plain skin.
@@ -205,6 +212,7 @@ impl Default for Config {
             preset: None,
             palette: "terminal".into(),
             skin: SkinKind::Plain,
+            fill: FillStyle::Solid,
             glyphs: GlyphTier::Nerd,
             color_depth: DepthSetting::Auto,
             separator: None,
@@ -318,25 +326,25 @@ const V1_THEMES: &[(&str, &str, SkinKind, GlyphTier)] = &[
     ("nord", "nord", SkinKind::Powerline, GlyphTier::Nerd),
     (
         "powerline-dark",
-        "tokyo-night",
+        "powerline-dark",
         SkinKind::Powerline,
         GlyphTier::Nerd,
     ),
     (
         "powerline-light",
-        "catppuccin-latte",
+        "powerline-light",
         SkinKind::Powerline,
         GlyphTier::Nerd,
     ),
     (
         "powerline-rose-pine",
-        "rose-pine",
+        "powerline-rose-pine",
         SkinKind::Powerline,
         GlyphTier::Nerd,
     ),
     (
         "powerline-tokyo-night",
-        "tokyo-night",
+        "powerline-tokyo-night",
         SkinKind::Powerline,
         GlyphTier::Nerd,
     ),
@@ -464,7 +472,7 @@ mod tests {
         let v1 = apply_theme(base.clone(), "powerline-rose-pine").unwrap();
         assert_eq!(
             (v1.palette.as_str(), v1.skin),
-            ("rose-pine", SkinKind::Powerline)
+            ("powerline-rose-pine", SkinKind::Powerline)
         );
         assert_eq!(v1.lines, base.lines);
         assert_eq!(

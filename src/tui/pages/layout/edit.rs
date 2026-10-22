@@ -256,7 +256,7 @@ fn tidy(mut config: ItemConfig) -> ItemSpec {
     if config == bare {
         ItemSpec::Id(config.metric)
     } else {
-        ItemSpec::Item(config)
+        ItemSpec::Item(Box::new(config))
     }
 }
 

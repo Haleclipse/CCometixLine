@@ -90,7 +90,9 @@ pub fn merge(pieces: Vec<Piece>) -> Vec<Piece> {
     let mut out: Vec<Piece> = Vec::with_capacity(pieces.len());
     for p in pieces {
         match out.last_mut() {
-            Some(last) if last.role == p.role && last.link == p.link => last.text.push_str(&p.text),
+            Some(last) if last.role == p.role && last.link == p.link && last.inset == p.inset => {
+                last.text.push_str(&p.text)
+            }
             _ => out.push(p),
         }
     }

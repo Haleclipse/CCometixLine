@@ -36,6 +36,18 @@ impl SkinKind {
     }
 }
 
+/// How filled skins color a segment when the palette doesn't set its
+/// colors itself.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum FillStyle {
+    /// The item's color as the background, text in a deep shade of it.
+    #[default]
+    Solid,
+    /// The item's color as the text, on a dark background tinted with it.
+    Tinted,
+}
+
 /// Everything about appearance that rendering needs.
 #[derive(Clone, Debug)]
 pub struct Theme {
@@ -44,6 +56,7 @@ pub struct Theme {
     pub glyphs: GlyphTier,
     /// Separator for the plain skin; `None` uses the default.
     pub separator: Option<String>,
+    pub fill: FillStyle,
 }
 
 impl Theme {
@@ -72,6 +85,9 @@ pub struct ItemView<'a> {
     pub severity: Severity,
     /// Replaces the category color.
     pub color: Option<Color>,
+    /// The text color: on the segment in filled skins, beside the icon in
+    /// the others.
+    pub fg: Option<Color>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -98,14 +114,117 @@ fn base_color(item: &ItemView, theme: &Theme) -> Option<Color> {
     item.color.or_else(|| theme.token(item.category.into()))
 }
 
-/// Background of a filled item: the severity color when it's a warning,
-/// otherwise the item's own color.
-fn fill_color(item: &ItemView, theme: &Theme) -> Option<Color> {
-    match item.severity {
-        Severity::Warn | Severity::Crit => {
-            severity_token(item.severity).and_then(|t| theme.token(t))
+/// WCAG relative luminance, 0..1.
+fn luminance(c: Color) -> f32 {
+    let (r, g, b) = c.to_rgb();
+    let lin = |v: u8| {
+        let v = v as f32 / 255.0;
+        if v <= 0.039_28 {
+            v / 12.92
+        } else {
+            ((v + 0.055) / 1.055).powf(2.4)
         }
-        _ => base_color(item, theme),
+    };
+    0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b)
+}
+
+/// WCAG contrast ratio, 1..21; 21 when either color is unknown, so
+/// nothing gets adjusted against the terminal's own colors.
+fn contrast(a: Option<Color>, b: Option<Color>) -> f32 {
+    let (Some(a), Some(b)) = (a, b) else {
+        return 21.0;
+    };
+    let (la, lb) = (luminance(a), luminance(b));
+    (la.max(lb) + 0.05) / (la.min(lb) + 0.05)
+}
+
+/// `from` moved toward `toward` just far enough to read on `bg`, keeping
+/// as much of its hue as it can.
+fn readable(from: Option<Color>, toward: Option<Color>, bg: Option<Color>) -> Option<Color> {
+    if contrast(from, bg) >= READABLE {
+        return from;
+    }
+    (1..=10)
+        .filter_map(|i| shade(from, toward, i as f32 / 10.0))
+        .find(|c| contrast(Some(*c), bg) >= READABLE)
+        .or(toward)
+}
+
+/// Text on `bg` when nothing sets it: a deep shade of the background
+/// toward the palette's `on_fill`, readable on it.
+fn ink_on(bg: Option<Color>, theme: &Theme) -> Option<Color> {
+    let on_fill = theme.token(Token::OnFill);
+    readable(shade(bg, on_fill, INK).or(on_fill), on_fill, bg)
+}
+
+/// A filled item's background and text. In order: the palette's segment
+/// colors for the category (unless the item has its own color), then the
+/// fill style; colors worked out rather than set are kept readable. A
+/// warning or error turns the text its color when that reads on the
+/// background, else the background.
+fn segment(item: &ItemView, theme: &Theme) -> (Option<Color>, Option<Color>) {
+    let main = base_color(item, theme);
+    let (own_bg, own_fg) = match item.color {
+        Some(_) => (None, None),
+        None => (
+            theme.token(Token::SegBg(item.category)),
+            theme.token(Token::SegFg(item.category)),
+        ),
+    };
+    let (bg, fg) = match theme.fill {
+        FillStyle::Solid => {
+            let bg = own_bg.or(main);
+            (bg, own_fg.or_else(|| ink_on(bg, theme)))
+        }
+        FillStyle::Tinted => {
+            let surface = theme.token(Token::Bg).or(theme.token(Token::OnFill));
+            let bg = own_bg.or_else(|| shade(surface, main, TINT).or(surface));
+            let fg = own_fg.or_else(|| readable(main, theme.token(Token::Text), bg));
+            (bg, fg)
+        }
+    };
+    let fg = item.fg.or(fg);
+    let Some(sev) = severity_token(item.severity)
+        .filter(|_| matches!(item.severity, Severity::Warn | Severity::Crit))
+        .and_then(|t| theme.token(t))
+    else {
+        return (bg, fg);
+    };
+    // Text someone chose stays if it reads; worked-out text follows the
+    // new background.
+    let chosen = item.fg.or(own_fg);
+    if contrast(Some(sev), bg) >= SEVERITY_TEXT {
+        (bg, Some(sev))
+    } else if chosen.is_some() && contrast(chosen, Some(sev)) >= READABLE {
+        (Some(sev), chosen)
+    } else {
+        (Some(sev), ink_on(Some(sev), theme))
+    }
+}
+
+/// Share of the text color mixed into a segment's background: for a solid
+/// bar's track, and for unfilled graph cells, quiet text and a pace bar's
+/// elapsed half.
+const TRACK: f32 = 0.22;
+const MID: f32 = 0.5;
+/// Share of `on_fill` in default text on a solid segment, before making
+/// sure it reads.
+const INK: f32 = 0.75;
+/// Contrast text needs on its background (WCAG AA for normal text).
+const READABLE: f32 = 4.5;
+/// Contrast a warning color needs to be shown as text on the segment.
+const SEVERITY_TEXT: f32 = 3.0;
+/// Share of the item's color in a tinted segment's background.
+const TINT: f32 = 0.22;
+
+/// `bg` moved toward `ink` by `amount`; `None` unless both are RGB, since
+/// terminal colors can't be mixed.
+fn shade(bg: Option<Color>, ink: Option<Color>, amount: f32) -> Option<Color> {
+    match (bg?, ink?) {
+        (bg @ Color::Rgb(..), ink @ Color::Rgb(..)) => {
+            Some(lerp(bg.to_rgb(), ink.to_rgb(), amount))
+        }
+        _ => None,
     }
 }
 
@@ -142,52 +261,84 @@ pub fn gradient(theme: &Theme, t: f32) -> Option<Color> {
 
 /// Style each piece of an item.
 pub fn paint(item: &ItemView, theme: &Theme) -> Vec<Span> {
-    let filled = theme.skin().filled();
     let base = base_color(item, theme);
     let sev = severity_token(item.severity).and_then(|t| theme.token(t));
     let muted = theme.token(Token::Muted);
-    let bg = filled.then(|| fill_color(item, theme)).flatten();
-    let on_fill = theme.token(Token::OnFill);
-
-    item.pieces
-        .iter()
-        .map(|p| {
-            let style = if let Role::Pace { used, elapsed } = p.role {
-                // Top half: usage. Bottom half: time passed in the window.
-                let track = if filled { on_fill } else { muted };
-                Style {
-                    fg: if used { sev.or(base) } else { track },
-                    bg: if elapsed { muted } else { bg },
-                    dim: !used && filled,
-                    ..Style::default()
-                }
-            } else if filled {
-                let dim = matches!(p.role, Role::Empty | Role::Muted);
-                Style {
-                    fg: on_fill,
-                    bg,
-                    bold: p.role == Role::Strong,
-                    dim,
-                    ..Style::default()
-                }
-            } else {
+    if !theme.skin().filled() {
+        return item
+            .pieces
+            .iter()
+            .map(|p| {
                 let fg = match p.role {
                     Role::Icon => base,
-                    Role::Text | Role::Strong => sev.or(base),
+                    Role::Text | Role::Strong => sev.or(item.fg).or(base),
                     Role::Muted | Role::Empty => muted,
                     Role::Fill(s) => severity_token(s).and_then(|t| theme.token(t)).or(base),
                     Role::Gradient(t) => gradient(theme, t),
                     Role::Good => theme.token(Token::Ok),
                     Role::Bad => theme.token(Token::Crit),
-                    Role::Pace { .. } => unreachable!("handled above"),
+                    Role::Pace { used, .. } => {
+                        if used {
+                            sev.or(base)
+                        } else {
+                            muted
+                        }
+                    }
                 };
-                Style {
+                let bg = match p.role {
+                    Role::Pace { elapsed: true, .. } => muted,
+                    _ => None,
+                };
+                let style = Style {
                     fg,
+                    bg,
                     bold: p.role == Role::Strong,
                     ..Style::default()
-                }
+                };
+                Span::styled(p.text.clone(), style).with_link(p.link.clone())
+            })
+            .collect();
+    }
+
+    // Everything in a segment is a tone between its background and text,
+    // so bars and quiet text match whatever colors the segment has. Where
+    // colors can't be mixed, quiet text is dimmed and tracks are muted.
+    let (bg, fg) = segment(item, theme);
+    let track = shade(bg, fg, TRACK).or(muted);
+    let mid = shade(bg, fg, MID);
+    let style = |fg, bg| Style {
+        fg,
+        bg,
+        ..Style::default()
+    };
+    item.pieces
+        .iter()
+        .map(|p| {
+            let s = match (p.role, p.inset) {
+                // Top half: usage. Bottom half: time passed in the window.
+                (Role::Pace { used, elapsed }, _) => style(
+                    if used { fg } else { track },
+                    if elapsed { mid.or(muted) } else { track },
+                ),
+                // A solid bar sits in a track; its frame is the track's ends.
+                (Role::Muted, true) => style(track, bg),
+                (Role::Empty, true) => style(track, track),
+                (Role::Gradient(t), true) => style(gradient(theme, t).or(fg), track),
+                (_, true) => style(fg, track),
+                (Role::Muted | Role::Empty, false) => Style {
+                    fg: mid.or(fg),
+                    bg,
+                    dim: mid.is_none(),
+                    ..Style::default()
+                },
+                (role, false) => Style {
+                    fg,
+                    bg,
+                    bold: role == Role::Strong,
+                    ..Style::default()
+                },
             };
-            Span::styled(p.text.clone(), style).with_link(p.link.clone())
+            Span::styled(p.text.clone(), s).with_link(p.link.clone())
         })
         .collect()
 }
@@ -223,7 +374,7 @@ pub fn compose(items: &[ItemView], side: Side, theme: &Theme) -> Line {
                 if i > 0 {
                     line.push(Span::raw(" "));
                 }
-                let bg = fill_color(item, theme);
+                let bg = segment(item, theme).0;
                 let cap = Style {
                     fg: bg,
                     ..Style::default()
@@ -236,7 +387,7 @@ pub fn compose(items: &[ItemView], side: Side, theme: &Theme) -> Line {
             }
         }
         SkinKind::Powerline => {
-            let bgs: Vec<Option<Color>> = items.iter().map(|i| fill_color(i, theme)).collect();
+            let bgs: Vec<Option<Color>> = items.iter().map(|i| segment(i, theme).0).collect();
             for (i, item) in items.iter().enumerate() {
                 if side == Side::Right {
                     let prev = if i > 0 { bgs[i - 1] } else { None };
@@ -281,6 +432,7 @@ mod tests {
             skin,
             glyphs,
             separator: None,
+            fill: FillStyle::Solid,
         }
     }
 
@@ -290,6 +442,7 @@ mod tests {
             category: Category::Identity,
             severity: Severity::Normal,
             color: None,
+            fg: None,
         }
     }
 
@@ -342,10 +495,90 @@ mod tests {
             paint(&it, &plain)[0].style.fg,
             plain.palette.get(Token::Crit)
         );
+        // Red text wouldn't read on a light segment, so the segment turns
+        // red, with text worked out for red.
         let pill = theme(SkinKind::Pill, GlyphTier::Nerd);
         let span = &paint(&it, &pill)[0];
-        assert_eq!(span.style.bg, pill.palette.get(Token::Crit));
-        assert_eq!(span.style.fg, pill.palette.get(Token::OnFill));
+        let crit = pill.palette.get(Token::Crit);
+        assert_eq!(span.style.bg, crit);
+        assert_eq!(span.style.fg, ink_on(crit, &pill));
+        assert!(contrast(span.style.fg, crit) >= READABLE);
+        // A dark segment keeps its background and turns its text red.
+        let tinted = Theme {
+            fill: FillStyle::Tinted,
+            ..pill
+        };
+        let span = &paint(&it, &tinted)[0];
+        assert_eq!(span.style.fg, crit);
+        assert_ne!(span.style.bg, crit);
+        // White text on a bright segment: red text wouldn't read, so the
+        // segment turns red and keeps its white text.
+        let light = Theme {
+            palette: palette::builtin("powerline-light").unwrap(),
+            ..theme(SkinKind::Powerline, GlyphTier::Nerd)
+        };
+        it.category = Category::Vcs;
+        let span = &paint(&it, &light)[0];
+        assert_eq!(span.style.bg, light.palette.get(Token::Crit));
+        assert_eq!(span.style.fg, Color::parse("#ffffff"));
+    }
+
+    #[test]
+    fn segments_take_palette_item_and_fill_style_colors() {
+        let p = [Piece::new("x", Role::Text)];
+        let pill = theme(SkinKind::Pill, GlyphTier::Nerd);
+        let identity = pill.palette.get(Token::Identity);
+        let on_fill = pill.palette.get(Token::OnFill);
+
+        // Solid: the category color behind text in a deep shade of it.
+        let (bg, fg) = segment(&item(&p), &pill);
+        assert_eq!(bg, identity);
+        assert_eq!(fg, ink_on(identity, &pill));
+        assert_ne!(fg, on_fill);
+        assert!(contrast(fg, bg) >= READABLE);
+
+        // Tinted: the category color as text on a dark tinted surface.
+        let tinted = Theme {
+            fill: FillStyle::Tinted,
+            ..pill.clone()
+        };
+        let (bg, fg) = segment(&item(&p), &tinted);
+        assert_eq!(fg, identity);
+        assert!(luminance(bg.unwrap()) < luminance(identity.unwrap()));
+        assert!(contrast(fg, bg) >= READABLE);
+
+        // The palette's own segment colors win over the fill style.
+        let v1 = Theme {
+            palette: palette::builtin("powerline-tokyo-night").unwrap(),
+            ..pill.clone()
+        };
+        let (bg, fg) = segment(&item(&p), &v1);
+        assert_eq!(bg, Color::parse("#191b29"));
+        assert_eq!(fg, Color::parse("#fca7ea"));
+
+        // An item's own text color wins over everything.
+        let mut own = item(&p);
+        own.fg = Color::parse("#00ff00");
+        assert_eq!(segment(&own, &v1).1, own.fg);
+        assert_eq!(paint(&own, &v1)[0].style.fg, own.fg);
+    }
+
+    #[test]
+    fn solid_bars_sit_in_a_track() {
+        let pieces = [
+            Piece::new("██", Role::Fill(Severity::Normal)).inset(),
+            Piece::new("  ", Role::Empty).inset(),
+        ];
+        let pill = theme(SkinKind::Pill, GlyphTier::Nerd);
+        let it = item(&pieces);
+        let (bg, fg) = segment(&it, &pill);
+        let spans = paint(&it, &pill);
+        let track = shade(bg, fg, TRACK);
+        assert_eq!((spans[0].style.fg, spans[0].style.bg), (fg, track));
+        assert_eq!((spans[1].style.fg, spans[1].style.bg), (track, track));
+        // Plain skins ignore the track.
+        let plain = theme(SkinKind::Plain, GlyphTier::Nerd);
+        assert_eq!(paint(&it, &plain)[1].style.bg, None);
     }
 
     #[test]

@@ -193,6 +193,12 @@ impl BarGlyphs {
         }
     }
 
+    /// Whether filled cells cover the whole cell, so the bar is a solid
+    /// block rather than a row of shapes.
+    pub fn solid(self) -> bool {
+        matches!(self, BarGlyphs::Blocks | BarGlyphs::Eighths)
+    }
+
     /// Characters drawn around the bar.
     pub fn frame(self) -> (&'static str, &'static str) {
         match self {

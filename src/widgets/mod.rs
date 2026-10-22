@@ -156,9 +156,11 @@ fn bar(ratio: f64, props: &Props, sev: Severity, tier: GlyphTier) -> Vec<Piece> 
     let cells = props.cells.max(1);
     let filled = ratio.clamp(0.0, 1.0) * cells as f64;
     let (open, close) = set.frame();
+    // Solid bars get a track behind them in filled skins.
+    let mark = |p: Piece| if set.solid() { p.inset() } else { p };
     let mut out = Vec::new();
     if !open.is_empty() {
-        out.push(Piece::new(open, Role::Muted));
+        out.push(mark(Piece::new(open, Role::Muted)));
     }
     for i in 0..cells {
         let fill_role = match props.coloring {
@@ -180,10 +182,10 @@ fn bar(ratio: f64, props: &Props, sev: Severity, tier: GlyphTier) -> Vec<Piece> 
         } else {
             Piece::new(set.empty(), Role::Empty)
         };
-        out.push(piece);
+        out.push(mark(piece));
     }
     if !close.is_empty() {
-        out.push(Piece::new(close, Role::Muted));
+        out.push(mark(Piece::new(close, Role::Muted)));
     }
     out
 }

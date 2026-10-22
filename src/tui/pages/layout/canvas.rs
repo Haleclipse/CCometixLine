@@ -272,11 +272,11 @@ mod tests {
     fn labels_and_fates() {
         let mut opts = toml::Table::new();
         opts.insert("run".into(), "uptime | awk '{print $3}'".into());
-        let cmd = ItemSpec::Item(ItemConfig {
+        let cmd = ItemSpec::Item(Box::new(ItemConfig {
             metric: "cmd".into(),
             options: Some(opts),
             ..ItemConfig::default()
-        });
+        }));
         assert_eq!(label(&cmd), "cmd uptime | awk …");
         assert_eq!(label(&ItemSpec::Id("git".into())), "git");
 

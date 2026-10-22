@@ -43,6 +43,9 @@ pub struct Piece {
     pub text: String,
     pub role: Role,
     pub link: Option<String>,
+    /// A cell of a bar drawn in solid blocks. Filled skins sink these into a
+    /// track so the bar reads as a meter rather than a hole in the pill.
+    pub inset: bool,
 }
 
 impl Piece {
@@ -51,7 +54,13 @@ impl Piece {
             text: text.into(),
             role,
             link: None,
+            inset: false,
         }
+    }
+
+    pub fn inset(mut self) -> Self {
+        self.inset = true;
+        self
     }
 
     pub fn with_link(mut self, link: Option<String>) -> Self {

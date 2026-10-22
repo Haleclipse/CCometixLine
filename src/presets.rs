@@ -154,10 +154,10 @@ left = [
     },
     Preset {
         name: "powerline",
-        summary: "Powerline segments with a quota gauge",
+        summary: "Powerline segments with a quota gauge, in v1's Tokyo Night colors",
         tags: &["powerline", "quota"],
         toml: r#"
-palette = "tokyo-night"
+palette = "powerline-tokyo-night"
 skin = "powerline"
 glyphs = "nerd"
 
@@ -200,8 +200,8 @@ pub enum Parts {
     All,
     /// The `[[line]]` layout only.
     Layout,
-    /// Skin, palette, glyphs, color depth and separator; palette overrides
-    /// are dropped since they belong to the old palette.
+    /// Skin, fill, palette and its overrides, glyphs, color depth and
+    /// separator; the old palette's overrides go with it.
     Style,
 }
 
@@ -215,10 +215,11 @@ pub fn apply(config: &Config, preset: &Config, parts: Parts) -> Config {
     if parts != Parts::Layout {
         out.palette = preset.palette.clone();
         out.skin = preset.skin;
+        out.fill = preset.fill;
         out.glyphs = preset.glyphs;
         out.color_depth = preset.color_depth;
         out.separator = preset.separator.clone();
-        out.palette_overrides.clear();
+        out.palette_overrides = preset.palette_overrides.clone();
     }
     if parts == Parts::All {
         out.preset = preset.preset.clone();
