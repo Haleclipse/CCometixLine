@@ -106,7 +106,20 @@ fn all() -> Vec<Command> {
         if id.starts_with("task.") {
             continue;
         }
-        out.push(edit("Layout", format!("add {id}"), move |c| {
+        // Like the library: on the lines once, or not at all.
+        out.push(edit("Layout", format!("add or remove {id}"), move |c| {
+            let had = c
+                .lines
+                .iter()
+                .flat_map(|l| l.left.iter().chain(&l.right))
+                .any(|s| s.config().metric == id);
+            if had && id != "cmd" {
+                for line in &mut c.lines {
+                    line.left.retain(|s| s.config().metric != id);
+                    line.right.retain(|s| s.config().metric != id);
+                }
+                return;
+            }
             if c.lines.is_empty() {
                 c.lines.push(LineConfig::default());
             }
@@ -292,13 +305,25 @@ mod tests {
             Reply::Then(Action::Goto(PageId::Layout))
         ));
 
-        let mut c = Commands::default();
-        for ch in "add cost.today".chars() {
-            c.handle(key(KeyCode::Char(ch)), &mut doc);
-        }
-        c.handle(key(KeyCode::Enter), &mut doc);
+        let run = |doc: &mut Doc| {
+            let mut c = Commands::default();
+            for ch in "remove cost.today".chars() {
+                c.handle(key(KeyCode::Char(ch)), doc);
+            }
+            c.handle(key(KeyCode::Enter), doc);
+        };
+        run(&mut doc);
         let last = doc.config.lines.last().unwrap();
         assert_eq!(last.left.last(), Some(&ItemSpec::Id("cost.today".into())));
+        // Run again, it comes off: never twice.
+        run(&mut doc);
+        let all: Vec<_> = doc
+            .config
+            .lines
+            .iter()
+            .flat_map(|l| l.left.iter())
+            .collect();
+        assert!(!all.contains(&&ItemSpec::Id("cost.today".into())));
         std::fs::remove_dir_all(&dir).unwrap();
     }
 }

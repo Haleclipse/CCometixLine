@@ -88,7 +88,8 @@ pub enum Row {
 }
 
 pub enum Key {
-    Add(&'static Metric),
+    /// Add the metric, or remove it if the lines have it.
+    Toggle(&'static Metric),
     Consumed,
     Ignored,
 }
@@ -216,7 +217,7 @@ impl Library {
             },
             KeyCode::Enter | KeyCode::Char(' ') => match row {
                 Row::Group { cat, open, .. } => self.toggle(cat, !open),
-                Row::Metric(m) => return Key::Add(m),
+                Row::Metric(m) => return Key::Toggle(m),
             },
             _ => return Key::Ignored,
         }
@@ -279,7 +280,7 @@ impl Library {
                     Row::Group {
                         name, count, open, ..
                     } => {
-                        let arrow = if *open { "▾" } else { "▸" };
+                        let arrow = if *open { "▼" } else { "▶" };
                         let label = format!("{arrow} {name}");
                         let count = count.to_string();
                         let gap = width.saturating_sub(2 + label.chars().count() + count.len() + 1);
@@ -353,7 +354,7 @@ mod tests {
         lib.handle(key(KeyCode::Enter));
         assert!(matches!(lib.rows()[1], Row::Metric(m) if m.meta.id == "model"));
         lib.handle(key(KeyCode::Down));
-        assert!(matches!(lib.handle(key(KeyCode::Enter)), Key::Add(m) if m.meta.id == "model"));
+        assert!(matches!(lib.handle(key(KeyCode::Enter)), Key::Toggle(m) if m.meta.id == "model"));
         lib.handle(key(KeyCode::Left));
         assert_eq!(lib.rows().len(), GROUPS.len());
 

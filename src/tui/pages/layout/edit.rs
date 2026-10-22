@@ -224,6 +224,27 @@ pub fn move_line(
     Some(Cursor { line: to, pos })
 }
 
+/// Whether any line has an item of `metric`.
+pub fn has_metric(lines: &[LineConfig], metric: &str) -> bool {
+    lines
+        .iter()
+        .flat_map(|l| l.left.iter().chain(&l.right))
+        .any(|s| s.config().metric == metric)
+}
+
+/// Remove every item of `metric`; returns how many there were.
+pub fn remove_metric(lines: &mut [LineConfig], metric: &str) -> usize {
+    let mut removed = 0;
+    for line in lines {
+        for side in [&mut line.left, &mut line.right] {
+            let before = side.len();
+            side.retain(|s| s.config().metric != metric);
+            removed += before - side.len();
+        }
+    }
+    removed
+}
+
 /// Add an empty line after `line`; returns the cursor on it.
 pub fn new_line(lines: &mut Vec<LineConfig>, line: usize) -> Cursor {
     let at = (line + 1).min(lines.len());
@@ -339,6 +360,11 @@ mod tests {
             c.options = Some(toml::Table::new());
         });
         assert_eq!(ls[0].left[0], id("git"));
+
+        let mut two = vec![line(&["model", "git"], &["git"])];
+        assert!(has_metric(&two, "git") && !has_metric(&two, "cost"));
+        assert_eq!(remove_metric(&mut two, "git"), 2);
+        assert_eq!(two[0], line(&["model"], &[]));
 
         let mut config = Config::default();
         assert_eq!(

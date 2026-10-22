@@ -207,14 +207,27 @@ impl LayoutPage {
             return Outcome::Consumed;
         }
         match self.lib.handle(key) {
-            library::Key::Add(m) => self.add(m, doc, env),
+            library::Key::Toggle(m) => self.toggle(m, doc, env),
             library::Key::Consumed => Outcome::Consumed,
             library::Key::Ignored => Outcome::Ignored,
         }
     }
 
-    fn add(&mut self, m: &'static Metric, doc: &mut Doc, env: &Env) -> Outcome {
+    /// Add a metric, or take it off the lines when they have it already:
+    /// nobody needs the same item twice. Commands are the exception, each
+    /// running its own command line.
+    fn toggle(&mut self, m: &'static Metric, doc: &mut Doc, env: &Env) -> Outcome {
         let id = m.meta.id;
+        let lines = edit::lines(&doc.config, self.target);
+        if id != "cmd" && edit::has_metric(&lines, id) {
+            let target = self.target;
+            doc.edit(|c, _| {
+                edit::edit_lines(c, target, |lines| edit::remove_metric(lines, id));
+            });
+            let lines = edit::lines(&doc.config, self.target);
+            self.cursor = edit::clamp(&lines, self.cursor, self.grow());
+            return Outcome::Toast(format!("Removed {id}"));
+        }
         match library::avail(&m.meta, self.target, env.cc_version()) {
             Avail::Needs(v) => return Outcome::Toast(format!("{id} needs Claude Code {v}")),
             Avail::TaskOnly => {
@@ -543,7 +556,7 @@ impl Page for LayoutPage {
         match self.pane {
             Pane::Library => vec![
                 ("tab", "pane"),
-                ("enter", "add"),
+                ("enter", "add/remove"),
                 ("←→", "fold"),
                 ("/", "search"),
                 ("t", "switch line"),
@@ -614,7 +627,7 @@ mod tests {
             "Inspector",
             "Line 1",
             "Fits in",
-            "▸ Identity",
+            "▶ Identity",
         ] {
             assert!(s.contains(text), "{text}: {s}");
         }
@@ -629,9 +642,20 @@ mod tests {
         let mut want = left.clone();
         want.insert(1, "effort".into());
         assert_eq!(ids(&app.doc.config.lines[0]).0, want);
+        // Enter again takes it off rather than adding a second one.
+        app.handle_key(key(KeyCode::Enter));
+        assert_eq!(ids(&app.doc.config.lines[0]).0, left);
+        app.handle_key(key(KeyCode::Enter));
+        let (l, _) = ids(&app.doc.config.lines[0]);
+        assert_eq!(l.iter().filter(|m| *m == "effort").count(), 1);
+        app.handle_key(ctrl('z'));
+        app.handle_key(ctrl('z'));
+        assert_eq!(ids(&app.doc.config.lines[0]).0, want);
 
         // Canvas: move it to the end of the left side, then over to the right.
+        // The cursor still sits where the second add put effort.
         app.handle_key(key(KeyCode::Tab));
+        app.handle_key(key(KeyCode::Left));
         for _ in 0..left.len() {
             app.handle_key(alt(KeyCode::Right));
         }
