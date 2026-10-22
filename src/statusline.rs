@@ -1,14 +1,15 @@
 //! The render pipeline: config + input → metrics → widgets → layout → lines.
 
-use crate::config::{Config, ItemConfig, ItemSpec};
+use crate::config::{Config, ItemConfig, ItemSpec, LineConfig};
 use crate::env::{AutoCompact, ClaudeSettings};
-use crate::input::{Input, SubagentInput};
+use crate::input::{Input, SubagentInput, Task};
 use crate::layout::{self, LaidItem, LineSpec};
 use crate::metrics::{self, Commands, Ctx, GitSource, Options};
 use crate::models::Registry;
 use crate::render::span::{Line, Span, Style};
 use crate::state::StateView;
 use crate::style::palette::{self, Palette, Token};
+use crate::style::skin::{ItemView, Side, compose};
 use crate::style::{Color, Severity, Theme, glyphs};
 use crate::version;
 use crate::widgets::{self, Level, Props};
@@ -81,14 +82,95 @@ pub fn lines(input: &Input, config: &Config, registry: &Registry, frame: Frame) 
     config
         .lines
         .iter()
-        .map(|line| {
-            let spec = LineSpec {
-                left: items(&line.left, &ctx, &theme),
-                right: items(&line.right, &ctx, &theme),
-            };
-            layout::fit(&spec, frame.width, &theme)
-        })
+        .map(|line| layout::fit(&line_spec(line, &ctx, &theme).0, frame.width, &theme))
         .collect()
+}
+
+/// What the layout made of one configured line, for the composer.
+#[derive(Clone, Debug, Default)]
+pub struct Report {
+    pub line: Line,
+    /// Columns the line needs with every item at its fullest.
+    pub natural: usize,
+    /// The layout's steps, with `index` pointing into the config's side.
+    pub steps: Vec<layout::Step>,
+    /// Config entries with nothing to show for this input.
+    pub empty: Vec<(Side, usize)>,
+}
+
+/// Lay out `line` as `lines` would, reporting each step it took; `task`
+/// is the background task for a subagent line.
+pub fn report(
+    input: &Input,
+    task: Option<&Task>,
+    config: &Config,
+    registry: &Registry,
+    frame: &Frame,
+    line: &LineConfig,
+) -> Report {
+    let theme = theme(config);
+    let mut ctx = context(input, registry, frame, &theme);
+    if let Some(task) = task {
+        ctx = ctx.with_task(task);
+    }
+    let (spec, [left, right]) = line_spec(line, &ctx, &theme);
+    let plan = layout::plan(&spec, frame.width, &theme);
+    let source = |side: Side, i: usize| match side {
+        Side::Left => left[i],
+        Side::Right => right[i],
+    };
+    let empty = [
+        (Side::Left, &line.left, &left),
+        (Side::Right, &line.right, &right),
+    ]
+    .into_iter()
+    .flat_map(|(side, all, shown)| {
+        (0..all.len())
+            .filter(|i| !shown.contains(i))
+            .map(move |i| (side, i))
+    })
+    .collect();
+    Report {
+        line: plan.line,
+        natural: plan.natural,
+        steps: plan
+            .steps
+            .into_iter()
+            .map(|s| layout::Step {
+                index: source(s.side, s.index),
+                ..s
+            })
+            .collect(),
+        empty,
+    }
+}
+
+/// `item` drawn on its own at each level, `None` where it has nothing;
+/// `None` overall when it shows nothing for this input.
+pub fn item_levels(
+    input: &Input,
+    task: Option<&Task>,
+    config: &Config,
+    registry: &Registry,
+    frame: &Frame,
+    item: &ItemConfig,
+) -> Option<[Option<Line>; 3]> {
+    let theme = theme(config);
+    let mut ctx = context(input, registry, frame, &theme);
+    if let Some(task) = task {
+        ctx = ctx.with_task(task);
+    }
+    let laid = lay_item(item, &ctx, &theme)?;
+    Some(Level::ALL.map(|level| {
+        let pieces = laid.variants[level.index()].as_deref()?;
+        let view = ItemView {
+            pieces,
+            category: laid.category,
+            severity: laid.severity,
+            color: laid.color,
+        };
+        Some(compose(&[view], Side::Left, &theme))
+    }))
 }
 
 fn context<'a>(input: &'a Input, registry: &'a Registry, frame: &Frame, theme: &Theme) -> Ctx<'a> {
@@ -120,20 +202,25 @@ pub fn subagent_lines(
         .map(|task| {
             let input = task.input(payload);
             let ctx = context(&input, registry, &frame, &theme).with_task(task);
-            let spec = LineSpec {
-                left: items(&line.left, &ctx, &theme),
-                right: items(&line.right, &ctx, &theme),
-            };
+            let spec = line_spec(&line, &ctx, &theme).0;
             (task.id.clone(), layout::fit(&spec, width, &theme))
         })
         .collect()
 }
 
-fn items(specs: &[ItemSpec], ctx: &Ctx, theme: &Theme) -> Vec<LaidItem> {
-    specs
-        .iter()
-        .filter_map(|s| lay_item(&s.config(), ctx, theme))
-        .collect()
+/// The laid-out items of `line`, and for each side the config entries
+/// they came from (entries with nothing to show are skipped).
+fn line_spec(line: &LineConfig, ctx: &Ctx, theme: &Theme) -> (LineSpec, [Vec<usize>; 2]) {
+    let side = |specs: &[ItemSpec]| -> (Vec<LaidItem>, Vec<usize>) {
+        specs
+            .iter()
+            .enumerate()
+            .filter_map(|(i, s)| Some((lay_item(&s.config(), ctx, theme)?, i)))
+            .unzip()
+    };
+    let (left, left_src) = side(&line.left);
+    let (right, right_src) = side(&line.right);
+    (LineSpec { left, right }, [left_src, right_src])
 }
 
 fn parse_severity(name: &str) -> Option<Severity> {
@@ -243,6 +330,74 @@ mod tests {
         assert_eq!(
             out,
             vec!["ccline needs Claude Code 2.1.153 or newer (running 2.1.140)"]
+        );
+    }
+
+    #[test]
+    fn reports_steps_by_config_entry() {
+        let s = scenarios::find("normal").unwrap();
+        let frame = |width| Frame {
+            now: scenarios::BASE,
+            tz: FixedOffset::east_opt(0).unwrap(),
+            width,
+            git: GitSource::Fixed(s.git()),
+            state: s.state(scenarios::BASE),
+            compact: AutoCompact::default(),
+            commands: Commands::Show,
+        };
+        let mut config = presets::get("classic").unwrap();
+        config.glyphs = crate::style::GlyphTier::Ascii;
+        let id = |m: &str| ItemSpec::Id(m.into());
+        // `vim` has nothing in this scenario, so `git` is entry 2 but item 1.
+        let line = LineConfig {
+            left: vec![
+                id("model"),
+                id("vim"),
+                ItemSpec::Item(ItemConfig {
+                    metric: "git".into(),
+                    priority: Some(1),
+                    ..ItemConfig::default()
+                }),
+            ],
+            right: vec![id("cost")],
+        };
+        let input = s.input(scenarios::BASE);
+        let reg = Registry::default();
+        let r = report(&input, None, &config, &reg, &frame(Some(80)), &line);
+        assert_eq!(r.empty, vec![(Side::Left, 1)]);
+        assert!(r.steps.is_empty());
+        assert!(r.natural < 80);
+
+        let narrow = r.natural - 1;
+        let r = report(&input, None, &config, &reg, &frame(Some(narrow)), &line);
+        let first = r.steps[0];
+        assert_eq!((first.side, first.index), (Side::Left, 2));
+        assert_eq!(first.from, Level::Full);
+
+        let levels = item_levels(
+            &input,
+            None,
+            &config,
+            &reg,
+            &frame(None),
+            &id("git").config(),
+        )
+        .unwrap();
+        let text: Vec<String> = levels
+            .iter()
+            .map(|l| l.as_ref().map(|l| line_text(l)).unwrap_or_default())
+            .collect();
+        assert_eq!(text, vec!["main * +2", "main*", "main"]);
+        assert!(
+            item_levels(
+                &input,
+                None,
+                &config,
+                &reg,
+                &frame(None),
+                &id("vim").config()
+            )
+            .is_none()
         );
     }
 

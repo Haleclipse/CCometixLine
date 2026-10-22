@@ -26,6 +26,8 @@ pub struct LineSpec {
 struct Slot<'a> {
     item: &'a LaidItem,
     side: Side,
+    /// Position within its side.
+    index: usize,
     order: usize,
     level: Option<Level>,
 }
@@ -57,30 +59,71 @@ impl Slot<'_> {
     }
 }
 
+/// One step taken to make a line fit: an item moved down a level, or was
+/// dropped.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Step {
+    pub side: Side,
+    /// Position within its side of the `LineSpec`.
+    pub index: usize,
+    pub from: Level,
+    /// `None` when the item was dropped.
+    pub to: Option<Level>,
+}
+
+/// A laid-out line and how it got there.
+#[derive(Clone, Debug, Default)]
+pub struct Plan {
+    pub line: Line,
+    /// Columns the line needs with every item at its fullest.
+    pub natural: usize,
+    /// Steps in the order they were taken; empty when the line fit.
+    pub steps: Vec<Step>,
+}
+
 /// Lay out one line. With `budget = None` (width unknown) nothing is dropped
 /// and right-side items simply follow the left ones.
 pub fn fit(spec: &LineSpec, budget: Option<usize>, theme: &Theme) -> Line {
+    plan(spec, budget, theme).line
+}
+
+/// Lay out one line like `fit`, recording each step down.
+pub fn plan(spec: &LineSpec, budget: Option<usize>, theme: &Theme) -> Plan {
     let mut slots: Vec<Slot> = spec
         .left
         .iter()
-        .map(|i| (i, Side::Left))
-        .chain(spec.right.iter().map(|i| (i, Side::Right)))
         .enumerate()
-        .map(|(order, (item, side))| Slot {
+        .map(|(i, item)| (i, item, Side::Left))
+        .chain(
+            spec.right
+                .iter()
+                .enumerate()
+                .map(|(i, item)| (i, item, Side::Right)),
+        )
+        .enumerate()
+        .map(|(order, (index, item, side))| Slot {
             item,
             side,
+            index,
             order,
             level: Slot::first_level(item),
         })
         .collect();
+    let natural = line_width(&assemble(&slots, Some(0), theme));
+    let mut steps = Vec::new();
 
     loop {
         let line = assemble(&slots, budget, theme);
+        let done = |line: Line, steps: Vec<Step>| Plan {
+            line,
+            natural,
+            steps,
+        };
         let Some(budget) = budget else {
-            return line;
+            return done(line, steps);
         };
         if line_width(&line) <= budget {
-            return line;
+            return done(line, steps);
         }
         // Lowest priority first; on ties the right side, then later items.
         let next = slots
@@ -94,8 +137,17 @@ pub fn fit(spec: &LineSpec, budget: Option<usize>, theme: &Theme) -> Line {
                 )
             });
         match next {
-            Some(slot) => slot.step(),
-            None => return Line::new(),
+            Some(slot) => {
+                let from = slot.level.unwrap_or(Level::Full);
+                slot.step();
+                steps.push(Step {
+                    side: slot.side,
+                    index: slot.index,
+                    from,
+                    to: slot.level,
+                });
+            }
+            None => return done(Line::new(), steps),
         }
     }
 }
@@ -202,6 +254,30 @@ mod tests {
             format!("Opus 4.8 | ctx 62% · 124k{}$1", gap(2))
         );
         assert_eq!(fit_text(Some(20)), "Opus 4.8 | 62%");
+    }
+
+    #[test]
+    fn plan_records_each_step() {
+        let s = spec();
+        let p = plan(&s, Some(32), &theme());
+        assert_eq!(p.natural, 43);
+        let step = |side, index, from, to| Step {
+            side,
+            index,
+            from,
+            to,
+        };
+        assert_eq!(
+            p.steps,
+            vec![
+                step(Side::Left, 2, Level::Full, Some(Level::Compact)),
+                step(Side::Left, 2, Level::Compact, Some(Level::Minimal)),
+                step(Side::Left, 2, Level::Minimal, None),
+            ]
+        );
+        assert_eq!(line_text(&p.line), line_text(&fit(&s, Some(32), &theme())));
+        assert!(plan(&s, Some(50), &theme()).steps.is_empty());
+        assert!(plan(&s, None, &theme()).steps.is_empty());
     }
 
     #[test]
