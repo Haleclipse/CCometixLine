@@ -118,9 +118,16 @@ impl App {
 
         self.preview.fit = inner.width;
         let registry = self.doc.registry();
+        // What the page has under its cursor, while it has the keys.
+        let showing = if self.tabs_focused {
+            None
+        } else {
+            self.pages[page.index()].previewing(&self.doc)
+        };
+        let config = showing.as_ref().map_or(&self.doc.config, |(_, c)| c);
         let lines = if show_preview {
             self.preview
-                .render_lines(&self.doc, &registry, self.env.tz, target)
+                .render_lines(config, &self.doc, &registry, self.env.tz, target)
         } else {
             Vec::new()
         };
@@ -154,7 +161,8 @@ impl App {
 
         if show_preview {
             let (title, body, ruler) = preview::split(preview_area, lines.len());
-            let heading = self.preview.title(&self.doc, target, area.width - 4);
+            let label = showing.as_ref().map(|(name, _)| name.as_str());
+            let heading = self.preview.title(&self.doc, target, label, area.width - 4);
             ui::rule(f.buffer_mut(), area.x, title.y, area.width, Some(heading));
             f.render_widget(Paragraph::new(lines), body);
             f.render_widget(Paragraph::new(self.preview.ruler()), ruler);

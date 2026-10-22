@@ -252,18 +252,19 @@ impl Preview {
         Scene { input, sub, frame }
     }
 
-    /// The edited config's `target` lines for the current scenario.
+    /// `config`'s `target` lines for the current scenario.
     pub fn render_lines(
         &self,
+        config: &Config,
         doc: &Doc,
         registry: &Registry,
         tz: FixedOffset,
         target: Target,
     ) -> Vec<Line<'static>> {
         match target {
-            Target::Status => self.render(&doc.config, doc, registry, tz, self.columns()),
+            Target::Status => self.render(config, doc, registry, tz, self.columns()),
             Target::Subagent => {
-                let config = self.effective(&doc.config);
+                let config = self.effective(config);
                 let scene = self.scene(tz, Some(self.columns() as usize), target);
                 let depth = self.depth(doc);
                 let sub = scene.sub.expect("a subagent scene has tasks");
@@ -343,7 +344,14 @@ impl Preview {
     }
 
     /// The title on the bar's top rule, labelled when `room` allows.
-    pub fn title(&self, doc: &Doc, target: Target, room: u16) -> Line<'static> {
+    /// `showing` names what the bar shows when it isn't the edited config.
+    pub fn title(
+        &self,
+        doc: &Doc,
+        target: Target,
+        showing: Option<&str>,
+        room: u16,
+    ) -> Line<'static> {
         let depth = match DEPTHS[self.depth] {
             Some(d) => depth_name(d).to_string(),
             None => format!("auto·{}", depth_name(self.depth(doc))),
@@ -366,12 +374,13 @@ impl Preview {
             ("depth", depth),
             ("glyphs", tier),
         ];
-        let heading = match target {
-            Target::Status => " Preview ",
-            Target::Subagent => " Preview · subagent ",
+        let heading = match (showing, target) {
+            (Some(name), _) => format!(" Preview · {name} "),
+            (None, Target::Status) => " Preview ".to_string(),
+            (None, Target::Subagent) => " Preview · subagent ".to_string(),
         };
         let build = |labels: bool| {
-            let mut spans = vec![Span::styled(heading, ui::title())];
+            let mut spans = vec![Span::styled(heading.clone(), ui::title())];
             for (label, value) in &values {
                 spans.push(Span::raw(if labels {
                     format!(" {label} ")
@@ -471,7 +480,7 @@ mod tests {
         let (dir, paths) = crate::tui::doc::tests::temp_paths("replay");
         let doc = Doc::open(paths);
         let title: String = p
-            .title(&doc, Target::Status, 200)
+            .title(&doc, Target::Status, None, 200)
             .spans
             .iter()
             .map(|s| s.content.as_ref())

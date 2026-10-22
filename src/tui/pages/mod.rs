@@ -147,6 +147,11 @@ pub trait Page {
     fn target(&self) -> Target {
         Target::Status
     }
+    /// A config the preview bar shows instead of the edited one, and its
+    /// name, while the page has the keys (a preset under the cursor).
+    fn previewing(&self, _doc: &Doc) -> Option<(String, crate::config::Config)> {
+        None
+    }
     /// Whether letter keys reach the page while the tab row has the keys,
     /// for pages whose letters only open things.
     fn shortcuts(&self) -> bool {

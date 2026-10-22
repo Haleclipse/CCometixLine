@@ -242,6 +242,21 @@ impl Page for Presets {
         Outcome::Consumed
     }
 
+    /// The preset under the cursor, applied as Enter would apply it.
+    fn previewing(&self, doc: &Doc) -> Option<(String, Config)> {
+        let preset = self.shown().get(self.selected).copied()?;
+        let config = self
+            .configs
+            .iter()
+            .find(|(n, _)| *n == preset.name)
+            .map(|(_, c)| c.clone())
+            .or_else(|| presets::get(preset.name))?;
+        Some((
+            format!("{} · enter applies", preset.name),
+            presets::apply(&doc.config, &config, Parts::All),
+        ))
+    }
+
     fn keys(&self) -> Vec<(&'static str, &'static str)> {
         vec![
             ("←→↑↓", "choose"),
@@ -281,9 +296,13 @@ mod tests {
         assert!(s.contains("✓ in use"), "the default config is classic: {s}");
         assert!(s.contains("The v1 look"));
 
-        // Right then down: from classic to the card under minimal.
+        // Right then down: from classic to the card under minimal. The
+        // preview bar shows the card under the cursor, nothing applied yet.
         app.handle_key(key(KeyCode::Right));
-        assert!(screen(&mut app, 112, 33).contains("Model, context and cost"));
+        let s = screen(&mut app, 112, 33);
+        assert!(s.contains("Model, context and cost"));
+        assert!(s.contains("Preview · minimal · enter applies"), "{s}");
+        assert!(!app.doc.dirty());
         app.handle_key(key(KeyCode::Down));
         app.handle_key(key(KeyCode::Char('s')));
         assert_eq!(app.doc.config.lines.len(), 1, "style only keeps the layout");
