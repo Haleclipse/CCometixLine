@@ -15,6 +15,8 @@ type $ = EngineInterface
 const VERSION = 1
 /** Events within this many milliseconds share one write. */
 const FLUSH_MS = 200
+/** A response that streamed for less than this gives no speed. */
+const MIN_STREAM_MS = 100
 
 type Category = { name: string; kind: string; tokens: number }
 type Context = {
@@ -24,18 +26,20 @@ type Context = {
   used?: number
   categories: Category[]
 }
+/** The main loop's last model request, and how long its last turn took. */
 type Turn = {
   model?: string
   ttft_ms?: number
   tps?: number
+  /** The last finished turn's wall-clock length. */
   duration_ms?: number
+  /** The last request's. */
   output_tokens?: number
   ended_at?: number
 }
 type Tool = { name: string; since: number; agent?: string }
 type Agent = { id: string; type: string; status: string; description?: string }
-/** One model request's timing. */
-type Step = { sent: number; first?: number; output?: number; last?: number }
+type Chunk = { kind?: string; usage?: { output_tokens?: number; model?: string } | null }
 
 /** What the bridge holds, kept between events. */
 const live = {
@@ -45,7 +49,6 @@ const live = {
   turn: undefined as Turn | undefined,
   agents: [] as Agent[],
   tools: new Map<string, Tool>(),
-  steps: new Map<string, Step>(),
   pending: false,
   seq: 0,
 }
@@ -129,6 +132,20 @@ async function now($: $): Promise<number> {
   return $.clock.now()
 }
 
+// One main-loop request is done: its time to first token and its speed,
+// shown while the turn goes on rather than once it ends.
+function timed(sent: number, first: number, last: number, output?: number, model?: string) {
+  const streamed = last - first
+  live.turn = {
+    ...live.turn,
+    model: model ?? live.turn?.model,
+    ttft_ms: first - sent,
+    tps: output && streamed >= MIN_STREAM_MS ? (output * 1000) / streamed : live.turn?.tps,
+    output_tokens: output,
+    ended_at: last,
+  }
+}
+
 export const register: Register = (on) => {
   live.dir = undefined
   live.pending = false
@@ -154,10 +171,14 @@ export const register: Register = (on) => {
   })
 
   // Time each model request on the main loop: when it went out, when the
-  // first piece came back, and what its stop counted.
+  // first of the answer (text, thinking or a tool call) came back, and what
+  // its stop counted. Subagents' requests pass straight through.
   on('turn.step', async function* ($, e, next) {
-    const main = (e as { agentId?: string }).agentId === undefined
-    const step: Step = { sent: main ? await now($) : 0 }
+    if (e.agentId !== undefined) return yield* next(e)
+    const sent = await now($)
+    let first: number | undefined
+    let output: number | undefined
+    let model: string | undefined
     const stream = next(e)
     let ended = false
     try {
@@ -165,18 +186,22 @@ export const register: Register = (on) => {
         const piece = await stream.next()
         if (piece.done) {
           ended = true
-          if (main) {
-            step.last = await now($)
-            live.steps.set(e.turnId, step)
-          }
+          try {
+            if (first !== undefined) {
+              const usage = piece.value?.usage
+              timed(sent, first, await now($), output ?? usage?.output_tokens, model ?? usage?.model)
+              flush($)
+            }
+          } catch {}
           return piece.value
         }
-        if (main) {
-          const c = piece.value as { kind?: string; usage?: { output_tokens?: number } | null }
-          if (step.first === undefined && c.kind !== undefined && c.kind !== 'stop') {
-            step.first = await now($)
-          }
-          if (c.kind === 'stop' && c.usage) step.output = c.usage.output_tokens
+        const c = piece.value as Chunk
+        if (first === undefined && c.kind !== undefined && c.kind !== 'engine' && c.kind !== 'stop') {
+          first = await now($)
+        }
+        if (c.kind === 'stop' && c.usage) {
+          output = c.usage.output_tokens
+          model = c.usage.model
         }
         yield piece.value
       }
@@ -191,19 +216,7 @@ export const register: Register = (on) => {
     const answered = await next(e)
     try {
       if (e.agentId === undefined) {
-        const step = live.steps.get(e.turnId)
-        live.steps.delete(e.turnId)
-        const streamed =
-          step?.first !== undefined && step.last !== undefined ? step.last - step.first : 0
-        const output = e.usage?.output_tokens ?? step?.output
-        live.turn = {
-          model: e.usage?.model,
-          ttft_ms: step?.first !== undefined ? step.first - step.sent : live.turn?.ttft_ms,
-          tps: output && streamed > 0 ? (output * 1000) / streamed : live.turn?.tps,
-          duration_ms: e.durationMs,
-          output_tokens: output,
-          ended_at: await now($),
-        }
+        live.turn = { ...live.turn, duration_ms: e.durationMs, ended_at: await now($) }
       }
       await listAgents($)
       flush($)

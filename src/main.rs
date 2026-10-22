@@ -166,7 +166,7 @@ fn companion(action: ModAction) {
         ModAction::Install | ModAction::Uninstall => {
             let install = matches!(action, ModAction::Install);
             let steps = if install {
-                companion::install_steps(&status, &companion::dir())
+                companion::install_plan()
             } else {
                 companion::uninstall_steps()
             };

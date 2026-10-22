@@ -21,7 +21,7 @@ pub struct ModSteps {
 impl ModSteps {
     fn steps(&self) -> Vec<Vec<String>> {
         if self.install {
-            companion::install_steps(&companion::status(), &companion::dir())
+            companion::install_plan()
         } else {
             companion::uninstall_steps()
         }

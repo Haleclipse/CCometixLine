@@ -1,6 +1,6 @@
 //! Metrics only the companion mod can supply (Claude Code 2.1.287+), read
 //! from its bridge: the context window by category, the tools and agents
-//! running now, and the last turn's time to first token and speed.
+//! running now, and the last model request's time to first token and speed.
 
 use super::{Ctx, Metric, MetricMeta, Options, Reading, fmt};
 use crate::state::bridge::{Bridge, Category as Row};
@@ -87,7 +87,7 @@ pub(super) fn metrics() -> Vec<Metric> {
                 "timing.ttft",
                 Category::Timing,
                 "Time to first token",
-                "How long the last turn's answer took to start",
+                "How long the main loop's last model request took to start answering",
                 IconKey::Ttft,
                 ["{ttft} to first token", "{ttft}", "{ttft}"],
                 &["ttft"],
@@ -99,7 +99,7 @@ pub(super) fn metrics() -> Vec<Metric> {
                 "timing.tps",
                 Category::Timing,
                 "Output speed",
-                "Output tokens per second while the last turn's answer streamed",
+                "Output tokens per second while the main loop's last answer streamed",
                 IconKey::Speed,
                 ["{tps} tok/s", "{tps}/s", "{tps}"],
                 &["tps"],

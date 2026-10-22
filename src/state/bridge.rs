@@ -1,7 +1,7 @@
 //! The companion mod's bridge: inside Claude Code (2.1.287+), the mod
 //! writes what the status line payload lacks to `bridge/<session>.json`
 //! under ccline's home: the context window by category and the exact
-//! auto-compact threshold, the last turn's timing, and the tools and agents
+//! auto-compact threshold, each model request's timing, and the tools and agents
 //! running now. Renders read it back.
 //!
 //! The mod's writes aren't atomic (mods can't rename), so a read that
@@ -61,16 +61,19 @@ pub struct Category {
     pub tokens: u64,
 }
 
-/// The last main-thread turn.
+/// The main loop's last model request, written as each one finishes so it
+/// shows during a turn; `duration_ms` is the last finished turn's.
 #[derive(Clone, Debug, Default, PartialEq, Deserialize)]
 #[serde(default)]
 pub struct Turn {
     pub model: Option<String>,
-    /// From the request going out to the first piece of the answer.
+    /// From the request going out to the first text, thinking or tool call
+    /// of the answer.
     pub ttft_ms: Option<u64>,
     /// Output tokens per second while the answer streamed.
     pub tps: Option<f64>,
     pub duration_ms: Option<u64>,
+    /// The last request's.
     pub output_tokens: Option<u64>,
     /// Unix epoch milliseconds it ended.
     pub ended_at: Option<i64>,

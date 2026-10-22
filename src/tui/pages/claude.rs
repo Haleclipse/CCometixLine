@@ -647,7 +647,7 @@ mod tests {
         app.handle_key(key(KeyCode::Enter));
         let s = screen(&mut app, 112, 33);
         assert!(
-            s.contains("Install the companion mod") && s.contains("ccline@ccline"),
+            s.contains("Install the companion mod") && s.contains("cometix@ccline"),
             "{s}"
         );
         app.handle_key(key(KeyCode::Char('n')));
