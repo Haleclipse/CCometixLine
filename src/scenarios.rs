@@ -418,6 +418,7 @@ impl Scenario {
             samples,
             today_cost: self.today,
             latest_version: self.latest.map(str::to_string),
+            bridge: None,
         }
     }
 }

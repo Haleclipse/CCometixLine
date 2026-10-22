@@ -374,7 +374,7 @@ impl ClaudePage {
             Self::info(pane, "adds", Span::raw("context breakdown"), width),
             Self::info(pane, "", Span::raw("live tools and agents"), width),
             Self::info(pane, "", Span::raw("time to first token"), width),
-            Self::info(pane, "", Span::raw("a /ccline pane in Claude Code"), width),
+            Self::info(pane, "", Span::raw("the exact auto-compact point"), width),
         ];
         f.render_widget(Paragraph::new(text).block(block), area);
     }

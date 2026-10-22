@@ -4,6 +4,7 @@
 //! read-modify-write with the last writer winning, which the next render
 //! corrects.
 
+pub mod bridge;
 pub mod cmd_cache;
 pub mod git_cache;
 pub mod ledger;
@@ -165,6 +166,8 @@ pub struct StateView {
     pub today_cost: Option<f64>,
     /// Newest ccline version known to be published.
     pub latest_version: Option<String>,
+    /// What the companion mod reports for this session.
+    pub bridge: Option<std::rc::Rc<bridge::Bridge>>,
 }
 
 /// Record this render: add a session sample, fold the session's cost into
@@ -222,10 +225,12 @@ pub fn observe(
         // Unchanged values aren't stored, but rates still need "now".
         samples.push(current);
     }
+    bridge::prune();
     StateView {
         samples,
         today_cost,
         latest_version: None,
+        bridge: bridge::read(id, now * 1000).map(std::rc::Rc::new),
     }
 }
 
