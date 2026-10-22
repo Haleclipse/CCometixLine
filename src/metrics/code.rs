@@ -1,6 +1,6 @@
 //! Working directory, repository, branch, pull request and line changes.
 
-use super::{Ctx, LEVELS, Metric, MetricMeta, OptKind, OptSpec, Options, Reading};
+use super::{Ctx, Metric, MetricMeta, OptKind, OptSpec, Options, Reading};
 use crate::style::{Category, GlyphTier, IconKey, Role, Severity};
 use crate::widgets::WidgetKind;
 
@@ -22,7 +22,7 @@ fn meta(
         widget: WidgetKind::Text,
         templates,
         fields,
-        levels: LEVELS,
+        levels: &[],
         min_cc: None,
         needs_mod: false,
         options: &[],

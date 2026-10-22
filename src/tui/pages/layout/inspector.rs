@@ -545,7 +545,22 @@ mod tests {
         let f = fields(&text, ctx);
         assert!(!f.contains(&Field::Bar) && !f.contains(&Field::Cells));
         assert_eq!(fields(&bare("cmd"), meta("cmd"))[0], Field::Opt(0));
-        assert!(!fields(&bare("cmd"), meta("cmd")).contains(&Field::Levels));
+        // Levels only where there is a percentage to judge.
+        for id in [
+            "context",
+            "quota.5h",
+            "quota.7d",
+            "quota.spend",
+            "context.breakdown",
+        ] {
+            assert!(fields(&bare(id), meta(id)).contains(&Field::Levels), "{id}");
+        }
+        for id in ["model", "dir", "git", "cost", "cmd", "cache", "duration"] {
+            assert!(
+                !fields(&bare(id), meta(id)).contains(&Field::Levels),
+                "{id}"
+            );
+        }
     }
 
     #[test]
@@ -628,6 +643,10 @@ mod tests {
         assert_eq!(g.icon.as_deref(), Some(""));
         reset(Field::Icon, &mut g, git);
         assert_eq!(g.icon, None);
-        assert_eq!(levels_text(&g, git), "50 warn · 80 crit");
+        assert_eq!(levels_text(&g, git), "none");
+        assert_eq!(
+            levels_text(&bare("context"), meta("context")),
+            "50 warn · 80 crit"
+        );
     }
 }

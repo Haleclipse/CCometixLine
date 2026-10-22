@@ -41,17 +41,21 @@ fn meta(
 pub(super) fn metrics() -> Vec<Metric> {
     vec![
         Metric {
-            meta: meta(
-                "context.breakdown",
-                Category::Context,
-                "Context by kind",
-                "What fills the context window, largest first, as /context counts it",
-                IconKey::Context,
-                ["{top}", "{top2}", "{first}"],
-                &[
-                    "top", "top2", "first", "messages", "system", "tools", "memory",
-                ],
-            ),
+            meta: MetricMeta {
+                // Its ratio is the window's use, as `context`'s is.
+                levels: super::LEVELS,
+                ..meta(
+                    "context.breakdown",
+                    Category::Context,
+                    "Context by kind",
+                    "What fills the context window, largest first, as /context counts it",
+                    IconKey::Context,
+                    ["{top}", "{top2}", "{first}"],
+                    &[
+                        "top", "top2", "first", "messages", "system", "tools", "memory",
+                    ],
+                )
+            },
             compute: breakdown,
         },
         Metric {

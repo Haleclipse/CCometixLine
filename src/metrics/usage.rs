@@ -26,7 +26,7 @@ fn meta(
         widget: WidgetKind::Text,
         templates: ["", "", ""],
         fields: &[],
-        levels: LEVELS,
+        levels: &[],
         min_cc: None,
         needs_mod: false,
         options: &[],
@@ -45,6 +45,7 @@ pub(super) fn metrics() -> Vec<Metric> {
                 widget: WidgetKind::Bar,
                 templates: ["{pct}%[ · {tokens}]", "{pct}%", "{pct}%"],
                 fields: &["pct", "tokens", "window", "left", "cc_pct"],
+                levels: LEVELS,
                 priority: 5,
                 ..meta(
                     "context",
@@ -61,6 +62,7 @@ pub(super) fn metrics() -> Vec<Metric> {
                 widget: WidgetKind::Pace,
                 templates: WINDOW_TEMPLATES,
                 fields: WINDOW_FIELDS,
+                levels: LEVELS,
                 priority: 4,
                 ..meta(
                     "quota.5h",
@@ -77,6 +79,7 @@ pub(super) fn metrics() -> Vec<Metric> {
                 widget: WidgetKind::Pace,
                 templates: WINDOW_TEMPLATES,
                 fields: WINDOW_FIELDS,
+                levels: LEVELS,
                 priority: 3,
                 ..meta(
                     "quota.7d",
@@ -96,6 +99,7 @@ pub(super) fn metrics() -> Vec<Metric> {
                     "pct", "used", "limit", "period", "reset", "left", "pace", "arrow", "eta",
                 ],
                 min_cc: Some(gate::SPEND_LIMIT),
+                levels: LEVELS,
                 ..meta(
                     "quota.spend",
                     Category::Quota,
