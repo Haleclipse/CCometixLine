@@ -75,6 +75,8 @@ pub struct LayoutConfig {
     pub width: Dim,
     pub padding: Dim,
     pub reserve: u16,
+    /// What a line too wide for the terminal does.
+    pub overflow: crate::layout::Overflow,
 }
 
 /// One item on a line: a metric id, or a table of settings.

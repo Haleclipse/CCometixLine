@@ -297,6 +297,19 @@ impl LayoutPage {
                 });
                 return Outcome::Toast(format!("Removed line {}", n + 1));
             }
+            KeyCode::Char('w') if grow => {
+                use crate::layout::Overflow;
+                doc.edit(|c, _| {
+                    c.layout.overflow = match c.layout.overflow {
+                        Overflow::Wrap => Overflow::Shrink,
+                        Overflow::Shrink => Overflow::Wrap,
+                    }
+                });
+                return Outcome::Toast(match doc.config.layout.overflow {
+                    Overflow::Wrap => "Lines too wide wrap onto the next".into(),
+                    Overflow::Shrink => "Lines too wide shrink, then drop items".into(),
+                });
+            }
             KeyCode::Char('n') if grow => {
                 let n = self.cursor.line;
                 self.apply(doc, |l, _| Some(edit::new_line(l, n)));
@@ -495,14 +508,20 @@ impl Page for LayoutPage {
                 Target::Status => "status line",
                 Target::Subagent => "subagent line",
             };
-            let block = self.block(Pane::Canvas, cx).title_top(
-                Line::from(vec![
-                    Span::styled(" t ", ui::muted()),
-                    ui::choice(target_name),
-                    Span::raw(" "),
-                ])
-                .right_aligned(),
-            );
+            let overflow = match cx.doc.config.layout.overflow {
+                crate::layout::Overflow::Wrap => "wrap",
+                crate::layout::Overflow::Shrink => "shrink",
+            };
+            let mut title = vec![Span::styled(" t ", ui::muted()), ui::choice(target_name)];
+            // Task lines never wrap; the status line's overflow is a choice.
+            if self.target == Target::Status {
+                title.push(Span::styled("  w ", ui::muted()));
+                title.push(ui::choice(overflow));
+            }
+            title.push(Span::raw(" "));
+            let block = self
+                .block(Pane::Canvas, cx)
+                .title_top(Line::from(title).right_aligned());
             let view = canvas::View {
                 lines: &lines,
                 reports: &reports,
@@ -573,6 +592,7 @@ impl Page for LayoutPage {
                 ("alt+arrows", "move"),
                 ("x", "remove"),
                 ("n", "new line"),
+                ("w", "wrap/shrink"),
                 ("t", "subagent line"),
                 ("a", "add"),
             ],
@@ -707,6 +727,26 @@ mod tests {
             s.contains("tab next pane") && !s.contains("╭ Library"),
             "{s}"
         );
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn shows_where_a_narrow_line_wraps() {
+        let (dir, paths) = temp_paths("layout-wrap");
+        let mut app = App::new(Doc::open(paths), env());
+        app.open_page(PageId::Layout);
+        app.preview.width = Some(40);
+        let s = screen(&mut app, 112, 33);
+        assert!(s.contains("↵ wraps here") && s.contains("→ 2 lines"), "{s}");
+        assert!(s.contains("‹wrap›"), "{s}");
+        // w keeps the line on one: items shrink instead.
+        app.handle_key(key(KeyCode::Char('w')));
+        assert_eq!(
+            app.doc.config.layout.overflow,
+            crate::layout::Overflow::Shrink
+        );
+        let s = screen(&mut app, 112, 33);
+        assert!(!s.contains("wraps here") && s.contains("‹shrink›"), "{s}");
         std::fs::remove_dir_all(&dir).unwrap();
     }
 

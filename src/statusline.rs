@@ -84,20 +84,24 @@ pub fn lines(input: &Input, config: &Config, registry: &Registry, frame: Frame) 
     config
         .lines
         .iter()
-        .map(|line| layout::fit(&line_spec(line, &ctx, &theme).0, frame.width, &theme))
+        .flat_map(|line| {
+            let spec = line_spec(line, &ctx, &theme).0;
+            layout::lay(&spec, frame.width, &theme, config.layout.overflow)
+        })
         .collect()
 }
 
 /// What the layout made of one configured line, for the composer.
 #[derive(Clone, Debug, Default)]
 pub struct Report {
-    pub line: Line,
     /// Columns the line needs with every item at its fullest.
     pub natural: usize,
     /// The layout's steps, with `index` pointing into the config's side.
     pub steps: Vec<layout::Step>,
     /// Config entries with nothing to show for this input.
     pub empty: Vec<(Side, usize)>,
+    /// Config entries that begin a line of their own when the line wraps.
+    pub breaks: Vec<(Side, usize)>,
 }
 
 /// Lay out `line` as `lines` would, reporting each step it took; `task`
@@ -116,7 +120,6 @@ pub fn report(
         ctx = ctx.with_task(task);
     }
     let (spec, [left, right]) = line_spec(line, &ctx, &theme);
-    let plan = layout::plan(&spec, frame.width, &theme);
     let source = |side: Side, i: usize| match side {
         Side::Left => left[i],
         Side::Right => right[i],
@@ -132,18 +135,45 @@ pub fn report(
             .map(move |i| (side, i))
     })
     .collect();
-    Report {
-        line: plan.line,
-        natural: plan.natural,
-        steps: plan
-            .steps
-            .into_iter()
-            .map(|s| layout::Step {
-                index: source(s.side, s.index),
+    // A task's line is always one line; the status line may wrap.
+    let rows = match (frame.width, config.layout.overflow, task) {
+        (Some(w), layout::Overflow::Wrap, None) => layout::rows(&spec, w, &theme),
+        _ => vec![layout::Row {
+            left: (0..spec.left.len()).collect(),
+            right: (0..spec.right.len()).collect(),
+        }],
+    };
+    let mut steps = Vec::new();
+    let mut breaks = Vec::new();
+    for (n, row) in rows.iter().enumerate() {
+        let first = match (row.left.first(), row.right.first()) {
+            (Some(&i), _) => Some((Side::Left, i)),
+            (None, Some(&j)) => Some((Side::Right, j)),
+            _ => None,
+        };
+        if n > 0
+            && let Some((side, i)) = first
+        {
+            breaks.push((side, source(side, i)));
+        }
+        let plan = layout::plan(&spec.row(row), frame.width, &theme);
+        // Back from the row's positions to the spec's, then the config's.
+        steps.extend(plan.steps.into_iter().map(|s| {
+            let at = match s.side {
+                Side::Left => row.left[s.index],
+                Side::Right => row.right[s.index],
+            };
+            layout::Step {
+                index: source(s.side, at),
                 ..s
-            })
-            .collect(),
+            }
+        }));
+    }
+    Report {
+        natural: layout::natural(&spec, &theme),
+        steps,
         empty,
+        breaks,
     }
 }
 
@@ -374,8 +404,17 @@ mod tests {
         assert!(r.steps.is_empty());
         assert!(r.natural < 80);
 
+        // Too narrow by one: by default the right side wraps below, with
+        // nothing shortened.
         let narrow = r.natural - 1;
         let r = report(&input, None, &config, &reg, &frame(Some(narrow)), &line);
+        assert_eq!(r.breaks, vec![(Side::Right, 0)]);
+        assert!(r.steps.is_empty());
+
+        // Kept on one line, git (priority 1) is the first to shrink.
+        config.layout.overflow = layout::Overflow::Shrink;
+        let r = report(&input, None, &config, &reg, &frame(Some(narrow)), &line);
+        assert!(r.breaks.is_empty());
         let first = r.steps[0];
         assert_eq!((first.side, first.index), (Side::Left, 2));
         assert_eq!(first.from, Level::Full);

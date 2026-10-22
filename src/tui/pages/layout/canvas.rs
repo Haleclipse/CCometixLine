@@ -95,7 +95,10 @@ fn line_rows(view: &View, n: usize, width: usize) -> Vec<Line<'static>> {
         } else {
             ui::WARN
         };
-        let meter = format!("{}/{cols}", r.natural);
+        let meter = match r.breaks.len() {
+            0 => format!("{}/{cols}", r.natural),
+            n => format!("{}/{cols} → {} lines", r.natural, n + 1),
+        };
         let gap = width.saturating_sub(heading.chars().count() + meter.len());
         head.push(Span::raw(" ".repeat(gap)));
         head.push(Span::styled(meter, Style::default().fg(color)));
@@ -130,6 +133,10 @@ fn line_rows(view: &View, n: usize, width: usize) -> Vec<Line<'static>> {
     for (pos, (side, index, spec)) in all.enumerate() {
         if side == Side::Right && index == 0 {
             chips.push(Span::styled(" ⇥", ui::muted()));
+        }
+        // Where the line goes on below, at the preview's width.
+        if report.is_some_and(|r| r.breaks.contains(&(side, index))) {
+            chips.push(Span::styled(" ↵", Style::default().fg(ui::WARN)));
         }
         let style = if here && pos == view.cursor.pos {
             if view.focused {
@@ -174,22 +181,36 @@ fn line_rows(view: &View, n: usize, width: usize) -> Vec<Line<'static>> {
 }
 
 /// What gives way at the preview's width, merging an item's steps in a row.
+/// What happens to an item at the preview's width.
+enum Change {
+    /// Its line goes on below, starting with it.
+    Wraps,
+    /// It shrinks from one level to another, or is dropped.
+    Level(Level, Option<Level>),
+}
+
+/// What gives way at the preview's width, line by line: where each wraps,
+/// then what shrinks, merging an item's steps in a row.
 fn narrow_rows(view: &View) -> Vec<Line<'static>> {
     let cols = view.columns;
-    let mut merged: Vec<(usize, String, Level, Option<Level>)> = Vec::new();
+    let mut merged: Vec<(usize, String, Change)> = Vec::new();
     for (n, report) in view.reports.iter().enumerate() {
+        for &(side, index) in &report.breaks {
+            let spec = &edit::side(&view.lines[n], side)[index];
+            merged.push((n, label(spec), Change::Wraps));
+        }
         let mut last: Option<(Side, usize)> = None;
         for step in &report.steps {
             let key = (step.side, step.index);
             if last == Some(key)
-                && let Some(m) = merged.last_mut()
+                && let Some((_, _, Change::Level(_, to))) = merged.last_mut()
             {
-                m.3 = step.to;
+                *to = step.to;
                 continue;
             }
             last = Some(key);
             let spec = &edit::side(&view.lines[n], step.side)[step.index];
-            merged.push((n, label(spec), step.from, step.to));
+            merged.push((n, label(spec), Change::Level(step.from, step.to)));
         }
     }
     if merged.is_empty() {
@@ -205,14 +226,15 @@ fn narrow_rows(view: &View) -> Vec<Line<'static>> {
         format!("Too narrow at {cols} columns:"),
         ui::muted(),
     )];
-    for (i, (n, label, from, to)) in merged.into_iter().enumerate() {
+    for (i, (n, label, change)) in merged.into_iter().enumerate() {
         let line = match view.target {
             Target::Status => format!("L{} ", n + 1),
             Target::Subagent => String::new(),
         };
-        let change = match to {
-            None => Span::styled("dropped", Style::default().fg(ui::BAD)),
-            Some(_) => Span::styled(
+        let change = match change {
+            Change::Wraps => Span::styled("↵ wraps here", Style::default().fg(ui::WARN)),
+            Change::Level(_, None) => Span::styled("dropped", Style::default().fg(ui::BAD)),
+            Change::Level(from, to) => Span::styled(
                 format!("{} → {}", level_name(Some(from)), level_name(to)),
                 Style::default().fg(ui::WARN),
             ),

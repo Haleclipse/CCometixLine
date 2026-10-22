@@ -22,7 +22,7 @@ use ratatui::text::{Line, Span};
 use std::rc::Rc;
 
 /// Most lines the bar shows.
-pub const MAX_LINES: usize = 4;
+pub const MAX_LINES: usize = 6;
 const MIN_WIDTH: u16 = 20;
 
 const DEPTHS: [Option<ColorDepth>; 5] = [

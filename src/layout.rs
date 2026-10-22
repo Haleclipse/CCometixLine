@@ -1,5 +1,6 @@
-//! Fit a line into the available width by stepping items down from full to
-//! compact to minimal and finally dropping them, lowest priority first.
+//! Fit a line into the available width: wrap it onto more lines between
+//! items, or keep it on one by stepping items down from full to compact to
+//! minimal and finally dropping them, lowest priority first.
 
 use crate::render::span::{Line, Span, line_width};
 use crate::style::skin::{ItemView, Side, Theme, compose};
@@ -22,6 +23,36 @@ pub struct LaidItem {
 pub struct LineSpec {
     pub left: Vec<LaidItem>,
     pub right: Vec<LaidItem>,
+}
+
+/// What a line too wide for the terminal does.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Overflow {
+    /// Go on below: break after the last item that fits, as text wraps.
+    #[default]
+    Wrap,
+    /// Stay on one line: shorten items, then drop them, lowest priority
+    /// first.
+    Shrink,
+}
+
+/// One line of a wrapped line: which of the spec's items it holds, by
+/// position within their side.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Row {
+    pub left: Vec<usize>,
+    pub right: Vec<usize>,
+}
+
+impl LineSpec {
+    /// The items `row` holds, as a line of their own.
+    pub fn row(&self, row: &Row) -> LineSpec {
+        LineSpec {
+            left: row.left.iter().map(|&i| self.left[i].clone()).collect(),
+            right: row.right.iter().map(|&i| self.right[i].clone()).collect(),
+        }
+    }
 }
 
 struct Slot<'a> {
@@ -81,6 +112,77 @@ pub struct Plan {
     pub natural: usize,
     /// Steps in the order they were taken; empty when the line fit.
     pub steps: Vec<Step>,
+}
+
+/// Columns `spec` needs with every item at its fullest.
+pub fn natural(spec: &LineSpec, theme: &Theme) -> usize {
+    plan(spec, None, theme).natural
+}
+
+/// Break `spec` into rows that each fit `budget` with every item at its
+/// fullest, between items only. The left side's items fill rows in order;
+/// the right side's go at the end of the last row when they fit there,
+/// else on rows of their own. A row of one item too wide for any row is
+/// left for `plan` to shorten.
+pub fn rows(spec: &LineSpec, budget: usize, theme: &Theme) -> Vec<Row> {
+    let all = Row {
+        left: (0..spec.left.len()).collect(),
+        right: (0..spec.right.len()).collect(),
+    };
+    if natural(spec, theme) <= budget {
+        return vec![all];
+    }
+    let fits = |row: &Row| natural(&spec.row(row), theme) <= budget;
+    let mut rows = Vec::new();
+    let mut cur = Row::default();
+    for i in all.left {
+        let mut next = cur.clone();
+        next.left.push(i);
+        if cur.left.is_empty() || fits(&next) {
+            cur = next;
+        } else {
+            rows.push(std::mem::take(&mut cur));
+            cur.left.push(i);
+        }
+    }
+    if !all.right.is_empty() {
+        let with_right = Row {
+            left: cur.left.clone(),
+            right: all.right.clone(),
+        };
+        if fits(&with_right) {
+            cur = with_right;
+        } else {
+            if !cur.left.is_empty() {
+                rows.push(std::mem::take(&mut cur));
+            }
+            for j in all.right {
+                let mut next = cur.clone();
+                next.right.push(j);
+                if cur.right.is_empty() || fits(&next) {
+                    cur = next;
+                } else {
+                    rows.push(std::mem::take(&mut cur));
+                    cur.right.push(j);
+                }
+            }
+        }
+    }
+    if !cur.left.is_empty() || !cur.right.is_empty() {
+        rows.push(cur);
+    }
+    rows
+}
+
+/// Lay out one line into as many as `overflow` lets it take.
+pub fn lay(spec: &LineSpec, budget: Option<usize>, theme: &Theme, overflow: Overflow) -> Vec<Line> {
+    match (budget, overflow) {
+        (Some(w), Overflow::Wrap) => rows(spec, w, theme)
+            .iter()
+            .map(|r| fit(&spec.row(r), budget, theme))
+            .collect(),
+        _ => vec![fit(spec, budget, theme)],
+    }
 }
 
 /// Lay out one line. With `budget = None` (width unknown) nothing is dropped
@@ -283,6 +385,48 @@ mod tests {
         assert_eq!(line_text(&p.line), line_text(&fit(&s, Some(32), &theme())));
         assert!(plan(&s, Some(50), &theme()).steps.is_empty());
         assert!(plan(&s, None, &theme()).steps.is_empty());
+    }
+
+    #[test]
+    fn wraps_between_items() {
+        let s = spec();
+        let t = theme();
+        let texts = |w| -> Vec<String> {
+            lay(&s, Some(w), &t, Overflow::Wrap)
+                .iter()
+                .map(|l| line_text(l))
+                .collect()
+        };
+        // Fits: one line, as before.
+        assert_eq!(texts(50).len(), 1);
+        // At 32, git moves down with cost after it on the right.
+        assert_eq!(
+            rows(&s, 32, &t),
+            vec![
+                Row {
+                    left: vec![0, 1],
+                    right: vec![]
+                },
+                Row {
+                    left: vec![2],
+                    right: vec![0]
+                }
+            ]
+        );
+        assert_eq!(texts(32)[0], "Opus 4.8 | ctx 62% · 124k");
+        assert!(texts(32)[1].starts_with("main ✓ ↑2") && texts(32)[1].ends_with("$1.20"));
+        // Narrower still, more lines; none is shortened, and cost still
+        // ends the last one.
+        let narrow = texts(16);
+        assert_eq!(
+            narrow,
+            vec!["Opus 4.8", "ctx 62% · 124k", "main ✓ ↑2  $1.20"]
+        );
+        // An item wider than any line is shortened on its own line.
+        assert_eq!(texts(10)[1], "62%");
+        // Shrink keeps one line, as before.
+        assert_eq!(lay(&s, Some(32), &t, Overflow::Shrink).len(), 1);
+        assert_eq!(lay(&s, None, &t, Overflow::Wrap).len(), 1);
     }
 
     #[test]

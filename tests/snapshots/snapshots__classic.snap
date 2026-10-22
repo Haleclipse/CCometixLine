@@ -15,7 +15,8 @@ expression: render_preset(preset.name)
 ── fresh @ 140
  Sonnet 5 | 󰉋 app | 󰊢 main ✓ |  0%                                                                                      󰚰 ]8;;https://github.com/Haleclipse/CCometixLine/releases/tag/v2.1.0\v2.1.0 available]8;;\⏎
 ── near-full @ 60
- Opus 4.8 | 󰉋 app | 󰊢 feature/auth* |  91% · 182k tokens⏎
+ Opus 4.8 | 󰉋 app | 󰊢 feature/auth ⚠ ↓3⏎
+ 91% · 182k tokens⏎
 ── near-full @ 100
  Opus 4.8 | 󰉋 app | 󰊢 feature/auth ⚠ ↓3 |  91% · 182k tokens⏎
 ── near-full @ 140
@@ -33,7 +34,8 @@ expression: render_preset(preset.name)
 ── third-party @ 140
  Kimi K2 Turbo | 󰉋 app | 󰊢 main ● |  81% · 104k tokens⏎
 ── worktree @ 60
- Sonnet 5 | 󰉋 feature-x |  19% · 38k tokens⏎
+ Sonnet 5 | 󰉋 feature-x | 󰊢 worktree-feature-x ● ↑1⏎
+ 19% · 38k tokens⏎
 ── worktree @ 100
  Sonnet 5 | 󰉋 feature-x | 󰊢 worktree-feature-x ● ↑1 |  19% · 38k tokens⏎
 ── worktree @ 140
