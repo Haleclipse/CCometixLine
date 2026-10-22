@@ -15,8 +15,6 @@ const HISTORY: usize = 200;
 #[derive(Clone, Debug)]
 pub struct Paths {
     pub config: PathBuf,
-    /// Where a migrated v1 config is backed up.
-    pub config_backup: PathBuf,
     pub models: PathBuf,
     /// The user's own presets.
     pub presets: PathBuf,
@@ -26,7 +24,6 @@ impl Paths {
     pub fn user() -> Paths {
         Paths {
             config: crate::paths::config_file(),
-            config_backup: crate::paths::legacy_config_backup(),
             models: crate::paths::models_file(),
             presets: crate::paths::presets_dir(),
         }
@@ -60,8 +57,6 @@ pub struct Doc {
     paths: Paths,
     /// Modification times of the files as last loaded or saved.
     stamps: [Option<SystemTime>; 2],
-    /// The config file is still in the v1 format; saving replaces it.
-    v1: bool,
     pub note: LoadNote,
     /// Why `models.toml` couldn't be read; the registry starts empty then.
     pub models_error: Option<String>,
@@ -72,10 +67,9 @@ fn mtime(path: &Path) -> Option<SystemTime> {
 }
 
 impl Doc {
-    /// Read both files. Opening never writes: a v1 config is converted in
-    /// memory and replaced only when saved.
+    /// Read both files; opening never writes.
     pub fn open(paths: Paths) -> Doc {
-        let (config, note) = config::read_from(&paths.config);
+        let (config, note) = config::load_from(&paths.config);
         let (models, models_error) = match ModelsFile::load(&paths.models) {
             Ok(m) => (m, None),
             Err(e) => (ModelsFile::default(), Some(e)),
@@ -93,7 +87,6 @@ impl Doc {
             redo: Vec::new(),
             edits: 0,
             stamps: [mtime(&paths.config), mtime(&paths.models)],
-            v1: note == LoadNote::V1,
             paths,
             note,
             models_error,
@@ -156,7 +149,7 @@ impl Doc {
     }
 
     pub fn config_dirty(&self) -> bool {
-        self.v1 || self.config != self.saved.config
+        self.config != self.saved.config
     }
 
     pub fn models_dirty(&self) -> bool {
@@ -191,11 +184,7 @@ impl Doc {
         }
         let io = |e: std::io::Error| SaveError::Io(e.to_string());
         if targets[0].0 {
-            if self.v1 && !self.paths.config_backup.exists() {
-                std::fs::copy(&self.paths.config, &self.paths.config_backup).map_err(io)?;
-            }
             self.config.save(&self.paths.config).map_err(io)?;
-            self.v1 = false;
             self.note = LoadNote::Fine;
             self.saved.config = self.config.clone();
             self.stamps[0] = mtime(&self.paths.config);
@@ -231,7 +220,6 @@ pub(crate) mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let paths = Paths {
             config: dir.join("config.toml"),
-            config_backup: dir.join("config.v1.toml"),
             models: dir.join("models.toml"),
             presets: dir.join("presets"),
         };
@@ -281,24 +269,6 @@ pub(crate) mod tests {
         assert!(!paths.config.exists());
         let again = Doc::open(paths);
         assert_eq!(again.models.rules[0].pattern, "kimi");
-        std::fs::remove_dir_all(&dir).unwrap();
-    }
-
-    #[test]
-    fn replaces_a_v1_config_only_on_save() {
-        let (dir, paths) = temp_paths("v1");
-        let v1 = "theme = \"nord\"\n[style]\nmode = \"nerd_font\"\n";
-        std::fs::write(&paths.config, v1).unwrap();
-        let mut doc = Doc::open(paths.clone());
-        assert_eq!(doc.note, LoadNote::V1);
-        assert_eq!(doc.config.palette, "nord");
-        // Opening wrote nothing, but the conversion is an unsaved change.
-        assert_eq!(std::fs::read_to_string(&paths.config).unwrap(), v1);
-        assert!(!paths.config_backup.exists());
-        assert!(doc.dirty());
-        doc.save(false).unwrap();
-        assert_eq!(std::fs::read_to_string(&paths.config_backup).unwrap(), v1);
-        assert_eq!(Doc::open(paths).note, LoadNote::Fine);
         std::fs::remove_dir_all(&dir).unwrap();
     }
 

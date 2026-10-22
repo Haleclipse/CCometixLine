@@ -85,9 +85,8 @@ impl Setup {
         };
         let config = match &cx.doc.note {
             LoadNote::Missing => "none yet".to_string(),
-            LoadNote::V1 => "a v1 config; kept as config.v1.toml when saved".into(),
             LoadNote::Invalid(e) => format!("unreadable ({e}); replaced when saved"),
-            LoadNote::Fine | LoadNote::Migrated => "a v2 config".into(),
+            LoadNote::Fine => "your config.toml".into(),
         };
         let depth = format!("{:?}", crate::env::color_depth()).to_lowercase();
         vec![

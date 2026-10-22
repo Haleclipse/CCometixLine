@@ -13,10 +13,6 @@ pub struct Cli {
     #[arg(long)]
     pub subagent: bool,
 
-    /// Removed in v2; kept so existing invocations exit cleanly
-    #[arg(long = "patch", hide = true)]
-    pub patch: Option<String>,
-
     #[command(subcommand)]
     pub command: Option<Command>,
 }

@@ -39,10 +39,6 @@ pub fn config_file() -> PathBuf {
     home().join("config.toml")
 }
 
-pub fn legacy_config_backup() -> PathBuf {
-    home().join("config.v1.toml")
-}
-
 pub fn models_file() -> PathBuf {
     home().join("models.toml")
 }

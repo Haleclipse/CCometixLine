@@ -105,11 +105,6 @@ fn checks(cx: &Cx) -> Vec<Check> {
     out.push(match &cx.doc.note {
         LoadNote::Fine => check(Mark::Ok, "config.toml valid"),
         LoadNote::Missing => check(Mark::Info, "no config.toml yet: the default preset"),
-        LoadNote::Migrated => check(Mark::Info, "v1 config moved to config.v1.toml"),
-        LoadNote::V1 => check(
-            Mark::Warn,
-            "config.toml is v1: ^S replaces it, keeping config.v1.toml",
-        ),
         LoadNote::Invalid(e) => check(Mark::Warn, format!("config.toml invalid: {e}")),
     });
     out.push(match &cx.doc.models_error {

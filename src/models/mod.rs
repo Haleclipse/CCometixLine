@@ -1,7 +1,5 @@
 //! The model registry: turns model ids Claude Code can't name or size into a
 //! readable name and the real context window.
-//!
-//! `models.toml` keeps the v1 format; v2 only adds optional fields.
 
 pub mod builtin;
 
@@ -317,7 +315,7 @@ mod tests {
     }
 
     #[test]
-    fn reads_v1_files() {
+    fn reads_rules_and_modifiers() {
         let r = registry(
             r#"
             [[models]]
@@ -387,7 +385,7 @@ mod tests {
     }
 
     #[test]
-    fn saves_in_the_v1_shape() {
+    fn saves_only_what_is_set() {
         let dir = std::env::temp_dir().join(format!("ccline-models-{}", std::process::id()));
         let path = dir.join("models.toml");
         assert_eq!(ModelsFile::load(&path), Ok(ModelsFile::default()));

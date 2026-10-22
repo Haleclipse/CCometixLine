@@ -1,8 +1,7 @@
-//! The v2 configuration (`~/.claude/ccline/config.toml`) and loading it,
-//! with v1 migration.
+//! The configuration (`~/.claude/ccline/config.toml`) and loading it.
 
 use crate::presets;
-use crate::style::{BarGlyphs, ColorDepth, Edge, Edges, FillStyle, GlyphTier, SkinKind, palette};
+use crate::style::{BarGlyphs, ColorDepth, Edges, FillStyle, GlyphTier, SkinKind};
 use crate::widgets::{Coloring, WidgetKind};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::borrow::Cow;
@@ -235,10 +234,6 @@ pub enum LoadNote {
     Fine,
     /// No config file; using the default preset.
     Missing,
-    /// A v1 config was backed up and replaced.
-    Migrated,
-    /// A v1 config, converted in memory only; saving replaces it.
-    V1,
     /// The file couldn't be used; the default preset is used instead.
     Invalid(String),
 }
@@ -252,43 +247,15 @@ impl Config {
         crate::paths::write_atomic(path, &self.to_toml())
     }
 
-    /// Load the user's config, migrating a v1 file if found.
+    /// Load the user's config.
     pub fn load() -> (Config, LoadNote) {
-        load_from(
-            &crate::paths::config_file(),
-            &crate::paths::legacy_config_backup(),
-        )
-    }
-
-    /// Read the user's config without writing anything, even for a v1
-    /// file (for previews and the TUI, which migrates only on save).
-    pub fn read() -> (Config, LoadNote) {
-        read_from(&crate::paths::config_file())
+        load_from(&crate::paths::config_file())
     }
 }
 
-fn is_v1(table: &toml::Table) -> bool {
-    table.get("version").and_then(|v| v.as_integer()) != Some(VERSION as i64)
-        && (table.contains_key("style") || table.contains_key("segments"))
-}
-
-/// Load `path` for rendering: a v1 file is backed up to `backup` and
-/// replaced, so the status line never comes out blank.
-pub fn load_from(path: &Path, backup: &Path) -> (Config, LoadNote) {
-    let (config, note) = read_from(path);
-    if note != LoadNote::V1 {
-        return (config, note);
-    }
-    if !backup.exists() {
-        let _ = std::fs::rename(path, backup);
-    }
-    let _ = config.save(path);
-    (config, LoadNote::Migrated)
-}
-
-/// Read `path` without writing; a v1 file comes back converted, as
-/// `LoadNote::V1`.
-pub fn read_from(path: &Path) -> (Config, LoadNote) {
+/// Load `path`. A file that can't be used gives the default preset, so the
+/// status line never comes out blank; nothing is written.
+pub fn load_from(path: &Path) -> (Config, LoadNote) {
     let text = match std::fs::read_to_string(path) {
         Ok(t) => t,
         Err(_) => return (presets::default_config(), LoadNote::Missing),
@@ -302,88 +269,22 @@ pub fn read_from(path: &Path) -> (Config, LoadNote) {
             );
         }
     };
-    if is_v1(&table) {
-        let theme = table
-            .get("theme")
-            .and_then(|v| v.as_str())
-            .unwrap_or("default");
-        let config =
-            v1_look(presets::default_config(), theme).unwrap_or_else(presets::default_config);
-        return (config, LoadNote::V1);
-    }
+    // Missing settings take their defaults; for the lines that is the
+    // default preset's, as an empty status line is never what's meant.
+    // `line = []`, written when every line was removed, stays empty.
+    let has_lines = table.contains_key("line");
     match Config::deserialize(toml::Value::Table(table)) {
-        Ok(config) => (config, LoadNote::Fine),
+        Ok(mut config) => {
+            if !has_lines {
+                config.lines = presets::default_config().lines;
+            }
+            (config, LoadNote::Fine)
+        }
         Err(e) => (
             presets::default_config(),
             LoadNote::Invalid(e.message().to_string()),
         ),
     }
-}
-
-/// v1 theme names and the appearance they map to.
-const V1_THEMES: &[(&str, &str, SkinKind, GlyphTier)] = &[
-    ("default", "terminal", SkinKind::Plain, GlyphTier::Unicode),
-    ("minimal", "terminal", SkinKind::Plain, GlyphTier::Unicode),
-    ("cometix", "terminal", SkinKind::Plain, GlyphTier::Nerd),
-    ("gruvbox", "gruvbox", SkinKind::Plain, GlyphTier::Nerd),
-    ("nord", "nord", SkinKind::Powerline, GlyphTier::Nerd),
-    (
-        "powerline-dark",
-        "powerline-dark",
-        SkinKind::Powerline,
-        GlyphTier::Nerd,
-    ),
-    (
-        "powerline-light",
-        "powerline-light",
-        SkinKind::Powerline,
-        GlyphTier::Nerd,
-    ),
-    (
-        "powerline-rose-pine",
-        "powerline-rose-pine",
-        SkinKind::Powerline,
-        GlyphTier::Nerd,
-    ),
-    (
-        "powerline-tokyo-night",
-        "powerline-tokyo-night",
-        SkinKind::Powerline,
-        GlyphTier::Nerd,
-    ),
-];
-
-/// A v1 config's `theme` on `config`: a built-in preset of that name
-/// replaces layout and look; a v1 theme name changes the look; a palette
-/// name changes the palette. `None` when the name is unknown.
-fn v1_look(config: Config, name: &str) -> Option<Config> {
-    if let Some(preset) = presets::get(name) {
-        return Some(presets::apply(&config, &preset, presets::Parts::All));
-    }
-    if let Some((_, pal, skin, glyphs)) = V1_THEMES.iter().find(|(n, ..)| *n == name) {
-        // v1 joined powerline segments with arrows and left the ends square.
-        let powerline = match skin {
-            SkinKind::Powerline => Edges {
-                join: Edge::Arrow,
-                end: Edge::Flat,
-            },
-            _ => config.powerline,
-        };
-        return Some(Config {
-            palette: pal.to_string(),
-            skin: *skin,
-            glyphs: *glyphs,
-            powerline,
-            ..config
-        });
-    }
-    if palette::Palette::load(name).is_some() {
-        return Some(Config {
-            palette: name.to_string(),
-            ..config
-        });
-    }
-    None
 }
 
 #[cfg(test)]
@@ -431,75 +332,28 @@ mod tests {
     }
 
     #[test]
-    fn migrates_v1_configs() {
-        let dir = std::env::temp_dir().join(format!("ccline-cfg-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let (path, backup) = (dir.join("config.toml"), dir.join("config.v1.toml"));
-        std::fs::write(
-            &path,
-            "theme = \"nord\"\n[style]\nmode = \"nerd_font\"\nseparator = \" | \"\n",
-        )
-        .unwrap();
-
-        // Reading leaves the file alone.
-        let (read, note) = read_from(&path);
-        assert_eq!(note, LoadNote::V1);
-        assert!(!backup.exists());
-        assert!(std::fs::read_to_string(&path).unwrap().contains("[style]"));
-
-        let (config, note) = load_from(&path, &backup);
-        assert_eq!(note, LoadNote::Migrated);
-        assert_eq!(config, read);
-        assert_eq!(
-            (config.palette.as_str(), config.skin),
-            ("nord", SkinKind::Powerline)
-        );
-        assert!(
-            std::fs::read_to_string(&backup)
-                .unwrap()
-                .contains("[style]")
-        );
-        let (again, note) = load_from(&path, &backup);
-        assert_eq!(note, LoadNote::Fine);
-        assert_eq!(again, config);
-        std::fs::remove_dir_all(&dir).unwrap();
-    }
-
-    #[test]
     fn falls_back_on_invalid_or_missing_files() {
         let dir = std::env::temp_dir().join(format!("ccline-bad-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("config.toml");
-        let (config, note) = load_from(&path, &dir.join("b"));
+        let (config, note) = load_from(&path);
         assert_eq!(note, LoadNote::Missing);
         assert!(!config.lines.is_empty());
-        std::fs::write(&path, "version = 2\nskin = \"lasers\"\n").unwrap();
-        assert!(matches!(
-            load_from(&path, &dir.join("b")).1,
-            LoadNote::Invalid(_)
-        ));
-        std::fs::remove_dir_all(&dir).unwrap();
-    }
+        std::fs::write(&path, "version = 2\nskin = \"lasers\"\n[[line]]\n").unwrap();
+        assert!(matches!(load_from(&path).1, LoadNote::Invalid(_)));
 
-    #[test]
-    fn maps_v1_theme_names() {
-        let base = presets::default_config();
-        assert_eq!(
-            v1_look(base.clone(), "zen").unwrap().glyphs,
-            GlyphTier::Ascii
-        );
-        let v1 = v1_look(base.clone(), "powerline-rose-pine").unwrap();
-        assert_eq!(
-            (v1.palette.as_str(), v1.skin),
-            ("powerline-rose-pine", SkinKind::Powerline)
-        );
-        assert_eq!(
-            (v1.powerline.join, v1.powerline.end),
-            (Edge::Arrow, Edge::Flat)
-        );
-        assert_eq!(base.powerline.join, Edge::Flat);
-        assert_eq!(v1.lines, base.lines);
-        assert_eq!(v1_look(base.clone(), "dracula").unwrap().palette, "dracula");
-        assert!(v1_look(base, "no-such-theme").is_none());
+        // Without lines, the default preset's lines go with the rest.
+        std::fs::write(&path, "palette = \"dracula\"\nstyle = { mode = \"x\" }\n").unwrap();
+        let (config, note) = load_from(&path);
+        assert_eq!(note, LoadNote::Fine);
+        assert_eq!(config.palette, "dracula");
+        assert_eq!(config.lines, presets::default_config().lines);
+
+        // Every line removed and saved is still a config of the user's.
+        let mut empty = presets::default_config();
+        empty.lines.clear();
+        empty.save(&path).unwrap();
+        assert_eq!(load_from(&path), (empty, LoadNote::Fine));
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 }

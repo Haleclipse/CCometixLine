@@ -16,11 +16,6 @@ use std::io::{self, IsTerminal, Read};
 fn main() {
     let cli = Cli::parse_args();
 
-    if cli.patch.is_some() {
-        println!("ccline v2 no longer patches Claude Code; --patch was removed.");
-        return;
-    }
-
     match cli.command {
         Some(Command::Preview(args)) => return preview(args),
         Some(Command::Update) => return update(),
@@ -221,8 +216,7 @@ fn preview(args: PreviewArgs) {
         }
         return;
     }
-    // Read without writing, even a v1 file.
-    let (config, _) = Config::read();
+    let (config, _) = Config::load();
     let depth = match args.color.as_str() {
         "truecolor" => DepthSetting::TrueColor,
         "256" => DepthSetting::Ansi256,
