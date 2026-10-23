@@ -9515,7 +9515,6 @@ ec82 cod-claude
 ec83 cod-open_in_window
 ec84 cod-new_session
 2665 oct-heart
-26a1 oct-zap
 f400 oct-light_bulb
 f401 oct-repo
 f402 oct-repo_forked

@@ -132,8 +132,15 @@ mod tests {
 
     #[test]
     fn holds_every_nerd_font_icon() {
-        assert_eq!(all().len(), 10_617);
-        assert_eq!(all().iter().map(|g| g.names.len()).sum::<usize>(), 10_995);
+        assert_eq!(all().len(), 10_616);
+        assert_eq!(all().iter().map(|g| g.names.len()).sum::<usize>(), 10_994);
+        // One column each, so the browser's grid stays aligned.
+        let wide: Vec<_> = all()
+            .iter()
+            .filter(|g| ratatui::text::Span::raw(g.glyph.to_string()).width() != 1)
+            .map(|g| g.names[0])
+            .collect();
+        assert!(wide.is_empty(), "{wide:?}");
         assert_eq!(version(), "3.5.1");
         assert_eq!(&classes()[..4], ["md", "fa", "dev", "cod"]);
         // The status line's own folder icon is in it under its name.

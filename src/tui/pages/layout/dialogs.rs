@@ -396,10 +396,7 @@ impl IconDialog {
                 } else {
                     Style::default()
                 };
-                // Three columns a cell, a wide glyph (⚡) included.
-                let glyph = all[g].glyph.to_string();
-                let pad = 2usize.saturating_sub(Span::raw(glyph.as_str()).width());
-                spans.push(Span::styled(format!(" {glyph}{}", " ".repeat(pad)), style));
+                spans.push(Span::styled(format!(" {} ", all[g].glyph), style));
             }
             text.push(Line::from(spans));
         }

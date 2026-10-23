@@ -20,11 +20,14 @@ if (meta?.version !== VERSION) throw new Error(`asked for ${VERSION}, got ${meta
 
 // One line per codepoint with every name it has; the classes with the most
 // glyphs first, which is also the order an empty search lists them in.
+// Emoji (⚡ oct-zap in 3.5.1) are left out: terminals draw them two columns
+// wide, unlike every other icon.
 const byCode = new Map()
 for (const [name, { code }] of Object.entries(glyphs)) {
   if (!/^[a-z0-9_-]+$/.test(name) || !/^[0-9a-f]{4,6}$/.test(code)) {
     throw new Error(`unexpected entry ${name}: ${code}`)
   }
+  if (/\p{Emoji_Presentation}/u.test(String.fromCodePoint(parseInt(code, 16)))) continue
   byCode.set(code, [...(byCode.get(code) ?? []), name])
 }
 const classOf = (name) => name.split('-')[0]
@@ -46,4 +49,5 @@ writeFileSync(
 ${lines.join('\n')}
 `,
 )
-console.log(`${out}: ${Object.keys(glyphs).length} names, ${lines.length} glyphs`)
+const names = [...byCode.values()].reduce((n, names) => n + names.length, 0)
+console.log(`${out}: ${names} names, ${lines.length} glyphs`)

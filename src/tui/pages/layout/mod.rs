@@ -625,7 +625,7 @@ mod tests {
         let s = screen(&mut app, 112, 33);
         assert!(
             s.contains("All Nerd Fonts")
-                && s.contains("10,617 of 10,617")
+                && s.contains("10,616 of 10,616")
                 && s.contains("Nerd Fonts 3.5.1"),
             "{s}"
         );
