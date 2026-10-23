@@ -44,9 +44,14 @@ pub fn theme(config: &Config) -> Theme {
     }
 }
 
+/// Columns Claude Code's footer keeps clear on each side of the status line
+/// (`paddingX: 2` around it, as of 2.1.302). Lines wider than what's left
+/// are cut with `…` rather than wrapped.
+const FOOTER_PADDING: usize = 2;
+
 /// Columns the status line may use: the configured or reported terminal
-/// width, minus Claude Code's `statusLine.padding` on both sides and any
-/// configured reserve.
+/// width, minus Claude Code's footer padding and `statusLine.padding` on
+/// both sides, and any configured reserve.
 pub fn budget(config: &Config, settings: &ClaudeSettings) -> Option<usize> {
     let width = config
         .layout
@@ -60,7 +65,7 @@ pub fn budget(config: &Config, settings: &ClaudeSettings) -> Option<usize> {
         .0
         .map(usize::from)
         .unwrap_or_else(|| settings.statusline_padding());
-    Some(width.saturating_sub(2 * padding + config.layout.reserve as usize))
+    Some(width.saturating_sub(2 * (FOOTER_PADDING + padding) + config.layout.reserve as usize))
 }
 
 pub fn lines(input: &Input, config: &Config, registry: &Registry, frame: Frame) -> Vec<Line> {
@@ -454,6 +459,17 @@ mod tests {
             )
             .is_none()
         );
+    }
+
+    #[test]
+    fn leaves_room_for_the_footer_padding() {
+        let mut config = presets::default_config();
+        config.layout.width = crate::config::Dim(Some(120));
+        let settings = ClaudeSettings::default();
+        assert_eq!(budget(&config, &settings), Some(116));
+        config.layout.padding = crate::config::Dim(Some(1));
+        config.layout.reserve = 2;
+        assert_eq!(budget(&config, &settings), Some(112));
     }
 
     #[test]
