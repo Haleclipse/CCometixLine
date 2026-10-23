@@ -344,6 +344,9 @@ pub fn paint(item: &ItemView, theme: &Theme) -> Vec<Span> {
     let muted = theme.token(Token::Muted);
     let sep = theme.token(Token::Separator);
     if !theme.skin().filled() {
+        // A pace bar's two halves both run the full width over the muted
+        // track: usage on top, time passed below in a lighter neutral.
+        let passed = shade(muted, theme.token(Token::Text), 0.5).or(Some(Color::Ansi16(7)));
         return item
             .pieces
             .iter()
@@ -366,7 +369,8 @@ pub fn paint(item: &ItemView, theme: &Theme) -> Vec<Span> {
                     }
                 };
                 let bg = match p.role {
-                    Role::Pace { elapsed: true, .. } => muted,
+                    Role::Pace { elapsed: true, .. } => passed,
+                    Role::Pace { elapsed: false, .. } => muted,
                     _ => None,
                 };
                 let style = Style {
@@ -719,6 +723,29 @@ mod tests {
         // Plain skins ignore the track.
         let plain = theme(SkinKind::Plain, GlyphTier::Nerd);
         assert_eq!(paint(&it, &plain)[1].style.bg, None);
+    }
+
+    #[test]
+    fn pace_halves_both_run_the_full_width() {
+        let cell = |used, elapsed| Piece::new("▀", Role::Pace { used, elapsed });
+        let pieces = [cell(true, true), cell(false, true), cell(false, false)];
+        let it = item(&pieces);
+        let plain = theme(SkinKind::Plain, GlyphTier::Nerd);
+        let muted = plain.palette.get(Token::Muted);
+        let spans = paint(&it, &plain);
+        // Top: usage over the track. Bottom: time passed over the same track.
+        assert_ne!(spans[0].style.fg, muted);
+        assert_eq!(spans[1].style.fg, muted);
+        let passed = spans[0].style.bg;
+        assert!(passed.is_some() && passed != muted);
+        assert_eq!(spans[1].style.bg, passed);
+        assert_eq!(spans[2].style.bg, muted);
+        // Without colors to mix, time passed is ANSI white.
+        let ansi = Theme {
+            palette: palette::terminal(),
+            ..plain
+        };
+        assert_eq!(paint(&it, &ansi)[0].style.bg, Some(Color::Ansi16(7)));
     }
 
     #[test]
