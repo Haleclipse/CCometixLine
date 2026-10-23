@@ -185,9 +185,15 @@ const SYMBOLS: &str = "◔◑◕●○◆◇■□▲△▶★☆✓✗⚑⚡♦
 const ICON_COLS: usize = 4;
 /// Columns for an icon's name in the grid.
 const ICON_NAME: usize = 12;
-/// The browser's grid: icons per row, three columns each, and rows shown.
-const BROWSE_COLS: usize = 23;
-const BROWSE_ROWS: usize = 10;
+/// A cell of the browser's grid: the icon with two columns either side,
+/// so it sits in the middle; a wide one runs a little into the right.
+const CELL: usize = 5;
+/// Rows of icons at most, each with a blank row under it.
+const BROWSE_ROWS: usize = 6;
+/// The browser follows the terminal's width between these.
+const BROWSE_WIDTH: (u16, u16) = (74, 100);
+/// Lines the browser draws besides the grid.
+const BROWSE_CHROME: u16 = 11;
 
 /// The "All Nerd Fonts" tab: every Nerd Fonts icon, found by name.
 struct Browser {
@@ -197,6 +203,9 @@ struct Browser {
     at: usize,
     /// The first row in view.
     top: usize,
+    /// Icons a row and rows in view, as last drawn.
+    cols: usize,
+    rows: usize,
 }
 
 impl Browser {
@@ -206,6 +215,8 @@ impl Browser {
             found: nerd::search(""),
             at: 0,
             top: 0,
+            cols: 11,
+            rows: BROWSE_ROWS,
         }
     }
 
@@ -228,14 +239,19 @@ impl Browser {
         };
         self.at = match self.at.checked_add_signed(by) {
             Some(n) => n.min(last),
-            None if by < -(BROWSE_COLS as isize) => 0,
+            None if by < -(self.cols as isize) => 0,
             None => self.at,
         };
-        let row = self.at / BROWSE_COLS;
+        self.scroll();
+    }
+
+    /// Bring the cursor's row into view.
+    fn scroll(&mut self) {
+        let row = self.at / self.cols;
         if row < self.top {
             self.top = row;
-        } else if row >= self.top + BROWSE_ROWS {
-            self.top = row + 1 - BROWSE_ROWS;
+        } else if row >= self.top + self.rows {
+            self.top = row + 1 - self.rows;
         }
     }
 }
@@ -360,8 +376,7 @@ impl IconDialog {
         self.at = self.at.min(self.entries().len() - 1);
     }
 
-    fn render_browse(&self, b: &Browser, f: &mut Frame, area: Rect, cx: &Cx) {
-        let rect = ui::popup(f, area, 74, BROWSE_ROWS as u16 + 11);
+    fn render_browse(&self, b: &Browser, f: &mut Frame, rect: Rect, cx: &Cx) {
         let all = nerd::all();
         let mut head = self.tabs();
         head.push(Span::styled(
@@ -377,26 +392,36 @@ impl IconDialog {
             prefixes.join(" ")
         );
         let mut search = vec![Span::styled(" / ", ui::accent())];
-        search.extend(b.query.line(60, true, &placeholder).spans);
+        search.extend(
+            b.query
+                .line((rect.width as usize).saturating_sub(8), true, &placeholder)
+                .spans,
+        );
         let mut text = vec![
             Line::from(head),
             Line::raw(""),
             Line::from(search),
             Line::raw(""),
         ];
-        for r in b.top..b.top + BROWSE_ROWS {
-            let mut spans = vec![Span::raw(" ")];
-            for c in 0..BROWSE_COLS {
-                let i = r * BROWSE_COLS + c;
+        for r in 0..b.rows {
+            if r > 0 {
+                text.push(Line::raw(""));
+            }
+            let mut spans = Vec::new();
+            for c in 0..b.cols {
+                let i = (b.top + r) * b.cols + c;
                 let Some(&g) = b.found.get(i) else {
                     break;
                 };
-                let style = if i == b.at {
-                    ui::tab_on()
+                // The selected icon keeps its look, between markers.
+                let (open, close) = if i == b.at {
+                    ("❯", "❮")
                 } else {
-                    Style::default()
+                    (" ", " ")
                 };
-                spans.push(Span::styled(format!(" {} ", all[g].glyph), style));
+                spans.push(Span::styled(open, ui::accent()));
+                spans.push(Span::raw(format!(" {} ", all[g].glyph)));
+                spans.push(Span::styled(close, ui::accent()));
             }
             text.push(Line::from(spans));
         }
@@ -421,7 +446,7 @@ impl IconDialog {
                         Style::default().fg(ui::WARN),
                     ));
                 }
-                Line::from(ui::clip(spans, 72))
+                Line::from(ui::clip(spans, (rect.width as usize).saturating_sub(2)))
             }
             None => Line::styled(" No icon matches", ui::muted()),
         });
@@ -454,7 +479,7 @@ impl IconDialog {
         let Some(b) = self.browse.as_mut() else {
             return Reply::Stay;
         };
-        let (row, page) = (BROWSE_COLS as isize, (BROWSE_COLS * BROWSE_ROWS) as isize);
+        let (row, page) = (b.cols as isize, (b.cols * b.rows) as isize);
         match key.code {
             KeyCode::Esc if !b.query.text().is_empty() => {
                 b.query = TextInput::default();
@@ -490,8 +515,22 @@ impl IconDialog {
 
 impl Dialog for IconDialog {
     fn render(&mut self, f: &mut Frame, area: Rect, cx: &Cx) {
-        if let Some(b) = &self.browse {
-            return self.render_browse(b, f, area, cx);
+        if let Some(b) = self.browse.as_mut() {
+            let width = area
+                .width
+                .saturating_sub(8)
+                .clamp(BROWSE_WIDTH.0, BROWSE_WIDTH.1);
+            let height = BROWSE_CHROME + 2 * BROWSE_ROWS as u16 - 1;
+            let rect = ui::popup(f, area, width, height);
+            // The grid takes the room the popup got: whole cells inside
+            // the border; rows with a blank one between.
+            b.cols = ((rect.width as usize).saturating_sub(2) / CELL).max(1);
+            let lines = rect.height.saturating_sub(BROWSE_CHROME) as usize;
+            b.rows = lines.div_ceil(2).clamp(1, BROWSE_ROWS);
+            b.scroll();
+            if let Some(b) = &self.browse {
+                return self.render_browse(b, f, rect, cx);
+            }
         }
         let entries = self.entries();
         let rows = entries.len().div_ceil(ICON_COLS);
@@ -926,7 +965,8 @@ mod tests {
         d.handle(key(KeyCode::BackTab), &mut doc);
         typed(&mut d, &mut doc, "git");
         d.handle(key(KeyCode::Down), &mut doc);
-        assert_eq!(d.browse.as_ref().unwrap().at, BROWSE_COLS);
+        let b = d.browse.as_ref().unwrap();
+        assert_eq!(b.at, b.cols);
         assert!(matches!(d.handle(key(KeyCode::Esc), &mut doc), Reply::Stay));
         assert!(d.browse.as_ref().unwrap().query.text().is_empty());
         assert!(matches!(

@@ -634,6 +634,8 @@ mod tests {
         }
         let s = screen(&mut app, 112, 33);
         assert!(s.contains("md-folder_open") && s.contains("U+F0770"), "{s}");
+        // The selected icon sits between markers, in the middle of its cell.
+        assert!(s.contains("❯ \u{f0770} ❮"), "{s}");
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
