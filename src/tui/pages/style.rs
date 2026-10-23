@@ -409,7 +409,8 @@ impl StylePage {
             Source::Override => "your override",
             Source::Palette if color.is_none() => "terminal default",
             Source::Palette => "from the palette",
-            Source::Auto if t == Token::Separator => "auto, as muted",
+            Source::Auto if t == Token::Separator && p.light => "auto, as muted",
+            Source::Auto if t == Token::Separator => "auto, white as in v1",
             Source::Auto => "auto, from the fill style",
         };
         // On the bottom border, so the table keeps every row.
@@ -720,13 +721,13 @@ mod tests {
         for _ in 0..5 {
             app.handle_key(key(KeyCode::Down));
         }
-        // The terminal palette draws it white, as v1 did; others as muted.
+        // White, as v1 drew it, but muted on a light palette.
         let s = screen(&mut app, 112, 33);
         assert!(
-            s.contains(" separator ") && s.contains("white  from the palette"),
+            s.contains(" separator ") && s.contains("auto, white as in v1"),
             "{s}"
         );
-        app.doc.edit(|c, _| c.palette = "nord".into());
+        app.doc.edit(|c, _| c.palette = "catppuccin-latte".into());
         assert!(screen(&mut app, 112, 33).contains("auto, as muted"));
         app.handle_key(key(KeyCode::Enter));
         for _ in 0..7 {

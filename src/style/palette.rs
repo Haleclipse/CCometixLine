@@ -64,8 +64,9 @@ pub enum Token {
     Crit,
     Accent,
     Muted,
-    /// Between items: the plain skin's separator, the bracket skin's
-    /// brackets. `muted` unless set.
+    /// Separators: between items in the plain skin, the bracket skin's
+    /// brackets, and the ` · ` within items. Unset, ANSI white as in v1, or
+    /// `muted` on a light palette where white wouldn't show.
     Separator,
     /// Default text; `None` means the terminal's foreground.
     Text,
@@ -193,12 +194,13 @@ impl Palette {
         self.colors.get(&token).copied()
     }
 
-    /// Color for `token`, falling back to the terminal palette's; an
-    /// unset separator is drawn as muted.
+    /// Color for `token`, falling back to the terminal palette's; see
+    /// `Token::Separator` for an unset separator.
     pub fn color(&self, token: Token) -> Option<Color> {
         match (self.get(token), token) {
             (Some(c), _) => Some(c),
-            (None, Token::Separator) => self.color(Token::Muted),
+            (None, Token::Separator) if self.light => self.color(Token::Muted),
+            (None, Token::Separator) => Some(Color::Ansi16(7)),
             (None, _) => terminal().get(token),
         }
     }
@@ -344,8 +346,6 @@ pub fn terminal() -> Palette {
         (Token::Crit, A(1)),
         (Token::Accent, A(14)),
         (Token::Muted, A(8)),
-        // White, as v1 drew every separator.
-        (Token::Separator, A(7)),
         (Token::OnFill, A(0)),
         (Token::Identity, A(14)),
         (Token::Workspace, A(10)),
@@ -530,14 +530,17 @@ mod tests {
     }
 
     #[test]
-    fn the_separator_is_muted_unless_set() {
+    fn separators_are_white_unless_set_or_on_a_light_palette() {
+        let white = Some(Color::Ansi16(7));
+        assert_eq!(terminal().color(Token::Separator), white);
         let mut p = builtin("nord").unwrap();
-        assert_eq!(p.color(Token::Separator), p.color(Token::Muted));
+        assert_eq!(p.color(Token::Separator), white);
+        let latte = builtin("catppuccin-latte").unwrap();
+        assert_eq!(latte.color(Token::Separator), latte.color(Token::Muted));
         let red = Color::parse("#ff0000").unwrap();
         p.set(Token::Separator, red);
         assert_eq!(p.color(Token::Separator), Some(red));
         assert_ne!(p.color(Token::Muted), Some(red));
-        assert_eq!(terminal().color(Token::Separator), Some(Color::Ansi16(7)));
     }
 
     #[test]

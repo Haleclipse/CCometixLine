@@ -342,6 +342,7 @@ pub fn paint(item: &ItemView, theme: &Theme) -> Vec<Span> {
     let base = base_color(item, theme);
     let sev = severity_token(item.severity).and_then(|t| theme.token(t));
     let muted = theme.token(Token::Muted);
+    let sep = theme.token(Token::Separator);
     if !theme.skin().filled() {
         return item
             .pieces
@@ -351,6 +352,7 @@ pub fn paint(item: &ItemView, theme: &Theme) -> Vec<Span> {
                     Role::Icon => item.icon_color.or(base),
                     Role::Text | Role::Strong => sev.or(item.fg).or(base),
                     Role::Muted | Role::Empty => muted,
+                    Role::Sep => sep,
                     Role::Fill(s) => severity_token(s).and_then(|t| theme.token(t)).or(base),
                     Role::Gradient(t) => gradient(theme, t),
                     Role::Good => theme.token(Token::Ok),
@@ -644,10 +646,16 @@ mod tests {
         let items = [item(&a), item(&a)];
         let mut plain = theme(SkinKind::Plain, GlyphTier::Nerd);
         let between = |t: &Theme| compose(&items, Side::Left, t)[1].style.fg;
-        assert_eq!(between(&plain), plain.palette.get(Token::Muted));
+        assert_eq!(between(&plain), Some(Color::Ansi16(7)));
         let red = Color::parse("#ff0000").unwrap();
         plain.palette.set(Token::Separator, red);
         assert_eq!(between(&plain), Some(red));
+        // A ` · ` within an item too; on a segment it keeps the text color.
+        let p = [Piece::new("a", Role::Text), Piece::new(" · ", Role::Sep)];
+        let it = item(&p);
+        assert_eq!(paint(&it, &plain)[1].style.fg, Some(red));
+        let spans = paint(&it, &theme(SkinKind::Pill, GlyphTier::Nerd));
+        assert_eq!(spans[1].style.fg, spans[0].style.fg);
         let bracket = Theme {
             skin: SkinKind::Bracket,
             ..plain

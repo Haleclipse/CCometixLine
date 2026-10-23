@@ -20,6 +20,9 @@ pub enum Role {
     Strong,
     /// Secondary detail.
     Muted,
+    /// A separator a template writes between parts, like ` · `; drawn in
+    /// the separator color outside segments.
+    Sep,
     /// A filled cell of a graph at the given severity.
     Fill(Severity),
     /// A filled cell colored by position along ok → warn → crit (0..1).

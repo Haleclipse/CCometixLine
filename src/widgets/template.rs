@@ -5,6 +5,10 @@
 use crate::metrics::Reading;
 use crate::style::{Piece, Role};
 
+/// Separators a template may write between parts: a glyph with a space on
+/// each side. A bare `/` (`{used}/{limit}`, `tok/s`) belongs to the value.
+const SEPARATORS: [&str; 4] = [" · ", " | ", " │ ", " / "];
+
 #[derive(Debug, PartialEq)]
 enum Node {
     Lit(String),
@@ -51,10 +55,29 @@ fn complete(nodes: &[Node], reading: &Reading) -> bool {
     })
 }
 
+/// Literal text, with its separators as pieces of their own.
+fn literal(text: &str, out: &mut Vec<Piece>) {
+    let mut rest = text;
+    while let Some((at, sep)) = SEPARATORS
+        .iter()
+        .filter_map(|s| Some((rest.find(s)?, *s)))
+        .min_by_key(|(at, _)| *at)
+    {
+        if at > 0 {
+            out.push(Piece::new(&rest[..at], Role::Text));
+        }
+        out.push(Piece::new(sep, Role::Sep));
+        rest = &rest[at + sep.len()..];
+    }
+    if !rest.is_empty() {
+        out.push(Piece::new(rest, Role::Text));
+    }
+}
+
 fn emit(nodes: &[Node], reading: &Reading, out: &mut Vec<Piece>) {
     for node in nodes {
         match node {
-            Node::Lit(text) => out.push(Piece::new(text.clone(), Role::Text)),
+            Node::Lit(text) => literal(text, out),
             Node::Field(name) => {
                 if let Some(f) = reading.get(name) {
                     out.push(Piece::new(f.text.clone(), f.role.unwrap_or(Role::Text)));
@@ -123,6 +146,26 @@ mod tests {
         let pieces = render("[{added}][ {removed}]", &r);
         assert_eq!(pieces[0], Piece::new("+3", Role::Good));
         assert_eq!(pieces[2], Piece::new("-1", Role::Bad));
+    }
+
+    #[test]
+    fn sets_separators_apart() {
+        let r = Reading::default()
+            .set("pct", "62")
+            .set("used", "3")
+            .set("limit", "5");
+        let pieces = render("{pct}% hit[ · {used}/{limit} | x]", &r);
+        let roles: Vec<(&str, Role)> = pieces.iter().map(|p| (p.text.as_str(), p.role)).collect();
+        assert_eq!(
+            roles,
+            [
+                ("62% hit", Role::Text),
+                (" · ", Role::Sep),
+                ("3/5", Role::Text),
+                (" | ", Role::Sep),
+                ("x", Role::Text),
+            ]
+        );
     }
 
     #[test]
