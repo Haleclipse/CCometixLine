@@ -34,7 +34,7 @@ separator = " | "
 [[line]]
 left = [
   "model",
-  { metric = "dir", icon_color = "16:11" },
+  { metric = "dir", icon_color = "bright_yellow" },
   "git",
   { metric = "context", widget = "text", format = "{pct}%[ · {tokens} tokens]" },
 ]
@@ -109,7 +109,7 @@ glyphs = "nerd"
 separator = " · "
 
 [[line]]
-left = ["model", { metric = "dir", icon_color = "16:11" }, "git", { metric = "context", widget = "text" }]
+left = ["model", { metric = "dir", icon_color = "bright_yellow" }, "git", { metric = "context", widget = "text" }]
 right = ["update", "cost"]
 
 [[line]]
@@ -596,7 +596,12 @@ mod tests {
             for item in c.lines.iter().flat_map(|l| l.left.iter().chain(&l.right)) {
                 let item = item.config();
                 if item.metric == "dir" {
-                    assert_eq!(item.icon_color.as_deref(), Some("16:11"), "{}", p.name);
+                    assert_eq!(
+                        item.icon_color.as_deref(),
+                        Some("bright_yellow"),
+                        "{}",
+                        p.name
+                    );
                 }
             }
         }
