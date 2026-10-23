@@ -353,9 +353,15 @@ impl App {
             .push(Box::new(dialogs::Setup::new(self.env.settings.clone())));
     }
 
+    /// Changes to Claude Code's settings a page drafted and didn't write.
+    fn unapplied(&self) -> Option<dialogs::SettingsDiff> {
+        self.pages.iter().find_map(|p| p.unapplied())
+    }
+
     fn request_quit(&mut self) {
-        if self.doc.dirty() {
-            self.dialogs.push(Box::new(dialogs::Quit));
+        let settings = self.unapplied().is_some();
+        if self.doc.dirty() || settings {
+            self.dialogs.push(Box::new(dialogs::Quit { settings }));
         } else {
             self.quit = true;
         }
@@ -397,16 +403,29 @@ impl App {
                 self.doc.reload();
                 self.toast("Reloaded from disk", false);
             }
-            Action::Save { force, then_quit } => match self.doc.save(force) {
-                Ok(()) => {
-                    self.toast("Saved", false);
-                    self.quit = then_quit;
+            // ccline's files, then any drafted change to Claude Code's
+            // settings, which is written only once its diff is accepted.
+            Action::Save { force, then_quit } => match (self.doc.dirty(), self.doc.save(force)) {
+                (dirty, Ok(())) => {
+                    let diff = self.unapplied();
+                    if dirty {
+                        self.toast("Saved", false);
+                    } else if diff.is_none() {
+                        self.toast("Nothing to save", false);
+                    }
+                    match diff {
+                        Some(mut diff) => {
+                            diff.then_quit = then_quit;
+                            self.dialogs.push(Box::new(diff));
+                        }
+                        None => self.quit = then_quit,
+                    }
                 }
-                Err(SaveError::Conflict(paths)) => {
+                (_, Err(SaveError::Conflict(paths))) => {
                     self.dialogs
                         .push(Box::new(dialogs::Conflict { paths, then_quit }));
                 }
-                Err(SaveError::Io(e)) => self.toast(format!("Couldn't save: {e}"), true),
+                (_, Err(SaveError::Io(e))) => self.toast(format!("Couldn't save: {e}"), true),
             },
         }
     }

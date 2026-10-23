@@ -22,6 +22,18 @@ pub struct SettingsDiff {
     pub base: Settings,
     /// The settings to write.
     pub draft: Settings,
+    /// Quit once they're written: the last step of saving on the way out.
+    pub then_quit: bool,
+}
+
+impl SettingsDiff {
+    pub fn new(base: Settings, draft: Settings) -> SettingsDiff {
+        SettingsDiff {
+            base,
+            draft,
+            then_quit: false,
+        }
+    }
 }
 
 /// `path` with the home directory as `~`.
@@ -72,7 +84,12 @@ impl Dialog for SettingsDiff {
                     .to_string_lossy()
             )),
         ]));
-        text.push(ui::hints(&[("Y", "apply"), ("N", "cancel")]));
+        let apply = if self.then_quit {
+            "apply and quit"
+        } else {
+            "apply"
+        };
+        text.push(ui::hints(&[("Y", apply), ("N", "cancel")]));
         let title = format!("Change {}", shown_path(&self.base.path));
         f.render_widget(Paragraph::new(text).block(ui::panel(&title)), rect);
     }
@@ -80,6 +97,7 @@ impl Dialog for SettingsDiff {
     fn handle(&mut self, key: KeyEvent, _: &mut Doc) -> Reply {
         match key.code {
             KeyCode::Char('y' | 'Y') => match self.draft.save(&self.base) {
+                Ok(_) if self.then_quit => Reply::Then(Action::Quit),
                 Ok(backup) => Reply::Then(Action::Toast(match backup {
                     Some(b) => format!("Updated settings.json · old file in {}", shown_path(&b)),
                     None => "Created settings.json".into(),

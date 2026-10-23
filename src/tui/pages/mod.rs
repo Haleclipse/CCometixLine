@@ -8,7 +8,7 @@ mod models;
 mod presets;
 mod style;
 
-use super::dialogs::Dialog;
+use super::dialogs::{Dialog, SettingsDiff};
 use super::doc::Doc;
 use super::preview::Target;
 use crate::state::SessionState;
@@ -156,5 +156,10 @@ pub trait Page {
     /// for pages whose letters only open things.
     fn shortcuts(&self) -> bool {
         false
+    }
+    /// Changes to Claude Code's settings drafted here and not written yet,
+    /// for saving and quitting to bring up.
+    fn unapplied(&self) -> Option<SettingsDiff> {
+        None
     }
 }

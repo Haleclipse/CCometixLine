@@ -173,7 +173,7 @@ fn change_settings(env: &Env, refresh: bool) -> Outcome {
     if !draft.differs(&base) {
         return Outcome::Toast("Already set".into());
     }
-    Outcome::Open(Box::new(SettingsDiff { base, draft }))
+    Outcome::Open(Box::new(SettingsDiff::new(base, draft)))
 }
 
 impl Home {

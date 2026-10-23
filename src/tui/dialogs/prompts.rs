@@ -13,20 +13,31 @@ use ratatui::widgets::Paragraph;
 use std::path::PathBuf;
 
 /// I · Unsaved changes.
-pub struct Quit;
+pub struct Quit {
+    /// A change to Claude Code's settings is drafted and not written.
+    pub settings: bool,
+}
 
 impl Dialog for Quit {
     fn render(&mut self, f: &mut Frame, area: Rect, cx: &Cx) {
-        let rect = ui::popup(f, area, 64, 7);
         let n = cx.doc.edits();
-        let text = vec![
-            Line::raw(format!(
+        let mut text = Vec::new();
+        if n > 0 {
+            text.push(Line::raw(format!(
                 " {n} change{} since the last save.",
                 if n == 1 { "" } else { "s" }
-            )),
-            Line::raw(""),
-            ui::hints(&[("S", "save and quit"), ("D", "discard"), ("esc", "stay")]),
-        ];
+            )));
+        }
+        if self.settings {
+            text.push(Line::raw(" A change to settings.json not applied yet."));
+        }
+        text.push(Line::raw(""));
+        text.push(ui::hints(&[
+            ("S", "save and quit"),
+            ("D", "discard"),
+            ("esc", "stay"),
+        ]));
+        let rect = ui::popup(f, area, 64, text.len() as u16 + 4);
         f.render_widget(
             Paragraph::new(text).block(ui::panel("Unsaved changes")),
             rect,

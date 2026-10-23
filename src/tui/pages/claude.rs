@@ -127,13 +127,18 @@ impl ClaudePage {
         Outcome::Consumed
     }
 
-    fn review(&self) -> Outcome {
+    /// The draft's changes to the file, if any.
+    fn diff(&self) -> Option<SettingsDiff> {
         match (&self.draft, self.base()) {
-            (Some(d), Some(b)) if d.differs(b) => Outcome::Open(Box::new(SettingsDiff {
-                base: b.clone(),
-                draft: d.clone(),
-            })),
-            _ => Outcome::Toast("No changes to apply".into()),
+            (Some(d), Some(b)) if d.differs(b) => Some(SettingsDiff::new(b.clone(), d.clone())),
+            _ => None,
+        }
+    }
+
+    fn review(&self) -> Outcome {
+        match self.diff() {
+            Some(diff) => Outcome::Open(Box::new(diff)),
+            None => Outcome::Toast("No changes to apply".into()),
         }
     }
 
@@ -584,13 +589,17 @@ impl Page for ClaudePage {
     fn file(&self) -> &'static str {
         "settings.json"
     }
+
+    fn unapplied(&self) -> Option<SettingsDiff> {
+        self.diff()
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::tui::app::App;
-    use crate::tui::app::tests::{env, key, screen};
+    use crate::tui::app::tests::{ctrl, env, key, screen};
     use crate::tui::doc::tests::temp_paths;
 
     #[test]
@@ -659,6 +668,54 @@ mod tests {
         app.handle_key(key(KeyCode::Char('y')));
         let written = Settings::load(&settings).unwrap();
         assert_eq!(written.subagent_command(), Some(line.command));
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn saving_or_quitting_brings_up_a_drafted_change() {
+        let (dir, paths) = temp_paths("claude-save");
+        let settings = dir.join("settings.json");
+        std::fs::write(
+            &settings,
+            "{\n  \"statusLine\": {\"type\": \"command\", \"command\": \"ccline\"}\n}\n",
+        )
+        .unwrap();
+        let mut app = App::new(
+            Doc::open(paths),
+            Env {
+                settings: settings.clone(),
+                ..env()
+            },
+        );
+        app.open_page(PageId::Claude);
+        screen(&mut app, 112, 33);
+        app.handle_key(key(KeyCode::Down));
+        app.handle_key(key(KeyCode::Down));
+        app.handle_key(key(KeyCode::Right));
+        app.handle_key(key(KeyCode::Right));
+        let refresh = || {
+            Settings::load(&settings)
+                .unwrap()
+                .status_line()
+                .unwrap()
+                .refresh_interval
+        };
+
+        // ^S shows the diff; N leaves the draft as it was.
+        app.handle_key(ctrl('s'));
+        assert!(screen(&mut app, 112, 33).contains("+   \"refreshInterval\": 2"));
+        app.handle_key(key(KeyCode::Char('n')));
+        assert_eq!(refresh(), None);
+
+        // Quitting asks first; saving on the way out applies it, then quits.
+        app.handle_key(key(KeyCode::Char('q')));
+        assert!(!app.quit);
+        assert!(screen(&mut app, 112, 33).contains("settings.json not applied"));
+        app.handle_key(key(KeyCode::Char('s')));
+        assert!(screen(&mut app, 112, 33).contains("apply and quit"));
+        app.handle_key(key(KeyCode::Char('y')));
+        assert!(app.quit);
+        assert_eq!(refresh(), Some(2));
         std::fs::remove_dir_all(&dir).unwrap();
     }
 }
