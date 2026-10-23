@@ -89,6 +89,9 @@ pub struct ItemView<'a> {
     /// The text color: on the segment in filled skins, beside the icon in
     /// the others.
     pub fg: Option<Color>,
+    /// Replaces the icon's color: `color` in the plain skins, the text
+    /// color in filled ones.
+    pub icon_color: Option<Color>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -227,6 +230,7 @@ pub fn segment_colors(category: Category, theme: &Theme) -> (Option<Color>, Opti
         severity: Severity::Normal,
         color: None,
         fg: None,
+        icon_color: None,
     };
     segment(&view, theme)
 }
@@ -344,7 +348,7 @@ pub fn paint(item: &ItemView, theme: &Theme) -> Vec<Span> {
             .iter()
             .map(|p| {
                 let fg = match p.role {
-                    Role::Icon => base,
+                    Role::Icon => item.icon_color.or(base),
                     Role::Text | Role::Strong => sev.or(item.fg).or(base),
                     Role::Muted | Role::Empty => muted,
                     Role::Fill(s) => severity_token(s).and_then(|t| theme.token(t)).or(base),
@@ -405,6 +409,7 @@ pub fn paint(item: &ItemView, theme: &Theme) -> Vec<Span> {
                     dim: mid.is_none(),
                     ..Style::default()
                 },
+                (Role::Icon, false) => style(item.icon_color.or(fg), bg),
                 (role, false) => Style {
                     fg,
                     bg,
@@ -420,15 +425,15 @@ pub fn paint(item: &ItemView, theme: &Theme) -> Vec<Span> {
 /// Paint and join the items of one side of a line.
 pub fn compose(items: &[ItemView], side: Side, theme: &Theme) -> Line {
     let mut line = Line::new();
-    let muted = Style {
-        fg: theme.token(Token::Muted),
+    let between = Style {
+        fg: theme.token(Token::Separator),
         ..Style::default()
     };
     match theme.skin() {
         SkinKind::Plain => {
             for (i, item) in items.iter().enumerate() {
                 if i > 0 {
-                    line.push(Span::styled(theme.separator(), muted.clone()));
+                    line.push(Span::styled(theme.separator(), between.clone()));
                 }
                 line.extend(paint(item, theme));
             }
@@ -438,9 +443,9 @@ pub fn compose(items: &[ItemView], side: Side, theme: &Theme) -> Line {
                 if i > 0 {
                     line.push(Span::raw(" "));
                 }
-                line.push(Span::styled("[", muted.clone()));
+                line.push(Span::styled("[", between.clone()));
                 line.extend(paint(item, theme));
-                line.push(Span::styled("]", muted.clone()));
+                line.push(Span::styled("]", between.clone()));
             }
         }
         SkinKind::Pill => {
@@ -529,6 +534,7 @@ mod tests {
             severity: Severity::Normal,
             color: None,
             fg: None,
+            icon_color: None,
         }
     }
 
@@ -608,6 +614,45 @@ mod tests {
         let span = &paint(&it, &light)[0];
         assert_eq!(span.style.bg, light.palette.get(Token::Crit));
         assert_eq!(span.style.fg, Color::parse("#ffffff"));
+    }
+
+    #[test]
+    fn icons_take_their_own_color() {
+        let p = [Piece::new("@", Role::Icon), Piece::new("x", Role::Text)];
+        let mut it = item(&p);
+        let red = Color::parse("#ff0000");
+        let blue = Color::parse("#0000ff");
+        it.color = red;
+        let plain = theme(SkinKind::Plain, GlyphTier::Nerd);
+        let fg =
+            |it: &ItemView, t: &Theme| paint(it, t).iter().map(|s| s.style.fg).collect::<Vec<_>>();
+        // The item's color is the icon's and, without `fg`, the text's.
+        assert_eq!(fg(&it, &plain), [red, red]);
+        it.icon_color = blue;
+        assert_eq!(fg(&it, &plain), [blue, red]);
+        // On a segment the icon replaces the text color, over the same fill.
+        let pill = theme(SkinKind::Pill, GlyphTier::Nerd);
+        let spans = paint(&it, &pill);
+        assert_eq!(spans[0].style.fg, blue);
+        assert_ne!(spans[1].style.fg, blue);
+        assert_eq!(spans[0].style.bg, spans[1].style.bg);
+    }
+
+    #[test]
+    fn separators_take_their_token() {
+        let a = [Piece::new("a", Role::Text)];
+        let items = [item(&a), item(&a)];
+        let mut plain = theme(SkinKind::Plain, GlyphTier::Nerd);
+        let between = |t: &Theme| compose(&items, Side::Left, t)[1].style.fg;
+        assert_eq!(between(&plain), plain.palette.get(Token::Muted));
+        let red = Color::parse("#ff0000").unwrap();
+        plain.palette.set(Token::Separator, red);
+        assert_eq!(between(&plain), Some(red));
+        let bracket = Theme {
+            skin: SkinKind::Bracket,
+            ..plain
+        };
+        assert_eq!(compose(&items, Side::Left, &bracket)[0].style.fg, Some(red));
     }
 
     #[test]

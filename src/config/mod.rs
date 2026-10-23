@@ -124,6 +124,10 @@ pub struct ItemConfig {
     /// to the icon in the others.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fg: Option<String>,
+    /// Icon color, the same way; unset, the icon takes the item's color
+    /// (its text color in filled skins).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub icon_color: Option<String>,
     /// Thresholds in percent, e.g. `[[50, "warn"], [80, "crit"]]`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub levels: Option<Vec<(f64, String)>>,

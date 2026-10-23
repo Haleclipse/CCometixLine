@@ -21,6 +21,7 @@ pub enum Field {
     Cells,
     Template(Level),
     Icon,
+    IconColor,
     Color,
     /// Text color (`fg`).
     Text,
@@ -39,8 +40,8 @@ pub enum Change {
     /// Open that field's dialog.
     Widget,
     Icon,
+    /// The color dialog, for the field's color.
     Color,
-    TextColor,
     Levels,
 }
 
@@ -105,6 +106,7 @@ pub fn fields(cfg: &ItemConfig, meta: &MetricMeta, one_line: bool) -> Vec<Field>
     }
     f.extend(Level::ALL.map(Field::Template));
     f.push(Field::Icon);
+    f.push(Field::IconColor);
     f.push(Field::Color);
     f.push(Field::Text);
     if !meta.levels.is_empty() || cfg.levels.is_some() {
@@ -130,6 +132,7 @@ pub fn label(field: Field, meta: &MetricMeta) -> String {
         Field::Template(Level::Compact) => "Compact".into(),
         Field::Template(Level::Minimal) => "Minimal".into(),
         Field::Icon => "Icon".into(),
+        Field::IconColor => "Icon color".into(),
         Field::Color => "Color".into(),
         Field::Text => "Text".into(),
         Field::Levels => "Levels".into(),
@@ -147,8 +150,7 @@ pub fn change(field: Field, meta: &MetricMeta) -> Change {
         Field::Template(_) => Change::Text,
         Field::Widget => Change::Widget,
         Field::Icon => Change::Icon,
-        Field::Color => Change::Color,
-        Field::Text => Change::TextColor,
+        Field::IconColor | Field::Color | Field::Text => Change::Color,
         Field::Levels => Change::Levels,
         Field::Bar | Field::Cells | Field::Coloring | Field::Priority => Change::Cycle,
     }
@@ -161,6 +163,7 @@ pub fn cycles(field: Field, meta: &MetricMeta) -> bool {
         Field::Widget
         | Field::Bar
         | Field::Cells
+        | Field::IconColor
         | Field::Color
         | Field::Text
         | Field::Coloring
@@ -216,9 +219,24 @@ fn opt_text(cfg: &ItemConfig, spec: &OptSpec) -> String {
     }
 }
 
-/// The token or color an item is drawn in, by name.
-fn color_name(cfg: &ItemConfig) -> Option<&str> {
-    cfg.color.as_deref()
+/// The token or color a color field holds, by name.
+pub fn color_of(field: Field, cfg: &ItemConfig) -> Option<&str> {
+    match field {
+        Field::IconColor => cfg.icon_color.as_deref(),
+        Field::Color => cfg.color.as_deref(),
+        Field::Text => cfg.fg.as_deref(),
+        _ => None,
+    }
+}
+
+/// Where a color field keeps its value.
+pub fn color_slot(field: Field, cfg: &mut ItemConfig) -> Option<&mut Option<String>> {
+    match field {
+        Field::IconColor => Some(&mut cfg.icon_color),
+        Field::Color => Some(&mut cfg.color),
+        Field::Text => Some(&mut cfg.fg),
+        _ => None,
+    }
 }
 
 /// Whether the item sets this field itself.
@@ -230,8 +248,7 @@ pub fn is_set(field: Field, cfg: &ItemConfig, meta: &MetricMeta) -> bool {
         Field::Cells => cfg.cells.is_some(),
         Field::Template(l) => template(cfg, l).is_some(),
         Field::Icon => cfg.icon.is_some(),
-        Field::Color => cfg.color.is_some(),
-        Field::Text => cfg.fg.is_some(),
+        Field::IconColor | Field::Color | Field::Text => color_of(field, cfg).is_some(),
         Field::Levels => cfg.levels.is_some(),
         Field::Coloring => cfg.coloring.is_some(),
         Field::Priority => cfg.priority.is_some(),
@@ -296,19 +313,16 @@ pub fn cycle(field: Field, cfg: &mut ItemConfig, meta: &MetricMeta, forward: boo
             };
             cfg.priority = unless_default(next, meta.priority);
         }
-        Field::Color | Field::Text => {
+        Field::IconColor | Field::Color | Field::Text => {
             // Unset (the category's or worked out), then each palette token.
             let names: Vec<Option<&str>> = std::iter::once(None)
                 .chain(TOKENS.iter().map(|t| Some(t.name())))
                 .collect();
-            let slot = if field == Field::Color {
-                &mut cfg.color
-            } else {
-                &mut cfg.fg
-            };
-            let current = slot.as_deref().filter(|c| Token::parse(c).is_some());
-            let next = step(&names, current, forward);
-            *slot = next.map(str::to_string);
+            if let Some(slot) = color_slot(field, cfg) {
+                let current = slot.as_deref().filter(|c| Token::parse(c).is_some());
+                let next = step(&names, current, forward);
+                *slot = next.map(str::to_string);
+            }
         }
         Field::Template(_) | Field::Icon | Field::Levels => {}
     }
@@ -381,6 +395,7 @@ pub fn reset(field: Field, cfg: &mut ItemConfig, meta: &MetricMeta) {
         Field::Cells => cfg.cells = None,
         Field::Template(l) => *template_mut(cfg, l) = None,
         Field::Icon => cfg.icon = None,
+        Field::IconColor => cfg.icon_color = None,
         Field::Color => cfg.color = None,
         Field::Text => cfg.fg = None,
         Field::Levels => cfg.levels = None,
@@ -448,11 +463,7 @@ pub fn value(field: Field, cfg: &ItemConfig, meta: &MetricMeta, look: &Look) -> 
                 v
             }
         },
-        Field::Color | Field::Text => match if field == Field::Color {
-            color_name(cfg)
-        } else {
-            cfg.fg.as_deref()
-        } {
+        Field::IconColor | Field::Color | Field::Text => match color_of(field, cfg) {
             None if field == Field::Color => muted("category"),
             None => muted("auto"),
             Some(name) => {
@@ -598,6 +609,11 @@ mod tests {
         assert_eq!(c.fg.as_deref(), Some("system"));
         reset(Field::Text, &mut c, git);
         assert_eq!(c.fg, None);
+        cycle(Field::IconColor, &mut c, git, true);
+        assert_eq!(c.icon_color.as_deref(), Some("ok"));
+        assert!(is_set(Field::IconColor, &c, git) && c.color.is_none());
+        reset(Field::IconColor, &mut c, git);
+        assert_eq!(c.icon_color, None);
 
         // A flag that defaults to on stores only its turning off.
         let model = meta("model");

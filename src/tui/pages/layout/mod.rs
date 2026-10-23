@@ -356,27 +356,25 @@ impl LayoutPage {
                 Change::Levels => {
                     return Outcome::Open(Box::new(dialogs::LevelsDialog::new(item, &cfg)));
                 }
-                Change::Color | Change::TextColor => {
+                Change::Color => {
                     let target = self.target;
-                    let text = change == Change::TextColor;
                     let apply = Box::new(move |doc: &mut Doc, value: String| {
                         doc.edit(|c, _| {
                             edit::edit_lines(c, target, |lines| {
                                 edit::edit_item(lines, loc, |cfg| {
-                                    if text {
-                                        cfg.fg = Some(value);
-                                    } else {
-                                        cfg.color = Some(value);
+                                    if let Some(slot) = inspector::color_slot(field, cfg) {
+                                        *slot = Some(value);
                                     }
                                 })
                             })
                         });
                     });
-                    let (title, current) = if text {
-                        (format!("{} text", meta.id), cfg.fg.as_deref())
-                    } else {
-                        (meta.id.to_string(), cfg.color.as_deref())
+                    let title = match field {
+                        Field::IconColor => format!("{} icon", meta.id),
+                        Field::Text => format!("{} text", meta.id),
+                        _ => meta.id.to_string(),
                     };
+                    let current = inspector::color_of(field, &cfg);
                     return Outcome::Open(Box::new(ColorDialog::custom(title, current, apply)));
                 }
             },

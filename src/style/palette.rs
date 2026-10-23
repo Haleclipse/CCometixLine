@@ -64,6 +64,9 @@ pub enum Token {
     Crit,
     Accent,
     Muted,
+    /// Between items: the plain skin's separator, the bracket skin's
+    /// brackets. `muted` unless set.
+    Separator,
     /// Default text; `None` means the terminal's foreground.
     Text,
     /// Background of the status line; `None` means the terminal's.
@@ -89,12 +92,13 @@ pub enum Token {
 
 /// The plain tokens: semantic colors, then a color per category. Each
 /// category also has segment tokens; see `segment_tokens`.
-pub const TOKENS: [Token; 19] = [
+pub const TOKENS: [Token; 20] = [
     Token::Ok,
     Token::Warn,
     Token::Crit,
     Token::Accent,
     Token::Muted,
+    Token::Separator,
     Token::Text,
     Token::Bg,
     Token::OnFill,
@@ -139,6 +143,7 @@ impl Token {
             Token::Crit => "crit",
             Token::Accent => "accent",
             Token::Muted => "muted",
+            Token::Separator => "separator",
             Token::Text => "text",
             Token::Bg => "bg",
             Token::OnFill => "on_fill",
@@ -188,9 +193,14 @@ impl Palette {
         self.colors.get(&token).copied()
     }
 
-    /// Color for `token`, falling back to the terminal palette's.
+    /// Color for `token`, falling back to the terminal palette's; an
+    /// unset separator is drawn as muted.
     pub fn color(&self, token: Token) -> Option<Color> {
-        self.get(token).or_else(|| terminal().get(token))
+        match (self.get(token), token) {
+            (Some(c), _) => Some(c),
+            (None, Token::Separator) => self.color(Token::Muted),
+            (None, _) => terminal().get(token),
+        }
     }
 
     pub fn set(&mut self, token: Token, color: Color) {
@@ -510,10 +520,21 @@ mod tests {
         for name in BUILTIN_NAMES {
             let p = builtin(name).unwrap();
             for t in TOKENS {
-                let optional = name == "terminal" && matches!(t, Token::Text | Token::Bg);
+                let optional = t == Token::Separator
+                    || name == "terminal" && matches!(t, Token::Text | Token::Bg);
                 assert!(optional || p.get(t).is_some(), "{name} lacks {t:?}");
             }
         }
+    }
+
+    #[test]
+    fn the_separator_is_muted_until_set() {
+        let mut p = builtin("nord").unwrap();
+        assert_eq!(p.color(Token::Separator), p.color(Token::Muted));
+        let red = Color::parse("#ff0000").unwrap();
+        p.set(Token::Separator, red);
+        assert_eq!(p.color(Token::Separator), Some(red));
+        assert_ne!(p.color(Token::Muted), Some(red));
     }
 
     #[test]

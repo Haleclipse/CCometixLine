@@ -47,9 +47,9 @@ const SWATCHES: [Token; 8] = [
     Token::Session,
 ];
 /// Semantic tokens come first in `TOKENS`; the rest are categories.
-const SEMANTIC: usize = 8;
+const SEMANTIC: usize = 9;
 /// Columns of a semantic cell: marker, name, swatch, value, mark.
-const SEMANTIC_CELL: usize = 2 + 9 + 1 + 9 + 1;
+const SEMANTIC_CELL: usize = 2 + 10 + 1 + 9 + 1;
 /// The category table's columns: the color, then segment bg and fg.
 const SEGMENT_COLUMNS: [&str; 3] = ["color", "bg", "fg"];
 
@@ -304,7 +304,9 @@ impl StylePage {
         let resolve = |t: Token| -> (Option<crate::style::Color>, Source) {
             let source = if overrides.contains_key(t.name()) {
                 Source::Override
-            } else if p.get(t).is_some() || !matches!(t, Token::SegBg(_) | Token::SegFg(_)) {
+            } else if p.get(t).is_some()
+                || !matches!(t, Token::SegBg(_) | Token::SegFg(_) | Token::Separator)
+            {
                 Source::Palette
             } else {
                 Source::Auto
@@ -312,6 +314,7 @@ impl StylePage {
             let color = match (t, &source) {
                 (Token::SegBg(c), Source::Auto) => crate::style::skin::segment_colors(c, &theme).0,
                 (Token::SegFg(c), Source::Auto) => crate::style::skin::segment_colors(c, &theme).1,
+                (Token::Separator, Source::Auto) => p.color(t),
                 _ => p.get(t),
             };
             (color, source)
@@ -333,7 +336,7 @@ impl StylePage {
             vec![
                 Span::styled(if sel { ui::SELECTED } else { "  " }, ui::accent()),
                 Span::styled(
-                    format!("{:<9}", t.name()),
+                    format!("{:<10}", t.name()),
                     if sel { ui::accent() } else { Style::default() },
                 ),
                 ui::swatch(color, depth),
@@ -406,6 +409,7 @@ impl StylePage {
             Source::Override => "your override",
             Source::Palette if color.is_none() => "terminal default",
             Source::Palette => "from the palette",
+            Source::Auto if t == Token::Separator => "auto, as muted",
             Source::Auto => "auto, from the fill style",
         };
         // On the bottom border, so the table keeps every row.
@@ -702,6 +706,36 @@ mod tests {
         app.handle_key(key(KeyCode::Down));
         app.handle_key(key(KeyCode::Right));
         assert_eq!(app.doc.config.fill, crate::style::FillStyle::Tinted);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn the_separator_has_a_token_of_its_own() {
+        let (dir, paths) = temp_paths("style-sep");
+        let mut app = App::new(Doc::open(paths), env());
+        app.open_page(PageId::Style);
+        for _ in 0..3 {
+            app.handle_key(key(KeyCode::Tab));
+        }
+        for _ in 0..5 {
+            app.handle_key(key(KeyCode::Down));
+        }
+        let s = screen(&mut app, 112, 33);
+        assert!(
+            s.contains(" separator ") && s.contains("auto, as muted"),
+            "{s}"
+        );
+        app.handle_key(key(KeyCode::Enter));
+        for _ in 0..7 {
+            app.handle_key(key(KeyCode::Backspace));
+        }
+        for c in "#ff8800".chars() {
+            app.handle_key(key(KeyCode::Char(c)));
+        }
+        app.handle_key(key(KeyCode::Enter));
+        let set = &app.doc.config.palette_overrides;
+        assert_eq!(set.get("separator").map(String::as_str), Some("#ff8800"));
+        assert!(screen(&mut app, 112, 33).contains("your override"));
         std::fs::remove_dir_all(&dir).unwrap();
     }
 }

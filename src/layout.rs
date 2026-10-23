@@ -16,6 +16,7 @@ pub struct LaidItem {
     pub severity: Severity,
     pub color: Option<Color>,
     pub fg: Option<Color>,
+    pub icon_color: Option<Color>,
     /// 1 (dropped first) to 5 (kept longest).
     pub priority: u8,
 }
@@ -77,6 +78,7 @@ impl Slot<'_> {
             severity: self.item.severity,
             color: self.item.color,
             fg: self.item.fg,
+            icon_color: self.item.icon_color,
         })
     }
 }
@@ -296,6 +298,7 @@ mod tests {
             severity: Severity::Normal,
             color: None,
             fg: None,
+            icon_color: None,
             priority,
         }
     }
