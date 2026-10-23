@@ -503,6 +503,7 @@ impl Page for LayoutPage {
                 focused: cx.focused && self.pane == Pane::Canvas,
                 target: self.target,
                 columns: cx.preview.columns(),
+                scenario: cx.preview.scenario_name(),
             };
             canvas::render(f, canvas_area, block, &view);
         }

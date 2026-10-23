@@ -72,6 +72,8 @@ pub struct View<'a> {
     pub focused: bool,
     pub target: Target,
     pub columns: u16,
+    /// The preview's sample, which the reports come from.
+    pub scenario: &'a str,
 }
 
 /// Rows for one line: its heading, then its chips wrapped to `width`.
@@ -213,14 +215,23 @@ fn narrow_rows(view: &View) -> Vec<Line<'static>> {
             merged.push((n, label(spec), Change::Level(step.from, step.to)));
         }
     }
+    // Gray items are this sample's doing, not the config's.
+    let gray = view.reports.iter().any(|r| !r.empty.is_empty()).then(|| {
+        Line::styled(
+            format!("gray: nothing to show in ‹{}›", view.scenario),
+            ui::muted(),
+        )
+    });
     if merged.is_empty() {
-        return vec![
+        let mut rows = vec![
             Line::styled(format!("Fits in {cols} columns."), ui::muted()),
             Line::from(vec![
                 Span::styled("-", ui::accent()),
                 Span::styled(" narrows the preview", ui::muted()),
             ]),
         ];
+        rows.extend(gray);
+        return rows;
     }
     let mut rows = vec![Line::styled(
         format!("Too narrow at {cols} columns:"),
@@ -245,6 +256,7 @@ fn narrow_rows(view: &View) -> Vec<Line<'static>> {
             change,
         ]));
     }
+    rows.extend(gray);
     rows
 }
 

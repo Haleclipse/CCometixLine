@@ -19,15 +19,16 @@ expression: render_preset(preset.name)
 ── fresh @ 60
   Sonnet 5 · Med   󰉋 app   󰊢 main ✓ ⏎
                            󰚰 ]8;;https://github.com/Haleclipse/CCometixLine/releases/tag/v2.1.0\v2.1.0 available]8;;\    $0.06 ⏎
-  ▕█▎        ▏ 12% · 24k                         4:20 ⏎
+  ▕█▎        ▏ 12% · 24k   󰪞 ▀▀▀▀▀▀▀▀ 1% · 04:55 ⇣1% ⏎
+                                                    4:20 ⏎
                                                     󱦻 40s ⏎
 ── fresh @ 100
   Sonnet 5 · Med   󰉋 app   󰊢 main ✓                         󰚰 ]8;;https://github.com/Haleclipse/CCometixLine/releases/tag/v2.1.0\v2.1.0 available]8;;\    $0.06 ⏎
-  ▕█▎        ▏ 12% · 24k                                                                 4:20 ⏎
+  ▕█▎        ▏ 12% · 24k   󰪞 ▀▀▀▀▀▀▀▀ 1% · 04:55 ⇣1%                                   4:20 ⏎
                                                                                             󱦻 40s ⏎
 ── fresh @ 140
   Sonnet 5 · Med   󰉋 app   󰊢 main ✓                                                                 󰚰 ]8;;https://github.com/Haleclipse/CCometixLine/releases/tag/v2.1.0\v2.1.0 available]8;;\    $0.06 ⏎
-  ▕█▎        ▏ 12% · 24k                                                                                                         4:20 ⏎
+  ▕█▎        ▏ 12% · 24k   󰪞 ▀▀▀▀▀▀▀▀ 1% · 04:55 ⇣1%                                                                           4:20 ⏎
                                                                                                                                     󱦻 40s ⏎
 ── near-full @ 60
   Opus 4.8 · Max   󰉋 app   󰊢 feature/auth ⚠ ↓3 ⏎
@@ -85,15 +86,16 @@ expression: render_preset(preset.name)
  ± +12    ]8;;https://gitlab.com/group/team/app/-/merge_requests/12\!12 draft]8;;\    feature-x                                                                                             󱦻 7m ⏎
 ── non-git @ 60
   Haiku 4.5   󰉋 scratch                       $0.02 ⏎
-  ▕▌         ▏ 5% · 9k                 1:35 · 40% hit ⏎
+  ▕▌         ▏ 5% · 9k   󰪞 ▀▀▀▀▀▀▀▀ 12% · 03:12 ⇣24% ⏎
+                                          1:35 · 40% hit ⏎
                                                    󱦻 1m1s ⏎
 ── non-git @ 100
   Haiku 4.5   󰉋 scratch                                                               $0.02 ⏎
-  ▕▌         ▏ 5% · 9k                                                         1:35 · 40% hit ⏎
+  ▕▌         ▏ 5% · 9k   󰪞 ▀▀▀▀▀▀▀▀ 12% · 03:12 ⇣24%                         1:35 · 40% hit ⏎
                                                                                            󱦻 1m1s ⏎
 ── non-git @ 140
   Haiku 4.5   󰉋 scratch                                                                                                       $0.02 ⏎
-  ▕▌         ▏ 5% · 9k                                                                                                 1:35 · 40% hit ⏎
+  ▕▌         ▏ 5% · 9k   󰪞 ▀▀▀▀▀▀▀▀ 12% · 03:12 ⇣24%                                                                 1:35 · 40% hit ⏎
                                                                                                                                    󱦻 1m1s ⏎
 ── gateway @ 60
   Sonnet 5 · Med   󰉋 app   󰊢 main ✓         $3.10 ⏎

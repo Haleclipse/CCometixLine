@@ -239,6 +239,8 @@ pub const SCENARIOS: &[Scenario] = &[
     "used_percentage": 12, "remaining_percentage": 88,
     "current_usage": {"input_tokens": 8, "output_tokens": 600, "cache_creation_input_tokens": 23992, "cache_read_input_tokens": 0}},
   "exceeds_200k_tokens": false, "effort": {"level": "medium"}, "thinking": {"enabled": true}, "fast_mode": false,
+  "rate_limits": {"five_hour": {"used_percentage": 1, "resets_at": 1790830500},
+    "seven_day": {"used_percentage": 18, "resets_at": 1791108000}},
   "prompt_cache": {"warm": true, "caching_observed": true, "ttl": "5m", "expires_at": 1790813060,
     "requests": 1, "misses": 0, "expected_rebuilds": 0, "hit_ratio": 0.0, "cache_write_tokens": 24000,
     "miss_recache_tokens": 0, "last_miss_at": null, "last_miss_cause": null, "miss_causes": {}, "recache_tokens_if_cold": 24000}
@@ -390,7 +392,8 @@ pub const SCENARIOS: &[Scenario] = &[
     "used_percentage": 19, "remaining_percentage": 81,
     "current_usage": {"input_tokens": 5, "output_tokens": 500, "cache_creation_input_tokens": 2000, "cache_read_input_tokens": 35995}},
   "exceeds_200k_tokens": false, "effort": {"level": "high"}, "thinking": {"enabled": true}, "fast_mode": false,
-  "rate_limits": {"five_hour": {"used_percentage": 41, "resets_at": 1790823600}},
+  "rate_limits": {"five_hour": {"used_percentage": 41, "resets_at": 1790823600},
+    "seven_day": {"used_percentage": 33, "resets_at": 1791021600}},
   "prompt_cache": {"warm": true, "caching_observed": true, "ttl": "5m", "expires_at": 1790813010,
     "requests": 9, "misses": 0, "expected_rebuilds": 0, "hit_ratio": 0.91, "cache_write_tokens": 38000,
     "miss_recache_tokens": 0, "last_miss_at": null, "last_miss_cause": null, "miss_causes": {}, "recache_tokens_if_cold": 38000},
@@ -418,6 +421,8 @@ pub const SCENARIOS: &[Scenario] = &[
     "used_percentage": 5, "remaining_percentage": 95,
     "current_usage": {"input_tokens": 900, "output_tokens": 200, "cache_creation_input_tokens": 0, "cache_read_input_tokens": 8100}},
   "exceeds_200k_tokens": false, "thinking": {"enabled": false}, "fast_mode": false,
+  "rate_limits": {"five_hour": {"used_percentage": 12, "resets_at": 1790824320},
+    "seven_day": {"used_percentage": 21, "resets_at": 1791244800}},
   "prompt_cache": {"warm": true, "caching_observed": true, "ttl": "5m", "expires_at": 1790812895,
     "requests": 3, "misses": 0, "expected_rebuilds": 0, "hit_ratio": 0.4, "cache_write_tokens": 9000,
     "miss_recache_tokens": 0, "last_miss_at": null, "last_miss_cause": null, "miss_causes": {}, "recache_tokens_if_cold": 9000}
@@ -592,6 +597,35 @@ mod tests {
             let input = s.input(BASE);
             assert!(input.model_id().is_some(), "{}", s.name);
             assert!(input.cc_version().is_some(), "{}", s.name);
+        }
+    }
+
+    /// The preview grays out an item a sample has nothing for. A sample of
+    /// a subscriber's session has every limit, the cache and the mod's
+    /// timing, so none is gray for want of data.
+    #[test]
+    fn subscriber_samples_have_every_metric() {
+        use crate::metrics::{self, Ctx, GitSource, Options};
+        let registry = crate::models::Registry::default();
+        let tz = chrono::FixedOffset::east_opt(0).unwrap();
+        for name in [
+            "normal",
+            "fresh",
+            "near-full",
+            "big-context",
+            "worktree",
+            "non-git",
+        ] {
+            let s = find(name).unwrap();
+            let input = s.input(BASE);
+            let ctx = Ctx::new(&input, &registry, BASE, tz, crate::style::GlyphTier::Nerd)
+                .with_git(GitSource::Fixed(s.git()))
+                .with_state(s.state(BASE));
+            for id in ["quota.5h", "quota.7d", "cache", "timing.ttft", "timing.tps"] {
+                let metric = metrics::find(id).unwrap();
+                let reading = metrics::read(metric, &ctx, &Options::new());
+                assert!(reading.is_some(), "{name}: {id}");
+            }
         }
     }
 

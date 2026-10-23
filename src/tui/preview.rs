@@ -355,6 +355,13 @@ impl Preview {
 
     /// The title on the bar's top rule, labelled when `room` allows.
     /// `showing` names what the bar shows when it isn't the edited config.
+    /// The sample in view, or "your session" for the replay.
+    pub fn scenario_name(&self) -> &'static str {
+        SCENARIOS
+            .get(self.scenario)
+            .map_or("your session", |s| s.name)
+    }
+
     pub fn title(
         &self,
         doc: &Doc,
@@ -374,10 +381,7 @@ impl Preview {
             Some(w) => w.to_string(),
             None => format!("fit {}", self.fit),
         };
-        let scenario = match SCENARIOS.get(self.scenario) {
-            Some(s) => s.name.to_string(),
-            None => "your session".to_string(),
-        };
+        let scenario = self.scenario_name().to_string();
         let values = [
             ("scenario", scenario),
             ("width", width),
