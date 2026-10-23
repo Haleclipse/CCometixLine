@@ -38,10 +38,18 @@ pub struct App {
     pub quit: bool,
     /// Whether keys go to the tab row (←→ switch pages) rather than the page.
     pub tabs_focused: bool,
+    /// When the app started, for the name's glint.
+    started: Instant,
+    /// Whether the name's rainbow takes Claude Code's truecolor values.
+    truecolor: bool,
+    /// Whether the glint moves; still when Claude Code prefers reduced motion.
+    motion: bool,
 }
 
 impl App {
     pub fn new(doc: Doc, env: Env) -> App {
+        let motion = !crate::cc_settings::Settings::load(&env.settings)
+            .is_ok_and(|s| s.prefers_reduced_motion());
         let mut preview = Preview::default();
         preview.set_replay(
             env.session
@@ -66,7 +74,15 @@ impl App {
             toast: None,
             quit: false,
             tabs_focused: true,
+            started: Instant::now(),
+            truecolor: crate::env::color_depth() == crate::style::ColorDepth::TrueColor,
+            motion,
         }
+    }
+
+    /// How soon the screen needs drawing again for the name's glint.
+    pub fn next_frame(&self) -> Option<Duration> {
+        self.motion.then(|| ui::next_glint(self.started.elapsed()))
     }
 
     fn page_mut(&mut self) -> &mut dyn Page {
@@ -195,7 +211,8 @@ impl App {
         const GAP: usize = 2;
         let width = width as usize;
         let mut spans = vec![Span::raw(" ")];
-        spans.extend(ui::brand());
+        let glint = self.motion.then(|| ui::glint(self.started.elapsed()));
+        spans.extend(ui::brand(self.truecolor, glint));
         let name: usize = spans.iter().map(Span::width).sum();
 
         let mut tabs = Vec::new();
@@ -594,6 +611,21 @@ pub(crate) mod tests {
     fn tab_current(app: &mut App, title: &str) -> bool {
         let s = tab_style(app, title);
         s.fg != Some(ui::ACCENT) && s.add_modifier.contains(ratatui::style::Modifier::REVERSED)
+    }
+
+    #[test]
+    fn the_glint_keeps_still_when_claude_code_prefers_reduced_motion() {
+        let (dir, paths) = temp_paths("app-motion");
+        let app = App::new(Doc::open(paths.clone()), env());
+        assert!(
+            app.next_frame()
+                .is_some_and(|f| f <= Duration::from_millis(500))
+        );
+        let settings = dir.join("settings.json");
+        std::fs::write(&settings, "{\"prefersReducedMotion\": true}").unwrap();
+        let still = App::new(Doc::open(paths), Env { settings, ..env() });
+        assert_eq!(still.next_frame(), None);
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]

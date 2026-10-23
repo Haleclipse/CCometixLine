@@ -149,6 +149,14 @@ impl Settings {
         })
     }
 
+    /// `prefersReducedMotion`, which stills Claude Code's own animations.
+    pub fn prefers_reduced_motion(&self) -> bool {
+        self.object()
+            .get("prefersReducedMotion")
+            .and_then(Value::as_bool)
+            .unwrap_or(false)
+    }
+
     pub fn subagent_command(&self) -> Option<String> {
         let s = self.object().get("subagentStatusLine")?;
         Some(s.get("command")?.as_str()?.to_string())

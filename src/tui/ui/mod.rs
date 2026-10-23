@@ -11,6 +11,7 @@ use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Clear};
+use std::time::Duration;
 
 // Named ANSI colors only, so the TUI follows the terminal's theme.
 pub const ACCENT: Color = Color::Blue;
@@ -46,30 +47,107 @@ pub fn tab_current() -> Style {
     Style::default().add_modifier(Modifier::REVERSED | Modifier::BOLD)
 }
 
-/// Claude Code's rainbow as its ANSI themes draw it.
-const RAINBOW: [Color; 7] = [
-    Color::Red,
-    Color::LightRed,
-    Color::Yellow,
-    Color::Green,
-    Color::Cyan,
-    Color::Blue,
-    Color::Magenta,
+/// The app's name, at the start of the tab row.
+pub const BRAND: &str = "CCometixLine";
+
+/// Claude Code's rainbow for `ultrathink`: the colors, then the lighter
+/// shades its glint passes over them in. Its truecolor themes use these
+/// values, its ANSI themes the named colors below; the name is the one
+/// place the TUI draws in fixed colors, and only on a truecolor terminal.
+const RAINBOW_RGB: [[(u8, u8, u8); 7]; 2] = [
+    [
+        (235, 95, 87),
+        (245, 139, 87),
+        (250, 195, 95),
+        (145, 200, 130),
+        (130, 170, 220),
+        (155, 130, 200),
+        (200, 130, 180),
+    ],
+    [
+        (250, 155, 147),
+        (255, 185, 137),
+        (255, 225, 155),
+        (185, 230, 180),
+        (180, 205, 240),
+        (195, 180, 230),
+        (230, 180, 210),
+    ],
+];
+const RAINBOW_ANSI: [[Color; 7]; 2] = [
+    [
+        Color::Red,
+        Color::LightRed,
+        Color::Yellow,
+        Color::Green,
+        Color::Cyan,
+        Color::Blue,
+        Color::Magenta,
+    ],
+    [
+        Color::LightRed,
+        Color::Yellow,
+        Color::LightYellow,
+        Color::LightGreen,
+        Color::LightCyan,
+        Color::LightBlue,
+        Color::LightMagenta,
+    ],
 ];
 
-/// The app's name at the start of the tab row, a rainbow color per letter
-/// as Claude Code draws `ultrathink`.
-pub fn brand() -> Vec<Span<'static>> {
-    "CCometixLine"
+/// The glint moves a letter this often...
+const GLINT_STEP: Duration = Duration::from_millis(50);
+/// ...from this many letters before the name to as many past it.
+const GLINT_RUN: i64 = 10;
+
+fn brand_len() -> i64 {
+    BRAND.chars().count() as i64
+}
+
+/// The name in Claude Code's rainbow, a color per letter, as its prompt
+/// draws `ultrathink`; the glint at letter `glint` lights that letter and
+/// its neighbours in the lighter shades.
+pub fn brand(truecolor: bool, glint: Option<i64>) -> Vec<Span<'static>> {
+    BRAND
         .chars()
-        .zip(RAINBOW.iter().cycle())
-        .map(|(c, color)| {
+        .enumerate()
+        .map(|(i, c)| {
+            let lit = glint.is_some_and(|g| (i as i64 - g).abs() <= 1);
+            let shade = usize::from(lit);
+            let color = if truecolor {
+                let (r, g, b) = RAINBOW_RGB[shade][i % 7];
+                Color::Rgb(r, g, b)
+            } else {
+                RAINBOW_ANSI[shade][i % 7]
+            };
             Span::styled(
                 c.to_string(),
-                Style::default().fg(*color).add_modifier(Modifier::BOLD),
+                Style::default().fg(color).add_modifier(Modifier::BOLD),
             )
         })
         .collect()
+}
+
+/// The letter the glint is on `elapsed` into the animation, over and over.
+pub fn glint(elapsed: Duration) -> i64 {
+    let step = (elapsed.as_millis() / GLINT_STEP.as_millis()) as i64;
+    step % (brand_len() + 2 * GLINT_RUN) - GLINT_RUN
+}
+
+/// Time until the glint next changes how the name looks: the next step
+/// while it is on the name or a step from it, else until it comes round.
+pub fn next_glint(elapsed: Duration) -> Duration {
+    let cycle = brand_len() + 2 * GLINT_RUN;
+    let step_ms = GLINT_STEP.as_millis() as i64;
+    let ms = elapsed.as_millis() as i64;
+    let step = ms / step_ms;
+    let steps = if (-2..=brand_len()).contains(&glint(elapsed)) {
+        1
+    } else {
+        // Round to where the glint lights the first letter.
+        (GLINT_RUN - 1 - step % cycle).rem_euclid(cycle)
+    };
+    Duration::from_millis((steps * step_ms - ms % step_ms) as u64)
 }
 
 /// Marker in front of the selected list row.
@@ -187,6 +265,44 @@ pub fn clip(spans: Vec<Span<'static>>, width: usize) -> Vec<Span<'static>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn draws_the_name_in_claude_codes_rainbow() {
+        let fg = |spans: &[Span], i: usize| spans[i].style.fg;
+        let ansi = brand(false, None);
+        assert_eq!(ansi.len(), 12);
+        assert_eq!(
+            (fg(&ansi, 0), fg(&ansi, 1), fg(&ansi, 7)),
+            (Some(Color::Red), Some(Color::LightRed), Some(Color::Red))
+        );
+        assert_eq!(fg(&brand(true, None), 1), Some(Color::Rgb(245, 139, 87)));
+        // The glint lights its letter and the ones either side.
+        let lit = brand(false, Some(1));
+        assert_eq!(
+            [0, 1, 2, 3].map(|i| fg(&lit, i)),
+            [
+                Color::LightRed,
+                Color::Yellow,
+                Color::LightYellow,
+                Color::Green
+            ]
+            .map(Some)
+        );
+    }
+
+    #[test]
+    fn the_glint_sweeps_past_the_name_and_rests_between() {
+        let ms = Duration::from_millis;
+        assert_eq!(glint(ms(0)), -10);
+        assert_eq!(glint(ms(500)), 0);
+        assert_eq!(glint(ms(32 * 50)), -10);
+        // Off the name it sleeps until it comes back; on it, a step.
+        assert_eq!(next_glint(ms(0)), ms(450));
+        assert_eq!(next_glint(ms(20)), ms(430));
+        assert_eq!(next_glint(ms(500)), ms(50));
+        assert_eq!(next_glint(ms(22 * 50)), ms(50));
+        assert_eq!(next_glint(ms(23 * 50)), ms(18 * 50));
+    }
 
     #[test]
     fn clips_to_width() {

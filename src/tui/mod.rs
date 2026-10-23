@@ -18,7 +18,8 @@ use ratatui::crossterm::event::{
 use ratatui::crossterm::execute;
 use std::time::Duration;
 
-/// How often the screen redraws without input, so messages expire.
+/// How often the screen redraws without input, so messages expire; the
+/// name's glint asks for more while it crosses the name.
 const TICK: Duration = Duration::from_millis(500);
 
 pub fn run() -> std::io::Result<()> {
@@ -38,7 +39,8 @@ pub fn run() -> std::io::Result<()> {
 fn event_loop(terminal: &mut DefaultTerminal, app: &mut App) -> std::io::Result<()> {
     while !app.quit {
         terminal.draw(|f| app.render(f))?;
-        if event::poll(TICK)? {
+        let wait = app.next_frame().map_or(TICK, |f| f.min(TICK));
+        if event::poll(wait)? {
             // Resizes only need the redraw at the top of the loop.
             match event::read()? {
                 Event::Key(key) if key.kind == KeyEventKind::Press => app.handle_key(key),
