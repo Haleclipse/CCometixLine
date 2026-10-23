@@ -189,9 +189,8 @@ impl App {
         }
     }
 
-    /// The name, the tabs centered on the row, and key hints on the right;
-    /// the tabs give way to the name and hints, and the hints shorten, then
-    /// go, when the row is full.
+    /// The name, then the tabs centered on the row, or just after the name
+    /// when the middle is too close to it. Key hints are the footer's.
     fn tab_line(&self, width: u16) -> Line<'static> {
         const GAP: usize = 2;
         let width = width as usize;
@@ -219,26 +218,9 @@ impl App {
         }
         let tabs_w: usize = tabs.iter().map(Span::width).sum();
 
-        let right = ["^P commands   ? help ", "? help ", ""]
-            .into_iter()
-            .find(|r| name + GAP + tabs_w + GAP + r.len() <= width)
-            .unwrap_or("");
-        let right_w = if right.is_empty() {
-            0
-        } else {
-            right.len() + GAP
-        };
-        let first = name + GAP;
-        let last = width.saturating_sub(right_w + tabs_w).max(first);
-        let start = (width.saturating_sub(tabs_w) / 2).clamp(first, last);
-
+        let start = (width.saturating_sub(tabs_w) / 2).max(name + GAP);
         spans.push(Span::raw(" ".repeat(start - name)));
         spans.extend(tabs);
-        let gap = width.saturating_sub(start + tabs_w + right.len());
-        spans.push(Span::raw(" ".repeat(gap)));
-        if !right.is_empty() {
-            spans.push(Span::styled(right, ui::muted()));
-        }
         Line::from(spans)
     }
 
@@ -464,7 +446,12 @@ impl App {
 /// last hints after the globals, but never `? help`, which lists them all.
 fn footer_hints(own: Vec<(&str, &str)>, in_page: bool, width: usize) -> Line<'static> {
     let mut own = own;
-    let mut global = vec![("^S", "save"), ("?", "help"), ("q", "quit")];
+    let mut global = vec![
+        ("^S", "save"),
+        ("^P", "commands"),
+        ("?", "help"),
+        ("q", "quit"),
+    ];
     if in_page {
         global.insert(0, ("↑", "tabs"));
     }
@@ -474,7 +461,7 @@ fn footer_hints(own: Vec<(&str, &str)>, in_page: bool, width: usize) -> Line<'st
         if line.width() <= width {
             return line;
         }
-        let next = ["q", "^S", "↑"]
+        let next = ["q", "^P", "^S", "↑"]
             .iter()
             .find_map(|d| global.iter().position(|(k, _)| k == d));
         match next {
@@ -545,7 +532,10 @@ pub(crate) mod tests {
                 .map(|s| s.content.to_string())
                 .collect::<String>()
         };
-        assert!(text(120).contains("q quit"));
+        assert!(text(120).contains("q quit") && text(120).contains("^P commands"));
+        // ^P goes after quit, before save.
+        let less = text(70);
+        assert!(!less.contains("^P") && less.contains("^S save"), "{less}");
         let mid = text(60);
         assert!(!mid.contains("q quit") && mid.contains("? help") && mid.contains("n new line"));
         let tight = text(30);
@@ -607,7 +597,7 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn centers_the_tabs_between_the_name_and_the_hints() {
+    fn centers_the_tabs_after_the_name() {
         let (dir, paths) = temp_paths("app-tabs");
         let app = App::new(Doc::open(paths), env());
         let row = |width: u16| -> String {
@@ -620,23 +610,13 @@ pub(crate) mod tests {
             (start, end)
         };
         // Room to spare: the tabs sit in the middle of the row.
-        let wide = row(140);
+        let wide = row(123);
         let (start, end) = span(&wide);
-        assert!(start.abs_diff(140 - end) <= 1, "{wide:?}");
-        assert!(wide.starts_with(" CCometixLine") && wide.ends_with("^P commands   ? help "));
-        // Less room: they give way to the hints, which then shorten.
-        let snug = row(98);
-        assert_eq!(snug.chars().count(), 98);
-        assert!(span(&snug).1 + 2 + "^P commands   ? help ".len() <= 98);
-        let short = row(86);
-        assert!(
-            short.ends_with(" ? help ") && !short.contains("^P"),
-            "{short:?}"
-        );
-        // The smallest frame: the footer keeps `? help`, the row drops it.
+        assert!(start.abs_diff(123 - end) <= 1, "{wide:?}");
+        assert!(wide.starts_with(" CCometixLine") && !wide.contains("help"));
+        // The smallest frame: they keep clear of the name.
         let narrow = row(MIN_SIZE.0 - 2);
-        assert!(!narrow.contains("help"), "{narrow:?}");
-        assert!(span(&narrow).0 >= " CCometixLine".len() + 2);
+        assert!(span(&narrow).0 >= " CCometixLine".len() + 2, "{narrow:?}");
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
