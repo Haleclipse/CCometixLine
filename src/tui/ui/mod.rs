@@ -46,9 +46,30 @@ pub fn tab_current() -> Style {
     Style::default().add_modifier(Modifier::REVERSED | Modifier::BOLD)
 }
 
-/// The app's name at the start of the tab row.
-pub fn brand() -> Style {
-    accent().add_modifier(Modifier::BOLD)
+/// Claude Code's rainbow as its ANSI themes draw it.
+const RAINBOW: [Color; 7] = [
+    Color::Red,
+    Color::LightRed,
+    Color::Yellow,
+    Color::Green,
+    Color::Cyan,
+    Color::Blue,
+    Color::Magenta,
+];
+
+/// The app's name at the start of the tab row, a rainbow color per letter
+/// as Claude Code draws `ultrathink`.
+pub fn brand() -> Vec<Span<'static>> {
+    "CCometixLine"
+        .chars()
+        .zip(RAINBOW.iter().cycle())
+        .map(|(c, color)| {
+            Span::styled(
+                c.to_string(),
+                Style::default().fg(*color).add_modifier(Modifier::BOLD),
+            )
+        })
+        .collect()
 }
 
 /// Marker in front of the selected list row.

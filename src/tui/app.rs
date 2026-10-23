@@ -189,9 +189,21 @@ impl App {
         }
     }
 
+    /// The name, the tabs centered on the row, and key hints on the right;
+    /// the tabs give way to the name and hints, and the hints shorten, then
+    /// go, when the row is full.
     fn tab_line(&self, width: u16) -> Line<'static> {
-        let mut spans = vec![Span::styled(" ccline", ui::brand()), Span::raw("  ")];
-        for p in PageId::ALL {
+        const GAP: usize = 2;
+        let width = width as usize;
+        let mut spans = vec![Span::raw(" ")];
+        spans.extend(ui::brand());
+        let name: usize = spans.iter().map(Span::width).sum();
+
+        let mut tabs = Vec::new();
+        for (i, p) in PageId::ALL.into_iter().enumerate() {
+            if i > 0 {
+                tabs.push(Span::raw(" "));
+            }
             let label = format!(" {} ", p.title());
             if p == self.page {
                 // Filled while the tab row has the keys.
@@ -200,17 +212,33 @@ impl App {
                 } else {
                     ui::tab_current()
                 };
-                spans.push(Span::styled(label, style));
+                tabs.push(Span::styled(label, style));
             } else {
-                spans.push(Span::raw(label));
+                tabs.push(Span::raw(label));
             }
-            spans.push(Span::raw(" "));
         }
-        let used: usize = spans.iter().map(|s| s.width()).sum();
-        let right = "^P commands   ? help ";
-        let gap = (width as usize).saturating_sub(used + right.len());
+        let tabs_w: usize = tabs.iter().map(Span::width).sum();
+
+        let right = ["^P commands   ? help ", "? help ", ""]
+            .into_iter()
+            .find(|r| name + GAP + tabs_w + GAP + r.len() <= width)
+            .unwrap_or("");
+        let right_w = if right.is_empty() {
+            0
+        } else {
+            right.len() + GAP
+        };
+        let first = name + GAP;
+        let last = width.saturating_sub(right_w + tabs_w).max(first);
+        let start = (width.saturating_sub(tabs_w) / 2).clamp(first, last);
+
+        spans.push(Span::raw(" ".repeat(start - name)));
+        spans.extend(tabs);
+        let gap = width.saturating_sub(start + tabs_w + right.len());
         spans.push(Span::raw(" ".repeat(gap)));
-        spans.push(Span::styled(right, ui::muted()));
+        if !right.is_empty() {
+            spans.push(Span::styled(right, ui::muted()));
+        }
         Line::from(spans)
     }
 
@@ -579,12 +607,48 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn centers_the_tabs_between_the_name_and_the_hints() {
+        let (dir, paths) = temp_paths("app-tabs");
+        let app = App::new(Doc::open(paths), env());
+        let row = |width: u16| -> String {
+            let line = app.tab_line(width);
+            line.spans.iter().map(|s| s.content.as_ref()).collect()
+        };
+        let span = |text: &str| {
+            let start = text.find(" Home ").unwrap();
+            let end = text.find(" Claude Code ").unwrap() + " Claude Code ".len();
+            (start, end)
+        };
+        // Room to spare: the tabs sit in the middle of the row.
+        let wide = row(140);
+        let (start, end) = span(&wide);
+        assert!(start.abs_diff(140 - end) <= 1, "{wide:?}");
+        assert!(wide.starts_with(" CCometixLine") && wide.ends_with("^P commands   ? help "));
+        // Less room: they give way to the hints, which then shorten.
+        let snug = row(98);
+        assert_eq!(snug.chars().count(), 98);
+        assert!(span(&snug).1 + 2 + "^P commands   ? help ".len() <= 98);
+        let short = row(86);
+        assert!(
+            short.ends_with(" ? help ") && !short.contains("^P"),
+            "{short:?}"
+        );
+        // The smallest frame: the footer keeps `? help`, the row drops it.
+        let narrow = row(MIN_SIZE.0 - 2);
+        assert!(!narrow.contains("help"), "{narrow:?}");
+        assert!(span(&narrow).0 >= " CCometixLine".len() + 2);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
     fn navigates_pages_from_the_tab_row() {
         let (dir, paths) = temp_paths("app-pages");
         let mut app = App::new(Doc::open(paths), env());
         let home = screen(&mut app, 100, 30);
         assert!(
-            home.contains(" ccline   Home ") && !home.contains("[1 Home]"),
+            home.contains(" CCometixLine ")
+                && home.contains(" Home ")
+                && !home.contains("[1 Home]"),
             "{home}"
         );
         assert!(
