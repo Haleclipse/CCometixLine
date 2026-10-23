@@ -609,6 +609,35 @@ mod tests {
     }
 
     #[test]
+    fn opens_the_nerd_font_browser_from_the_icon_field() {
+        let (dir, paths) = temp_paths("layout-browse");
+        let mut app = App::new(Doc::open(paths), env());
+        app.open_page(PageId::Layout);
+        // Canvas: the directory; inspector: its icon.
+        app.handle_key(key(KeyCode::Right));
+        app.handle_key(key(KeyCode::Enter));
+        for _ in 0..5 {
+            app.handle_key(key(KeyCode::Down));
+        }
+        app.handle_key(key(KeyCode::Enter));
+        app.handle_key(key(KeyCode::Tab));
+        app.handle_key(key(KeyCode::Tab));
+        let s = screen(&mut app, 112, 33);
+        assert!(
+            s.contains("All Nerd Fonts")
+                && s.contains("10,617 of 10,617")
+                && s.contains("Nerd Fonts 3.5.1"),
+            "{s}"
+        );
+        for c in "folder open".chars() {
+            app.handle_key(key(KeyCode::Char(c)));
+        }
+        let s = screen(&mut app, 112, 33);
+        assert!(s.contains("md-folder_open") && s.contains("U+F0770"), "{s}");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
     fn composes_lines() {
         let (dir, paths) = temp_paths("layout");
         let mut app = App::new(Doc::open(paths), env());

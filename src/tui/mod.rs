@@ -4,6 +4,7 @@ mod app;
 mod convert;
 mod dialogs;
 pub mod doc;
+mod nerd;
 mod pages;
 mod preview;
 mod ui;

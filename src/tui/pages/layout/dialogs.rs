@@ -13,6 +13,7 @@ use crate::style::skin;
 use crate::tui::convert;
 use crate::tui::dialogs::{Action, Dialog, Reply};
 use crate::tui::doc::Doc;
+use crate::tui::nerd;
 use crate::tui::pages::Cx;
 use crate::tui::preview::Target;
 use crate::tui::ui::{self, TextInput};
@@ -184,6 +185,73 @@ const SYMBOLS: &str = "◔◑◕●○◆◇■□▲△▶★☆✓✗⚑⚡♦
 const ICON_COLS: usize = 4;
 /// Columns for an icon's name in the grid.
 const ICON_NAME: usize = 12;
+/// The browser's grid: icons per row, three columns each, and rows shown.
+const BROWSE_COLS: usize = 23;
+const BROWSE_ROWS: usize = 10;
+
+/// The "All Nerd Fonts" tab: every Nerd Fonts icon, found by name.
+struct Browser {
+    query: TextInput,
+    /// Positions in `nerd::all()`, best match first.
+    found: Vec<usize>,
+    at: usize,
+    /// The first row in view.
+    top: usize,
+}
+
+impl Browser {
+    fn new() -> Browser {
+        Browser {
+            query: TextInput::default(),
+            found: nerd::search(""),
+            at: 0,
+            top: 0,
+        }
+    }
+
+    fn refresh(&mut self) {
+        self.found = nerd::search(&self.query.text());
+        self.at = 0;
+        self.top = 0;
+    }
+
+    fn focused(&self) -> Option<&'static nerd::Glyph> {
+        self.found.get(self.at).map(|&i| &nerd::all()[i])
+    }
+
+    /// Move by `by` icons, keeping the cursor's row in view. Past the end
+    /// it stops at the last icon; past the start, at the first for a page,
+    /// else where it is.
+    fn step(&mut self, by: isize) {
+        let Some(last) = self.found.len().checked_sub(1) else {
+            return;
+        };
+        self.at = match self.at.checked_add_signed(by) {
+            Some(n) => n.min(last),
+            None if by < -(BROWSE_COLS as isize) => 0,
+            None => self.at,
+        };
+        let row = self.at / BROWSE_COLS;
+        if row < self.top {
+            self.top = row;
+        } else if row >= self.top + BROWSE_ROWS {
+            self.top = row + 1 - BROWSE_ROWS;
+        }
+    }
+}
+
+/// `10617` as `10,617`.
+fn thousands(n: usize) -> String {
+    let digits = n.to_string();
+    let mut out = String::new();
+    for (i, c) in digits.chars().enumerate() {
+        if i > 0 && (digits.len() - i).is_multiple_of(3) {
+            out.push(',');
+        }
+        out.push(c);
+    }
+    out
+}
 
 /// C · The icon: the metric's own, none, any icon or symbol, or typed.
 pub struct IconDialog {
@@ -191,6 +259,8 @@ pub struct IconDialog {
     tier: GlyphTier,
     at: usize,
     custom: Option<TextInput>,
+    /// The "All Nerd Fonts" tab, while it is open.
+    browse: Option<Browser>,
 }
 
 impl IconDialog {
@@ -205,6 +275,7 @@ impl IconDialog {
             tier,
             at: 0,
             custom: None,
+            browse: None,
         }
     }
 
@@ -238,43 +309,197 @@ impl IconDialog {
         match at {
             0 => None,
             1 => Some(String::new()),
-            _ => {
-                let glyph = entries[at].0.clone();
-                (glyph != glyphs::icon(self.item.meta.icon, config_tier)).then_some(glyph)
-            }
+            _ => self.pick(entries[at].0.clone(), config_tier),
         }
     }
 
+    /// The setting for `glyph`: none when it is the metric's own.
+    fn pick(&self, glyph: String, config_tier: GlyphTier) -> Option<String> {
+        (glyph != glyphs::icon(self.item.meta.icon, config_tier)).then_some(glyph)
+    }
+
     fn candidate(&self, doc: &Doc) -> Option<String> {
-        match &self.custom {
-            Some(input) => Some(input.text().trim().to_string()),
-            None => self.icon(self.at, &self.entries(), doc.config.glyphs),
+        match (&self.custom, &self.browse) {
+            (Some(input), _) => Some(input.text().trim().to_string()),
+            (None, Some(b)) => match b.focused() {
+                Some(g) => self.pick(g.glyph.to_string(), doc.config.glyphs),
+                None => self.item.current(doc).icon,
+            },
+            (None, None) => self.icon(self.at, &self.entries(), doc.config.glyphs),
         }
+    }
+
+    /// The tabs: the two glyph sets, then every Nerd Fonts icon.
+    fn tabs(&self) -> Vec<Span<'static>> {
+        let on = if self.browse.is_some() {
+            2
+        } else if self.tier == GlyphTier::Nerd {
+            0
+        } else {
+            1
+        };
+        let mut spans = vec![Span::raw(" ")];
+        for (i, label) in ["Nerd", "Unicode", "All Nerd Fonts"]
+            .into_iter()
+            .enumerate()
+        {
+            let style = if i == on {
+                ui::tab_current()
+            } else {
+                Style::default()
+            };
+            spans.push(Span::styled(format!(" {label} "), style));
+            spans.push(Span::raw(" "));
+        }
+        spans
+    }
+
+    fn switch_tier(&mut self, tier: GlyphTier) {
+        self.browse = None;
+        self.tier = tier;
+        self.at = self.at.min(self.entries().len() - 1);
+    }
+
+    fn render_browse(&self, b: &Browser, f: &mut Frame, area: Rect, cx: &Cx) {
+        let rect = ui::popup(f, area, 74, BROWSE_ROWS as u16 + 11);
+        let all = nerd::all();
+        let mut head = self.tabs();
+        head.push(Span::styled(
+            format!("  {} of {}", thousands(b.found.len()), thousands(all.len())),
+            ui::muted(),
+        ));
+        let prefixes: Vec<String> = nerd::classes()[..4]
+            .iter()
+            .map(|c| format!("{c}-"))
+            .collect();
+        let placeholder = format!(
+            "a name, {} …, a codepoint, or paste an icon",
+            prefixes.join(" ")
+        );
+        let mut search = vec![Span::styled(" / ", ui::accent())];
+        search.extend(b.query.line(60, true, &placeholder).spans);
+        let mut text = vec![
+            Line::from(head),
+            Line::raw(""),
+            Line::from(search),
+            Line::raw(""),
+        ];
+        for r in b.top..b.top + BROWSE_ROWS {
+            let mut spans = vec![Span::raw(" ")];
+            for c in 0..BROWSE_COLS {
+                let i = r * BROWSE_COLS + c;
+                let Some(&g) = b.found.get(i) else {
+                    break;
+                };
+                let style = if i == b.at {
+                    ui::tab_on()
+                } else {
+                    Style::default()
+                };
+                // Three columns a cell, a wide glyph (⚡) included.
+                let glyph = all[g].glyph.to_string();
+                let pad = 2usize.saturating_sub(Span::raw(glyph.as_str()).width());
+                spans.push(Span::styled(format!(" {glyph}{}", " ".repeat(pad)), style));
+            }
+            text.push(Line::from(spans));
+        }
+        text.push(Line::raw(""));
+        text.push(match b.focused() {
+            Some(g) => {
+                let mut spans = vec![
+                    Span::styled(ui::SELECTED, ui::accent()),
+                    Span::raw(format!("{}  ", g.glyph)),
+                    Span::styled(g.names[0], ui::accent()),
+                    Span::styled(format!("  U+{:X}", g.glyph as u32), ui::muted()),
+                ];
+                if g.names.len() > 1 {
+                    spans.push(Span::styled(
+                        format!("  also {}", g.names[1..].join(" ")),
+                        ui::muted(),
+                    ));
+                }
+                if cx.doc.config.glyphs != GlyphTier::Nerd {
+                    spans.push(Span::styled(
+                        "  needs a Nerd Font",
+                        Style::default().fg(ui::WARN),
+                    ));
+                }
+                Line::from(ui::clip(spans, 72))
+            }
+            None => Line::styled(" No icon matches", ui::muted()),
+        });
+        let mut item = self.item.current(cx.doc);
+        item.icon = self.candidate(cx.doc);
+        text.push(sample_row(self.item.sample(cx, &item)));
+        text.push(Line::raw(""));
+        let esc = if b.query.text().is_empty() {
+            "cancel"
+        } else {
+            "clear"
+        };
+        text.push(ui::hints(&[
+            ("type", "search"),
+            ("arrows", "move"),
+            ("enter", "pick"),
+            ("tab", "glyphs"),
+            ("esc", esc),
+        ]));
+        let title = format!(
+            "{} · Nerd Fonts {}",
+            self.item.title("Icon"),
+            nerd::version()
+        );
+        f.render_widget(Paragraph::new(text).block(ui::panel(&title)), rect);
+    }
+
+    /// Keys on the "All Nerd Fonts" tab.
+    fn handle_browse(&mut self, key: KeyEvent, doc: &mut Doc) -> Reply {
+        let Some(b) = self.browse.as_mut() else {
+            return Reply::Stay;
+        };
+        let (row, page) = (BROWSE_COLS as isize, (BROWSE_COLS * BROWSE_ROWS) as isize);
+        match key.code {
+            KeyCode::Esc if !b.query.text().is_empty() => {
+                b.query = TextInput::default();
+                b.refresh();
+            }
+            KeyCode::Esc => return Reply::Close,
+            KeyCode::Tab => self.switch_tier(GlyphTier::Nerd),
+            KeyCode::BackTab => self.switch_tier(GlyphTier::Unicode),
+            KeyCode::Left => b.step(-1),
+            KeyCode::Right => b.step(1),
+            KeyCode::Up => b.step(-row),
+            KeyCode::Down => b.step(row),
+            KeyCode::PageUp => b.step(-page),
+            KeyCode::PageDown => b.step(page),
+            KeyCode::Enter => {
+                if let Some(g) = b.focused() {
+                    let icon = self.pick(g.glyph.to_string(), doc.config.glyphs);
+                    self.item.apply(doc, |c| c.icon = icon);
+                    return Reply::Then(Action::Toast(format!("Icon: {}", g.names[0])));
+                }
+            }
+            _ => {
+                let before = b.query.text();
+                b.query.handle(key);
+                if b.query.text() != before {
+                    b.refresh();
+                }
+            }
+        }
+        Reply::Stay
     }
 }
 
 impl Dialog for IconDialog {
     fn render(&mut self, f: &mut Frame, area: Rect, cx: &Cx) {
+        if let Some(b) = &self.browse {
+            return self.render_browse(b, f, area, cx);
+        }
         let entries = self.entries();
         let rows = entries.len().div_ceil(ICON_COLS);
         let rect = ui::popup(f, area, 74, rows as u16 + 8);
-        let tab = |t: GlyphTier, label: &str| {
-            let style = if self.tier == t {
-                ui::tab_current()
-            } else {
-                Style::default()
-            };
-            Span::styled(format!(" {label} "), style)
-        };
-        let mut text = vec![
-            Line::from(vec![
-                Span::raw(" "),
-                tab(GlyphTier::Nerd, "Nerd"),
-                Span::raw(" "),
-                tab(GlyphTier::Unicode, "Unicode"),
-            ]),
-            Line::raw(""),
-        ];
+        let mut text = vec![Line::from(self.tabs()), Line::raw("")];
         for r in 0..rows {
             let mut spans = vec![Span::raw(" ")];
             for c in 0..ICON_COLS {
@@ -348,16 +573,20 @@ impl Dialog for IconDialog {
             }
             return Reply::Stay;
         }
+        if self.browse.is_some() {
+            return self.handle_browse(key, doc);
+        }
         let n = self.entries().len();
         match key.code {
             KeyCode::Esc => return Reply::Close,
-            KeyCode::Tab | KeyCode::BackTab => {
-                self.tier = match self.tier {
-                    GlyphTier::Nerd => GlyphTier::Unicode,
-                    _ => GlyphTier::Nerd,
-                };
-                self.at = self.at.min(self.entries().len() - 1);
-            }
+            KeyCode::Tab => match self.tier {
+                GlyphTier::Nerd => self.switch_tier(GlyphTier::Unicode),
+                _ => self.browse = Some(Browser::new()),
+            },
+            KeyCode::BackTab => match self.tier {
+                GlyphTier::Nerd => self.browse = Some(Browser::new()),
+                _ => self.switch_tier(GlyphTier::Nerd),
+            },
             KeyCode::Char('c') => self.custom = Some(TextInput::default()),
             KeyCode::Left => self.at = self.at.saturating_sub(1),
             KeyCode::Right => self.at = (self.at + 1).min(n - 1),
@@ -374,7 +603,13 @@ impl Dialog for IconDialog {
     }
 
     fn paste(&mut self, text: &str) -> bool {
-        self.custom = Some(TextInput::new(text.trim()));
+        match self.browse.as_mut() {
+            Some(b) => {
+                b.query.insert_str(text.trim());
+                b.refresh();
+            }
+            None => self.custom = Some(TextInput::new(text.trim())),
+        }
         true
     }
 }
@@ -639,6 +874,69 @@ mod tests {
 
     fn key(code: KeyCode) -> KeyEvent {
         KeyEvent::new(code, KeyModifiers::NONE)
+    }
+
+    #[test]
+    fn browses_every_nerd_font_icon() {
+        let (dir, paths) = temp_paths("layout-nerd");
+        let mut doc = Doc::open(paths);
+        doc.edit(|c, _| {
+            c.lines = vec![crate::config::LineConfig {
+                left: vec![ItemSpec::Id("dir".into())],
+                right: Vec::new(),
+            }]
+        });
+        let item = ItemRef {
+            target: Target::Status,
+            loc: Loc {
+                line: 0,
+                side: Side::Left,
+                index: 0,
+            },
+            meta: &metrics::find("dir").unwrap().meta,
+        };
+        let typed = |d: &mut IconDialog, doc: &mut Doc, text: &str| {
+            for c in text.chars() {
+                d.handle(key(KeyCode::Char(c)), doc);
+            }
+        };
+
+        // Nerd, Unicode, then every icon; typing searches.
+        let mut d = IconDialog::new(item, GlyphTier::Nerd);
+        d.handle(key(KeyCode::Tab), &mut doc);
+        assert!(d.browse.is_none() && d.tier == GlyphTier::Unicode);
+        d.handle(key(KeyCode::Tab), &mut doc);
+        assert_eq!(d.browse.as_ref().unwrap().found.len(), nerd::all().len());
+        typed(&mut d, &mut doc, "folder open");
+        let first = d.browse.as_ref().unwrap().focused().unwrap();
+        assert_eq!(first.names[0], "md-folder_open");
+        d.handle(key(KeyCode::Enter), &mut doc);
+        assert_eq!(item.current(&doc).icon.as_deref(), Some("\u{f0770}"));
+
+        // A pasted icon finds its name; the metric's own leaves the setting.
+        let mut d = IconDialog::new(item, GlyphTier::Nerd);
+        d.handle(key(KeyCode::BackTab), &mut doc);
+        d.paste("\u{f024b}");
+        assert_eq!(
+            d.browse.as_ref().unwrap().focused().unwrap().names[0],
+            "md-folder"
+        );
+        d.handle(key(KeyCode::Enter), &mut doc);
+        assert_eq!(item.current(&doc).icon, None);
+
+        // Esc clears the search first, then closes.
+        let mut d = IconDialog::new(item, GlyphTier::Nerd);
+        d.handle(key(KeyCode::BackTab), &mut doc);
+        typed(&mut d, &mut doc, "git");
+        d.handle(key(KeyCode::Down), &mut doc);
+        assert_eq!(d.browse.as_ref().unwrap().at, BROWSE_COLS);
+        assert!(matches!(d.handle(key(KeyCode::Esc), &mut doc), Reply::Stay));
+        assert!(d.browse.as_ref().unwrap().query.text().is_empty());
+        assert!(matches!(
+            d.handle(key(KeyCode::Esc), &mut doc),
+            Reply::Close
+        ));
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]
