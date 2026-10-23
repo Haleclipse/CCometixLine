@@ -34,7 +34,7 @@ separator = " | "
 [[line]]
 left = [
   "model",
-  "dir",
+  { metric = "dir", icon_color = "16:11" },
   "git",
   { metric = "context", widget = "text", format = "{pct}%[ · {tokens} tokens]" },
 ]
@@ -109,7 +109,7 @@ glyphs = "nerd"
 separator = " · "
 
 [[line]]
-left = ["model", "dir", "git", { metric = "context", widget = "text" }]
+left = ["model", { metric = "dir", icon_color = "16:11" }, "git", { metric = "context", widget = "text" }]
 right = ["update", "cost"]
 
 [[line]]
@@ -585,6 +585,22 @@ impl Library {
 mod tests {
     use super::*;
     use crate::metrics;
+
+    #[test]
+    fn folder_icons_are_yellow_off_segments_as_in_v1() {
+        for p in PRESETS {
+            let c = get(p.name).unwrap();
+            if c.skin.filled() || c.glyphs != GlyphTier::Nerd {
+                continue;
+            }
+            for item in c.lines.iter().flat_map(|l| l.left.iter().chain(&l.right)) {
+                let item = item.config();
+                if item.metric == "dir" {
+                    assert_eq!(item.icon_color.as_deref(), Some("16:11"), "{}", p.name);
+                }
+            }
+        }
+    }
 
     #[test]
     fn applies_parts_and_keeps_the_setup() {
