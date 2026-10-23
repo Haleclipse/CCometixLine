@@ -96,7 +96,6 @@ right = ["cost", "cost.rate", "cost.today"]
 
 [[line]]
 left = [{ metric = "context", bar = "blocks" }, "context.to_compact", "cache"]
-right = ["api_share"]
 "#,
     },
     Preset {

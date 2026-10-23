@@ -1,4 +1,4 @@
-//! Context, rate limits, cost, prompt cache and timing.
+//! Context, rate limits, cost, prompt cache and session time.
 
 use super::projection::{self, Limit};
 use super::{Ctx, LEVELS, Metric, MetricMeta, Options, Reading, fmt};
@@ -175,22 +175,6 @@ pub(super) fn metrics() -> Vec<Metric> {
                 )
             },
             compute: duration,
-        },
-        Metric {
-            meta: MetricMeta {
-                templates: ["{pct}% on model", "{pct}%", "{pct}%"],
-                fields: &["pct", "api", "total"],
-                levels: &[],
-                priority: 1,
-                ..meta(
-                    "api_share",
-                    Category::Timing,
-                    "Time on model",
-                    "Share of session time spent waiting for the model",
-                    IconKey::ApiShare,
-                )
-            },
-            compute: api_share,
         },
     ]
 }
@@ -423,20 +407,4 @@ fn cache(ctx: &Ctx, _: &Options) -> Option<Reading> {
 fn duration(ctx: &Ctx, _: &Options) -> Option<Reading> {
     let ms = ctx.input.cost.as_ref()?.total_duration_ms?;
     Some(Reading::default().set("dur", fmt::duration_ms(ms as u64)))
-}
-
-fn api_share(ctx: &Ctx, _: &Options) -> Option<Reading> {
-    let c = ctx.input.cost.as_ref()?;
-    let (api, total) = (c.total_api_duration_ms?, c.total_duration_ms?);
-    if total <= 0.0 {
-        return None;
-    }
-    let ratio = (api / total).clamp(0.0, 1.0);
-    Some(
-        Reading::default()
-            .set("pct", fmt::percent(ratio))
-            .set("api", fmt::duration_ms(api as u64))
-            .set("total", fmt::duration_ms(total as u64))
-            .ratio(ratio),
-    )
 }

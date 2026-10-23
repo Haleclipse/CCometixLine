@@ -26,7 +26,6 @@ pub enum IconKey {
     Agent,
     SessionName,
     Duration,
-    ApiShare,
     Context,
     Trend,
     Compact,
@@ -52,7 +51,7 @@ pub enum IconKey {
 }
 
 impl IconKey {
-    pub const ALL: [IconKey; 32] = [
+    pub const ALL: [IconKey; 31] = [
         IconKey::Model,
         IconKey::Effort,
         IconKey::Thinking,
@@ -62,7 +61,6 @@ impl IconKey {
         IconKey::Agent,
         IconKey::SessionName,
         IconKey::Duration,
-        IconKey::ApiShare,
         IconKey::Context,
         IconKey::Trend,
         IconKey::Compact,
@@ -113,7 +111,6 @@ pub fn icon(key: IconKey, tier: GlyphTier) -> &'static str {
         IconKey::Agent => ("\u{f007}", "@"),
         IconKey::SessionName => ("\u{f02b}", "#"),
         IconKey::Duration => ("\u{f19bb}", "◷"),
-        IconKey::ApiShare => ("\u{f017}", "⧗"),
         IconKey::Context => ("\u{f49b}", "◔"),
         IconKey::Trend => ("\u{f201}", "∿"),
         IconKey::Compact => ("\u{f066}", "⇲"),
@@ -266,7 +263,6 @@ mod tests {
             IconKey::Context,
             IconKey::Git,
             IconKey::Worktree,
-            IconKey::ApiShare,
             IconKey::Update,
             IconKey::Trend,
             IconKey::Compact,
