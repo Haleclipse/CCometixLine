@@ -344,6 +344,8 @@ pub fn terminal() -> Palette {
         (Token::Crit, A(1)),
         (Token::Accent, A(14)),
         (Token::Muted, A(8)),
+        // White, as v1 drew every separator.
+        (Token::Separator, A(7)),
         (Token::OnFill, A(0)),
         (Token::Identity, A(14)),
         (Token::Workspace, A(10)),
@@ -528,13 +530,14 @@ mod tests {
     }
 
     #[test]
-    fn the_separator_is_muted_until_set() {
+    fn the_separator_is_muted_unless_set() {
         let mut p = builtin("nord").unwrap();
         assert_eq!(p.color(Token::Separator), p.color(Token::Muted));
         let red = Color::parse("#ff0000").unwrap();
         p.set(Token::Separator, red);
         assert_eq!(p.color(Token::Separator), Some(red));
         assert_ne!(p.color(Token::Muted), Some(red));
+        assert_eq!(terminal().color(Token::Separator), Some(Color::Ansi16(7)));
     }
 
     #[test]

@@ -720,11 +720,14 @@ mod tests {
         for _ in 0..5 {
             app.handle_key(key(KeyCode::Down));
         }
+        // The terminal palette draws it white, as v1 did; others as muted.
         let s = screen(&mut app, 112, 33);
         assert!(
-            s.contains(" separator ") && s.contains("auto, as muted"),
+            s.contains(" separator ") && s.contains("white  from the palette"),
             "{s}"
         );
+        app.doc.edit(|c, _| c.palette = "nord".into());
+        assert!(screen(&mut app, 112, 33).contains("auto, as muted"));
         app.handle_key(key(KeyCode::Enter));
         for _ in 0..7 {
             app.handle_key(key(KeyCode::Backspace));
