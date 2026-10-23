@@ -101,7 +101,7 @@ right = ["api_share"]
     },
     Preset {
         name: "cache-aware",
-        summary: "Prompt cache countdown, rewarm cost and misses under the usual line",
+        summary: "Prompt cache countdown, hit ratio and misses under the usual line",
         tags: &["multi-line", "cache"],
         toml: r#"
 palette = "rose-pine"
@@ -116,7 +116,6 @@ right = ["update", "cost"]
 [[line]]
 left = [
   { metric = "cache", widget = "bar", bar = "dots", cells = 8, format = "[warm {left}][{cold}]", priority = 4 },
-  { metric = "cache.cold_cost", icon = "", priority = 4 },
   { metric = "cache", icon = "", format = "[{hit}% hit][ · {misses}× miss][ · last: {cause}]", compact = "[{hit}% hit][ · {misses}× miss]", minimal = "[{hit}%]" },
 ]
 right = ["cost.rate"]

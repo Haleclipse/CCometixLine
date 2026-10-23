@@ -130,7 +130,7 @@ pub(super) fn metrics() -> Vec<Metric> {
                     "cache.cold_cost",
                     Category::Cache,
                     "Rewarm cost",
-                    "Estimated cost to rebuild the prompt cache once it goes cold",
+                    "What rebuilding a cold prompt cache would cost at API prices",
                     IconKey::Cache,
                     ["rewarm ~{usd}", "~{usd}", "~{usd}"],
                     &["usd", "tokens"],

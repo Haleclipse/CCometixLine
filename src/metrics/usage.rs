@@ -142,12 +142,12 @@ pub(super) fn metrics() -> Vec<Metric> {
         Metric {
             meta: MetricMeta {
                 templates: [
-                    "[{left}][{cold}][ · ~{risk}]",
-                    "[{left}][{cold}]",
+                    "[{left}][{cold}][ · {hit}% hit]",
+                    "[{left}][{cold}][ · {hit}%]",
                     "[{left}][{cold}]",
                 ],
                 fields: &[
-                    "left", "cold", "risk", "rewarm", "state", "ttl", "hit", "misses", "cause",
+                    "left", "cold", "rewarm", "state", "ttl", "hit", "misses", "cause",
                 ],
                 min_cc: Some(gate::PROMPT_CACHE),
                 priority: 2,
@@ -155,7 +155,7 @@ pub(super) fn metrics() -> Vec<Metric> {
                     "cache",
                     Category::Cache,
                     "Prompt cache",
-                    "Time until the prompt cache goes cold; near it, what rebuilding it would cost",
+                    "Time until the prompt cache goes cold, and the share of input read from it",
                     IconKey::Cache,
                 )
             },
@@ -386,39 +386,28 @@ fn cache(ctx: &Ctx, _: &Options) -> Option<Reading> {
         .expires_at
         .map(|t| t as i64 - ctx.now)
         .filter(|l| *l > 0 && pc.warm == Some(true));
-    let mut r = Reading::default();
-    // The last minutes before it goes cold, or cold already.
-    let at_risk = match left {
-        Some(left) => {
-            let near = left < (ttl / 5).clamp(60, 300);
-            r = r
-                .set("left", fmt::countdown(left))
-                .set("state", "warm")
-                .ratio(left as f64 / ttl as f64)
-                .severity(if near {
-                    Severity::Warn
-                } else {
-                    Severity::Normal
-                });
-            near
-        }
-        None => {
-            r = r
-                .set("cold", "cold")
-                .set("state", "cold")
-                .ratio(0.0)
-                .severity(Severity::Warn);
-            true
-        }
+    let mut r = match left {
+        // In its last minutes the countdown turns to a warning.
+        Some(left) => Reading::default()
+            .set("left", fmt::countdown(left))
+            .set("state", "warm")
+            .ratio(left as f64 / ttl as f64)
+            .severity(if left < (ttl / 5).clamp(60, 300) {
+                Severity::Warn
+            } else {
+                Severity::Normal
+            }),
+        None => Reading::default()
+            .set("cold", "cold")
+            .set("state", "cold")
+            .ratio(0.0)
+            .severity(Severity::Warn),
     };
     if let Some((usd, _)) = projection::rewarm_cost(ctx) {
-        let usd = fmt::money(usd);
-        if at_risk {
-            r = r.set("risk", usd.clone());
-        }
-        r = r.set("rewarm", usd);
+        r = r.set("rewarm", fmt::money(usd));
     }
-    if let Some(hit) = pc.hit_ratio {
+    // The first request only writes the cache, so its 0% says nothing yet.
+    if let Some(hit) = pc.hit_ratio.filter(|_| pc.requests.unwrap_or(0) > 1) {
         r = r.set("hit", fmt::percent(hit));
     }
     if let Some(m) = pc.misses.filter(|m| *m > 0) {

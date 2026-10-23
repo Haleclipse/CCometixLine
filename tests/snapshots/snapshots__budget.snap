@@ -7,13 +7,13 @@ expression: render_preset(preset.name)
 󰪞 ▀▀▀▀▀▀▀▀▀▀ 7% · Sat 01:00 ⇣64%⏎
                           $1.20 │  $1.65/h │  $4.85 today⏎
  ██████░░░░ 62% · 124k │  43k to compact · ~5 turns⏎
- 3:42                                         60% on model⏎
+ 3:42 · 94% hit                               60% on model⏎
 ── normal @ 100
 󰪞 ▀▀▀▀▀▀▀▀▀▀ 26% · 02:07 ⇣32% │ 󰪞 ▀▀▀▀▀▀▀▀▀▀ 7% · Sat 01:00 ⇣64%  $1.20 │  $1.65/h │  $4.85 today⏎
- ██████░░░░ 62% · 124k │  43k to compact · ~5 turns │  3:42                         60% on model⏎
+ ██████░░░░ 62% · 124k │  43k to compact · ~5 turns │  3:42 · 94% hit               60% on model⏎
 ── normal @ 140
 󰪞 ▀▀▀▀▀▀▀▀▀▀ 26% · 02:07 ⇣32% │ 󰪞 ▀▀▀▀▀▀▀▀▀▀ 7% · Sat 01:00 ⇣64%                                          $1.20 │  $1.65/h │  $4.85 today⏎
- ██████░░░░ 62% · 124k │  43k to compact · ~5 turns │  3:42                                                                 60% on model⏎
+ ██████░░░░ 62% · 124k │  43k to compact · ~5 turns │  3:42 · 94% hit                                                       60% on model⏎
 ── fresh @ 60
                                                       $0.06⏎
  █░░░░░░░░░ 12% · 24k │  143k to compact │  4:20⏎
@@ -28,68 +28,68 @@ expression: render_preset(preset.name)
 󰪞 ▀▀▀▀▀▀▀▀▀▀ 88% · 00:30 ⇣2%⏎
 󰪞 ▀▀▀▀▀▀▀▀▀▀ 64% · Mon 00:00 ⇡21% │  5h limit in 25:43⏎
                         $18.42 │  $5.18/h │  $31.60 today⏎
- █████████░ 91% · 182k │  compact due │  cold · ~$1.14⏎
+ █████████░ 91% · 182k │  compact due │  cold · 71% hit⏎
                                                69% on model⏎
 ── near-full @ 100
 󰪞 ▀▀▀▀▀▀▀▀▀▀ 88% · 00:30 ⇣2% │ 󰪞 ▀▀▀▀▀▀▀▀▀▀ 64% · Mon 00:00 ⇡21% │  5h limit in 25:43⏎
                                                                 $18.42 │  $5.18/h │  $31.60 today⏎
- █████████░ 91% · 182k │  compact due │  cold · ~$1.14                              69% on model⏎
+ █████████░ 91% · 182k │  compact due │  cold · 71% hit                             69% on model⏎
 ── near-full @ 140
 󰪞 ▀▀▀▀▀▀▀▀▀▀ 88% · 00:30 ⇣2% │ 󰪞 ▀▀▀▀▀▀▀▀▀▀ 64% · Mon 00:00 ⇡21% │  5h limit in 25:43                  $18.42 │  $5.18/h │  $31.60 today⏎
- █████████░ 91% · 182k │  compact due │  cold · ~$1.14                                                                      69% on model⏎
+ █████████░ 91% · 182k │  compact due │  cold · 71% hit                                                                     69% on model⏎
 ── big-context @ 60
 󰪞 ▀▀▀▀▀▀▀▀▀▀ 4% · 04:30 ⇣6%⏎
 󰪞 ▀▀▀▀▀▀▀▀▀▀ 80% · Fri 00:00 ⇣6%⏎
                          $7.74 │  $3.68/h │  $12.40 today⏎
  ██░░░░░░░░ 27% · 270k │  697k to compact · ~21 turns⏎
- 45:00                                        39% on model⏎
+ 45:00 · 97% hit                              39% on model⏎
 ── big-context @ 100
 󰪞 ▀▀▀▀▀▀▀▀▀▀ 4% · 04:30 ⇣6% │ 󰪞 ▀▀▀▀▀▀▀▀▀▀ 80% · Fri 00:00 ⇣6%   $7.74 │  $3.68/h │  $12.40 today⏎
- ██░░░░░░░░ 27% · 270k │  697k to compact · ~21 turns │  45:00                      39% on model⏎
+ ██░░░░░░░░ 27% · 270k │  697k to compact · ~21 turns │  45:00 · 97% hit            39% on model⏎
 ── big-context @ 140
 󰪞 ▀▀▀▀▀▀▀▀▀▀ 4% · 04:30 ⇣6% │ 󰪞 ▀▀▀▀▀▀▀▀▀▀ 80% · Fri 00:00 ⇣6%                                           $7.74 │  $3.68/h │  $12.40 today⏎
- ██░░░░░░░░ 27% · 270k │  697k to compact · ~21 turns │  45:00                                                              39% on model⏎
+ ██░░░░░░░░ 27% · 270k │  697k to compact · ~21 turns │  45:00 · 97% hit                                                    39% on model⏎
 ── third-party @ 60
                           $0.84 │  $1.76/h │  $0.84 today⏎
  ████████░░ 81% · 104k │  24k to compact · ~2 turns⏎
- 3:00                                         33% on model⏎
+ 3:00 · 88% hit                               33% on model⏎
 ── third-party @ 100
                                                                   $0.84 │  $1.76/h │  $0.84 today⏎
- ████████░░ 81% · 104k │  24k to compact · ~2 turns │  3:00                         33% on model⏎
+ ████████░░ 81% · 104k │  24k to compact · ~2 turns │  3:00 · 88% hit               33% on model⏎
 ── third-party @ 140
                                                                                                           $0.84 │  $1.76/h │  $0.84 today⏎
- ████████░░ 81% · 104k │  24k to compact · ~2 turns │  3:00                                                                 33% on model⏎
+ ████████░░ 81% · 104k │  24k to compact · ~2 turns │  3:00 · 88% hit                                                       33% on model⏎
 ── worktree @ 60
 󰪞 ▀▀▀▀▀▀▀▀▀▀ 41% · 03:00 ⇡1%⏎
                           $0.31 │  $1.80/h │  $2.15 today⏎
- █░░░░░░░░░ 19% · 38k │  129k to compact │  3:30⏎
-                                               36% on model⏎
+ █░░░░░░░░░ 19% · 38k │  129k to compact⏎
+ 3:30 · 91% hit                               36% on model⏎
 ── worktree @ 100
 󰪞 ▀▀▀▀▀▀▀▀▀▀ 41% · 03:00 ⇡1%                                      $0.31 │  $1.80/h │  $2.15 today⏎
- █░░░░░░░░░ 19% · 38k │  129k to compact │  3:30                                    36% on model⏎
+ █░░░░░░░░░ 19% · 38k │  129k to compact │  3:30 · 91% hit                          36% on model⏎
 ── worktree @ 140
 󰪞 ▀▀▀▀▀▀▀▀▀▀ 41% · 03:00 ⇡1%                                                                              $0.31 │  $1.80/h │  $2.15 today⏎
- █░░░░░░░░░ 19% · 38k │  129k to compact │  3:30                                                                            36% on model⏎
+ █░░░░░░░░░ 19% · 38k │  129k to compact │  3:30 · 91% hit                                                                  36% on model⏎
 ── non-git @ 60
                                                       $0.02⏎
- ░░░░░░░░░░ 5% · 9k │  158k to compact │  1:35⏎
+ ░░░░░░░░░░ 5% · 9k │  158k to compact │  1:35 · 40% hit⏎
                                                13% on model⏎
 ── non-git @ 100
                                                                                               $0.02⏎
- ░░░░░░░░░░ 5% · 9k │  158k to compact │  1:35                                      13% on model⏎
+ ░░░░░░░░░░ 5% · 9k │  158k to compact │  1:35 · 40% hit                            13% on model⏎
 ── non-git @ 140
                                                                                                                                       $0.02⏎
- ░░░░░░░░░░ 5% · 9k │  158k to compact │  1:35                                                                              13% on model⏎
+ ░░░░░░░░░░ 5% · 9k │  158k to compact │  1:35 · 40% hit                                                                    13% on model⏎
 ── gateway @ 60
  spend limit in 10d3h                                $3.10⏎
- ████░░░░░░ 40% · 80k │  87k to compact │  40:00⏎
-                                               33% on model⏎
+ ████░░░░░░ 40% · 80k │  87k to compact⏎
+ 40:00 · 93% hit                              33% on model⏎
 ── gateway @ 100
  spend limit in 10d3h                                                                        $3.10⏎
- ████░░░░░░ 40% · 80k │  87k to compact │  40:00                                    33% on model⏎
+ ████░░░░░░ 40% · 80k │  87k to compact │  40:00 · 93% hit                          33% on model⏎
 ── gateway @ 140
  spend limit in 10d3h                                                                                                                $3.10⏎
- ████░░░░░░ 40% · 80k │  87k to compact │  40:00                                                                            33% on model⏎
+ ████░░░░░░ 40% · 80k │  87k to compact │  40:00 · 93% hit                                                                  33% on model⏎
 ── old-cc @ 60
 ccline needs Claude Code 2.1.153 or newer (running 2.1.140)⏎
 ── old-cc @ 100
