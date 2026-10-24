@@ -110,6 +110,18 @@ pub struct OutputStyle {
     pub name: String,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct RateLimitWindow {
+    pub used_percentage: Option<f64>,
+    pub resets_at: Option<u64>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct RateLimits {
+    pub five_hour: Option<RateLimitWindow>,
+    pub seven_day: Option<RateLimitWindow>,
+}
+
 #[derive(Deserialize)]
 pub struct InputData {
     pub model: Model,
@@ -117,6 +129,7 @@ pub struct InputData {
     pub transcript_path: String,
     pub cost: Option<Cost>,
     pub output_style: Option<OutputStyle>,
+    pub rate_limits: Option<RateLimits>,
 }
 
 // OpenAI-style nested token details
