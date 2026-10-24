@@ -362,7 +362,7 @@ mod tests {
     #[test]
     fn corrects_third_party_context() {
         let out = render("minimal", "third-party", None);
-        assert_eq!(out, vec!["Kimi K2 Turbo · 81% · $0.84"]);
+        assert_eq!(out, vec!["Kimi K2 Turbo · 81% · cache 3:00 · $0.84"]);
     }
 
     #[test]

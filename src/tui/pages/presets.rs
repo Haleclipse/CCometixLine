@@ -383,7 +383,7 @@ mod tests {
         // preview bar shows the card under the cursor, nothing applied yet.
         app.handle_key(key(KeyCode::Right));
         let s = screen(&mut app, 112, 33);
-        assert!(s.contains("Model, context and cost"));
+        assert!(s.contains("Model, context, cache and cost"));
         assert!(s.contains("Preview · minimal · enter applies"), "{s}");
         assert!(!app.doc.dirty());
         app.handle_key(key(KeyCode::Down));
@@ -400,17 +400,15 @@ mod tests {
             app.handle_key(key(KeyCode::Tab));
         }
         let s = screen(&mut app, 112, 33);
+        // Every preset shows the cache; the tag marks the one about it.
         assert!(
             s.contains("● cache")
-                && s.contains("Cometix")
                 && s.contains("Cache-aware")
+                && !s.contains("Classic look")
                 && !s.contains("Minimal"),
             "{s}"
         );
-        // Past cometix, the default, which carries the cache too.
-        while !screen(&mut app, 112, 33).contains("Preview · cache-aware") {
-            app.handle_key(key(KeyCode::Right));
-        }
+        assert!(s.contains("Preview · cache-aware"), "{s}");
         app.handle_key(key(KeyCode::Enter));
         assert_eq!(app.doc.config.preset.as_deref(), Some("cache-aware"));
         assert_eq!(app.doc.config.lines.len(), 2);

@@ -24,7 +24,7 @@ pub const PRESETS: &[Preset] = &[
     Preset {
         name: "cometix",
         summary: "Classic look: model, directory, git, context and cache on one line",
-        tags: &["cache"],
+        tags: &[],
         toml: r#"
 palette = "terminal"
 skin = "plain"
@@ -44,7 +44,7 @@ right = ["update"]
     },
     Preset {
         name: "minimal",
-        summary: "Model, context and cost, no icons",
+        summary: "Model, context, cache and cost, no icons",
         tags: &["minimal"],
         toml: r#"
 palette = "terminal"
@@ -56,6 +56,7 @@ separator = " · "
 left = [
   { metric = "model", icon = "" },
   { metric = "context", widget = "text", icon = "", format = "{pct}%" },
+  { metric = "cache", icon = "", format = "[cache {left}][cache {cold}]" },
   { metric = "cost", icon = "" },
 ]
 "#,
@@ -136,6 +137,7 @@ right = [{ metric = "model", priority = 2 }]
 
 [[line]]
 left = [{ metric = "context.trend", cells = 12 }, { metric = "context.to_compact", icon = "", priority = 4 }]
+right = ["cache"]
 "#,
     },
     Preset {
@@ -153,6 +155,7 @@ separator = " | "
 left = [
   { metric = "model", compact = "{family}" },
   { metric = "context", widget = "text", format = "ctx {pct}%" },
+  { metric = "cache", format = "[cache {left}][cache {cold}]" },
   "cost",
 ]
 "#,
@@ -167,7 +170,7 @@ skin = "powerline"
 glyphs = "nerd"
 
 [[line]]
-left = ["model", "dir", "git", { metric = "context", widget = "text" }]
+left = ["model", "dir", "git", { metric = "context", widget = "text" }, "cache"]
 right = [{ metric = "quota.5h", widget = "gauge" }, "cost"]
 "#,
     },

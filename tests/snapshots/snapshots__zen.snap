@@ -3,53 +3,53 @@ source: tests/snapshots.rs
 expression: render_preset(preset.name)
 ---
 ── normal @ 60
-Opus 4.8 · High | ctx 62% | $1.20⏎
+Opus 4.8 · High | ctx 62% | cache 3:42 | $1.20⏎
 ── normal @ 100
-Opus 4.8 · High | ctx 62% | $1.20⏎
+Opus 4.8 · High | ctx 62% | cache 3:42 | $1.20⏎
 ── normal @ 140
-Opus 4.8 · High | ctx 62% | $1.20⏎
+Opus 4.8 · High | ctx 62% | cache 3:42 | $1.20⏎
 ── fresh @ 60
-Sonnet 5 · Med | ctx 12% | $0.06⏎
+Sonnet 5 · Med | ctx 12% | cache 4:20 | $0.06⏎
 ── fresh @ 100
-Sonnet 5 · Med | ctx 12% | $0.06⏎
+Sonnet 5 · Med | ctx 12% | cache 4:20 | $0.06⏎
 ── fresh @ 140
-Sonnet 5 · Med | ctx 12% | $0.06⏎
+Sonnet 5 · Med | ctx 12% | cache 4:20 | $0.06⏎
 ── near-full @ 60
-Opus 4.8 · Max | ctx 91% | $18.42⏎
+Opus 4.8 · Max | ctx 91% | cache cold | $18.42⏎
 ── near-full @ 100
-Opus 4.8 · Max | ctx 91% | $18.42⏎
+Opus 4.8 · Max | ctx 91% | cache cold | $18.42⏎
 ── near-full @ 140
-Opus 4.8 · Max | ctx 91% | $18.42⏎
+Opus 4.8 · Max | ctx 91% | cache cold | $18.42⏎
 ── big-context @ 60
-Opus 5.5 1M · xHigh | ctx 27% | $7.74⏎
+Opus 5.5 1M · xHigh | ctx 27% | cache 45:00 | $7.74⏎
 ── big-context @ 100
-Opus 5.5 1M · xHigh | ctx 27% | $7.74⏎
+Opus 5.5 1M · xHigh | ctx 27% | cache 45:00 | $7.74⏎
 ── big-context @ 140
-Opus 5.5 1M · xHigh | ctx 27% | $7.74⏎
+Opus 5.5 1M · xHigh | ctx 27% | cache 45:00 | $7.74⏎
 ── third-party @ 60
-Kimi K2 Turbo | ctx 81% | $0.84⏎
+Kimi K2 Turbo | ctx 81% | cache 3:00 | $0.84⏎
 ── third-party @ 100
-Kimi K2 Turbo | ctx 81% | $0.84⏎
+Kimi K2 Turbo | ctx 81% | cache 3:00 | $0.84⏎
 ── third-party @ 140
-Kimi K2 Turbo | ctx 81% | $0.84⏎
+Kimi K2 Turbo | ctx 81% | cache 3:00 | $0.84⏎
 ── worktree @ 60
-Sonnet 5 · High | ctx 19% | $0.31⏎
+Sonnet 5 · High | ctx 19% | cache 3:30 | $0.31⏎
 ── worktree @ 100
-Sonnet 5 · High | ctx 19% | $0.31⏎
+Sonnet 5 · High | ctx 19% | cache 3:30 | $0.31⏎
 ── worktree @ 140
-Sonnet 5 · High | ctx 19% | $0.31⏎
+Sonnet 5 · High | ctx 19% | cache 3:30 | $0.31⏎
 ── non-git @ 60
-Haiku 4.5 | ctx 5% | $0.02⏎
+Haiku 4.5 | ctx 5% | cache 1:35 | $0.02⏎
 ── non-git @ 100
-Haiku 4.5 | ctx 5% | $0.02⏎
+Haiku 4.5 | ctx 5% | cache 1:35 | $0.02⏎
 ── non-git @ 140
-Haiku 4.5 | ctx 5% | $0.02⏎
+Haiku 4.5 | ctx 5% | cache 1:35 | $0.02⏎
 ── gateway @ 60
-Sonnet 5 · Med | ctx 40% | $3.10⏎
+Sonnet 5 · Med | ctx 40% | cache 40:00 | $3.10⏎
 ── gateway @ 100
-Sonnet 5 · Med | ctx 40% | $3.10⏎
+Sonnet 5 · Med | ctx 40% | cache 40:00 | $3.10⏎
 ── gateway @ 140
-Sonnet 5 · Med | ctx 40% | $3.10⏎
+Sonnet 5 · Med | ctx 40% | cache 40:00 | $3.10⏎
 ── old-cc @ 60
 ccline needs Claude Code 2.1.153 or newer (running 2.1.140)⏎
 ── old-cc @ 100
