@@ -138,8 +138,12 @@ jobs:
     - name: Setup Node.js for NPM
       uses: actions/setup-node@v4
       with:
-        node-version: '18'
+        node-version: '24'
         registry-url: 'https://registry.npmjs.org'
+
+    # Trusted publishing (OIDC) needs npm 11.5.1 or newer; no token is used.
+    - name: Update npm
+      run: npm install -g npm@latest && npm --version
 
     - name: Extract binaries from archives
       run: |
@@ -203,8 +207,6 @@ jobs:
         find npm-publish -name "package.json" -exec echo "=== {} ===" \; -exec head -5 {} \;
 
     - name: Publish platform packages to NPM
-      env:
-        NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
       run: |
         # Publish platform packages first
         for platform in darwin-x64 darwin-arm64 linux-x64 linux-x64-musl linux-arm64 linux-arm64-musl win32-x64; do
@@ -221,8 +223,6 @@ jobs:
         sleep 30
 
     - name: Publish main package to NPM
-      env:
-        NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
       run: |
         cd npm-publish/main
         echo "📦 Publishing @cometix/ccline"
