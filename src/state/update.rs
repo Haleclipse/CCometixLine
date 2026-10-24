@@ -100,13 +100,17 @@ pub fn last() -> UpdateState {
 /// Ask each source in turn; `None` when none answered with a version.
 pub fn fetch() -> Option<String> {
     SOURCES.iter().find_map(|(url, key)| {
-        let out = Command::new("curl")
-            .args(["-fsSL", "--max-time", FETCH_TIMEOUT, url])
+        let mut cmd = Command::new("curl");
+        cmd.args(["-fsSL", "--max-time", FETCH_TIMEOUT, url])
             .stdin(Stdio::null())
-            .stderr(Stdio::null())
-            .output()
-            .ok()
-            .filter(|o| o.status.success())?;
+            .stderr(Stdio::null());
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+            cmd.creation_flags(CREATE_NO_WINDOW);
+        }
+        let out = cmd.output().ok().filter(|o| o.status.success())?;
         let json: serde_json::Value = serde_json::from_slice(&out.stdout).ok()?;
         let version = json.get(key)?.as_str()?.trim().trim_start_matches('v');
         semver(version).map(|_| version.to_string())
