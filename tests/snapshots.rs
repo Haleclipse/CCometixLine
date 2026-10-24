@@ -72,7 +72,7 @@ fn render_subagent(preset: &str) -> String {
 
 #[test]
 fn subagent_lines_render_every_task() {
-    for preset in ["classic", "dashboard"] {
+    for preset in ["cometix", "dashboard"] {
         insta::assert_snapshot!(format!("subagent_{preset}"), render_subagent(preset));
     }
 }

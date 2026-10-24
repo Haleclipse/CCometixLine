@@ -349,12 +349,12 @@ mod tests {
     }
 
     #[test]
-    fn classic_matches_v1_shape() {
-        let out = render("classic", "normal", None);
+    fn cometix_draws_one_classic_line() {
+        let out = render("cometix", "normal", None);
         assert_eq!(
             out,
             vec![
-                "\u{e26d} Opus 4.8 · High | \u{f024b} app | \u{f02a2} main ● ↑2 | \u{f49b} 62% · 124k tokens"
+                "\u{ef23} Opus 4.8 · High | \u{f024b} app | \u{f02a2} main ● ↑2 | \u{f49b} 62% · 124k tokens | \u{f1c0} 3:42 · 94% hit"
             ]
         );
     }
@@ -367,7 +367,7 @@ mod tests {
 
     #[test]
     fn refuses_old_claude_code() {
-        let out = render("classic", "old-cc", None);
+        let out = render("cometix", "old-cc", None);
         assert_eq!(
             out,
             vec!["ccline needs Claude Code 2.1.153 or newer (running 2.1.140)"]
@@ -386,7 +386,7 @@ mod tests {
             compact: AutoCompact::default(),
             commands: Commands::Show,
         };
-        let mut config = presets::get("classic").unwrap();
+        let mut config = presets::get("cometix").unwrap();
         config.glyphs = crate::style::GlyphTier::Ascii;
         let id = |m: &str| ItemSpec::Id(m.into());
         // `vim` has nothing in this scenario, so `git` is entry 2 but item 1.

@@ -367,7 +367,7 @@ mod tests {
         app.open_page(PageId::Presets);
         let s = screen(&mut app, 112, 33);
         for name in [
-            "Classic",
+            "Cometix",
             "Minimal",
             "Dashboard",
             "Budget",
@@ -376,10 +376,10 @@ mod tests {
         ] {
             assert!(s.contains(name), "{name}: {s}");
         }
-        assert!(s.contains("✓ in use"), "the default config is classic: {s}");
-        assert!(s.contains("The v1 look"));
+        assert!(s.contains("✓ in use"), "the default config is cometix: {s}");
+        assert!(s.contains("Classic look"));
 
-        // Right then down: from classic to the card under minimal. The
+        // Right then down: from cometix to the card under minimal. The
         // preview bar shows the card under the cursor, nothing applied yet.
         app.handle_key(key(KeyCode::Right));
         let s = screen(&mut app, 112, 33);
@@ -401,9 +401,16 @@ mod tests {
         }
         let s = screen(&mut app, 112, 33);
         assert!(
-            s.contains("● cache") && s.contains("Cache-aware") && !s.contains("Classic"),
+            s.contains("● cache")
+                && s.contains("Cometix")
+                && s.contains("Cache-aware")
+                && !s.contains("Minimal"),
             "{s}"
         );
+        // Past cometix, the default, which carries the cache too.
+        while !screen(&mut app, 112, 33).contains("Preview · cache-aware") {
+            app.handle_key(key(KeyCode::Right));
+        }
         app.handle_key(key(KeyCode::Enter));
         assert_eq!(app.doc.config.preset.as_deref(), Some("cache-aware"));
         assert_eq!(app.doc.config.lines.len(), 2);
@@ -438,13 +445,13 @@ mod tests {
         // Apply a look, then save the setup under a name typed loosely.
         app.handle_key(key(KeyCode::Char('s')));
         app.handle_key(key(KeyCode::Char('n')));
-        typed(&mut app, "classic");
+        typed(&mut app, "cometix");
         let s = screen(&mut app, 112, 33);
         assert!(
             s.contains("Save as preset") && s.contains("built-in preset"),
             "{s}"
         );
-        for _ in 0.."classic".len() {
+        for _ in 0.."cometix".len() {
             app.handle_key(key(KeyCode::Backspace));
         }
         typed(&mut app, "Work Laptop");

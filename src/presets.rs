@@ -18,13 +18,13 @@ pub struct Preset {
     toml: &'static str,
 }
 
-pub const DEFAULT: &str = "classic";
+pub const DEFAULT: &str = "cometix";
 
 pub const PRESETS: &[Preset] = &[
     Preset {
-        name: "classic",
-        summary: "The v1 look: model, directory, git and context on one line",
-        tags: &[],
+        name: "cometix",
+        summary: "Classic look: model, directory, git, context and cache on one line",
+        tags: &["cache"],
         toml: r#"
 palette = "terminal"
 skin = "plain"
@@ -37,6 +37,7 @@ left = [
   { metric = "dir", icon_color = "bright_yellow" },
   "git",
   { metric = "context", widget = "text", format = "{pct}%[ · {tokens} tokens]" },
+  "cache",
 ]
 right = ["update"]
 "#,
@@ -609,7 +610,7 @@ mod tests {
 
     #[test]
     fn applies_parts_and_keeps_the_setup() {
-        let mut mine = get("classic").unwrap();
+        let mut mine = get("cometix").unwrap();
         mine.layout.reserve = 4;
         mine.git.cache_ms = 0;
         mine.palette_overrides
@@ -628,7 +629,7 @@ mod tests {
             (&layout.lines, &layout.palette),
             (&dash.lines, &mine.palette)
         );
-        assert_eq!(layout.preset.as_deref(), Some("classic"));
+        assert_eq!(layout.preset.as_deref(), Some("cometix"));
 
         let style = apply(&mine, &dash, Parts::Style);
         assert_eq!((&style.lines, &style.palette), (&mine.lines, &dash.palette));
@@ -683,7 +684,7 @@ mod tests {
         assert_eq!(slug("工作 布局"), "工作-布局");
         assert_eq!(slug("!!!"), "");
         assert!(name_problem("").is_some());
-        assert!(name_problem("classic").unwrap().contains("built-in"));
+        assert!(name_problem("cometix").unwrap().contains("built-in"));
         assert!(name_problem(&"x".repeat(NAME_MAX + 1)).is_some());
         assert_eq!(name_problem("work"), None);
     }
@@ -730,7 +731,7 @@ mod tests {
                 .contains("already")
         );
         assert!(
-            lib.create("classic", "", &mine)
+            lib.create("cometix", "", &mine)
                 .unwrap_err()
                 .contains("built-in")
         );
@@ -741,7 +742,7 @@ mod tests {
     fn replaces_renames_and_deletes() {
         let dir = temp("edit");
         let mut lib = Library::load(dir.clone());
-        lib.create("work", "Mine", &get("classic").unwrap())
+        lib.create("work", "Mine", &get("cometix").unwrap())
             .unwrap();
         lib.replace("work", &get("zen").unwrap()).unwrap();
         let e = lib.get("work").unwrap();
@@ -760,10 +761,10 @@ mod tests {
         lib.create("other", "", &get("zen").unwrap()).unwrap();
         assert!(lib.rename("office", "other", "").is_err());
         assert!(
-            lib.rename("classic", "x", "").is_err(),
+            lib.rename("cometix", "x", "").is_err(),
             "built-ins don't change"
         );
-        assert!(lib.replace("classic", &get("zen").unwrap()).is_err());
+        assert!(lib.replace("cometix", &get("zen").unwrap()).is_err());
         assert!(lib.delete("minimal").is_err());
 
         lib.delete("office").unwrap();

@@ -234,24 +234,24 @@ fn window(w: &Window, length: i64, limit: Limit, ctx: &Ctx) -> Option<Reading> {
         let left = at - ctx.now;
         let elapsed = (1.0 - left as f64 / length as f64).clamp(0.0, 1.0);
         let delta = used - elapsed;
-        let (up, down) = match ctx.glyphs {
-            GlyphTier::Ascii => ("+", "-"),
-            _ => ("⇡", "⇣"),
+        let points = (delta * 100.0).round();
+        let (up, down, even) = match ctx.glyphs {
+            GlyphTier::Ascii => ("+", "-", ""),
+            _ => ("⇡", "⇣", "±"),
         };
-        let role = if delta > 0.0 { Role::Bad } else { Role::Good };
+        // Within half a point of the clock it is on pace: neither way.
+        let (arrow, role) = if points == 0.0 {
+            (even, Role::Muted)
+        } else if points > 0.0 {
+            (up, Role::Bad)
+        } else {
+            (down, Role::Good)
+        };
         r = r
             .set("reset", fmt::clock(at, ctx.now, ctx.tz))
             .set("left", fmt::countdown(left))
             .set_role("pace", fmt::signed_percent(delta), role)
-            .set_role(
-                "arrow",
-                format!(
-                    "{}{}%",
-                    if delta > 0.0 { up } else { down },
-                    (delta.abs() * 100.0).round()
-                ),
-                role,
-            );
+            .set_role("arrow", format!("{arrow}{}%", points.abs()), role);
         r.elapsed = Some(elapsed);
         if let Some(out) = projection::run_out(ctx, limit, used, at, length) {
             r = r.set("eta", fmt::clock(out, ctx.now, ctx.tz));
@@ -407,4 +407,28 @@ fn cache(ctx: &Ctx, _: &Options) -> Option<Reading> {
 fn duration(ctx: &Ctx, _: &Options) -> Option<Reading> {
     let ms = ctx.input.cost.as_ref()?.total_duration_ms?;
     Some(Reading::default().set("dur", fmt::duration_ms(ms as u64)))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn on_pace_is_neither_ahead_nor_behind() {
+        // 30% used with 30% of the five hours gone.
+        let now = 1_000_000;
+        let resets = now + FIVE_HOURS * 7 / 10;
+        let json = format!(
+            r#"{{"rate_limits": {{"five_hour": {{"used_percentage": 30, "resets_at": {resets}}}}}}}"#
+        );
+        let input = crate::input::Input::parse(&json).unwrap();
+        let registry = crate::models::Registry::default();
+        let tz = chrono::FixedOffset::east_opt(0).unwrap();
+        for (tier, text) in [(GlyphTier::Nerd, "±0%"), (GlyphTier::Ascii, "0%")] {
+            let ctx = Ctx::new(&input, &registry, now, tz, tier);
+            let reading = five_hour(&ctx, &Options::new()).unwrap();
+            let arrow = reading.get("arrow").unwrap();
+            assert_eq!((arrow.text.as_str(), arrow.role), (text, Some(Role::Muted)));
+        }
+    }
 }
