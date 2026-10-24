@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.1] - 2026-10-25
+
+### Fixed
+- **Windows Console Flash** ([#139](https://github.com/Haleclipse/CCometixLine/pull/139), [#138](https://github.com/Haleclipse/CCometixLine/issues/138)): Apply `CREATE_NO_WINDOW` when spawning child processes on Windows (`process::run`, `spawn_detached`, and the update-check `curl` path) so background git refresh and update checks no longer briefly flash a console window.
+
 ## [2.0.0] - 2026-10-24
 
 A rewrite. Data, form and look are separate layers: any metric can take any fitting form, on as many lines as you like, in any skin and palette. The config format is new and v1's is not read.
