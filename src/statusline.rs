@@ -389,11 +389,11 @@ mod tests {
         let mut config = presets::get("cometix").unwrap();
         config.glyphs = crate::style::GlyphTier::Ascii;
         let id = |m: &str| ItemSpec::Id(m.into());
-        // `vim` has nothing in this scenario, so `git` is entry 2 but item 1.
+        // `worktree` has nothing in this scenario, so `git` is entry 2 but item 1.
         let line = LineConfig {
             left: vec![
                 id("model"),
-                id("vim"),
+                id("worktree"),
                 ItemSpec::Item(Box::new(ItemConfig {
                     metric: "git".into(),
                     priority: Some(1),
@@ -455,7 +455,7 @@ mod tests {
                 &config,
                 &reg,
                 &frame(None),
-                &id("vim").config()
+                &id("worktree").config()
             )
             .is_none()
         );

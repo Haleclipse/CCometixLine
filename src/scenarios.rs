@@ -193,11 +193,11 @@ pub const SCENARIOS: &[Scenario] = &[
         latest: None,
         bridge: Some(NORMAL_BRIDGE),
         json: r#"{
-  "session_id": "s-normal", "prompt_id": "p-9", "transcript_path": "/home/u/.claude/projects/app/s.jsonl", "cwd": "/home/u/app",
+  "session_id": "s-normal", "prompt_id": "p-9", "session_name": "Fix the login redirect", "transcript_path": "/home/u/.claude/projects/app/s.jsonl", "cwd": "/home/u/app",
   "model": {"id": "claude-opus-4-8", "display_name": "Opus 4.8"},
   "workspace": {"current_dir": "/home/u/app", "project_dir": "/home/u/app", "added_dirs": [],
     "repo": {"host": "github.com", "owner": "acme", "name": "app"}},
-  "version": "2.1.305", "output_style": {"name": "default"},
+  "version": "2.1.305", "output_style": {"name": "Explanatory"},
   "cost": {"total_cost_usd": 1.2, "total_duration_ms": 1830000, "total_api_duration_ms": 1100000,
     "total_lines_added": 128, "total_lines_removed": 34},
   "context_window": {"total_input_tokens": 124000, "total_output_tokens": 1400, "context_window_size": 200000,
@@ -210,6 +210,7 @@ pub const SCENARIOS: &[Scenario] = &[
     "requests": 41, "misses": 1, "expected_rebuilds": 0, "hit_ratio": 0.94, "cache_write_tokens": 40000,
     "miss_recache_tokens": 9000, "last_miss_at": 1790811000, "last_miss_cause": {"causes": ["tools_changed"], "tools_added": 2, "tools_removed": 0},
     "miss_causes": {"tools_changed": 1}, "recache_tokens_if_cold": 124000},
+  "vim": {"mode": "INSERT"}, "agent": {"name": "planner"},
   "pr": {"number": 1287, "url": "https://github.com/acme/app/pull/1287", "review_state": "pending"}
 }"#,
     },
@@ -625,6 +626,49 @@ mod tests {
                 let metric = metrics::find(id).unwrap();
                 let reading = metrics::read(metric, &ctx, &Options::new());
                 assert!(reading.is_some(), "{name}: {id}");
+            }
+        }
+    }
+
+    /// The preview opens on `normal`, so whatever a user adds shows there,
+    /// save what only some sessions have; each of those shows in another
+    /// sample. `cmd` needs a command and `task.*` belong to the subagent line.
+    #[test]
+    fn normal_shows_all_but_situational_metrics() {
+        use crate::metrics::{self, Ctx, GitSource, Options};
+        let situational = ["update", "quota.spend", "quota.eta", "worktree"];
+        let registry = crate::models::Registry::default();
+        let tz = chrono::FixedOffset::east_opt(0).unwrap();
+        let readings: Vec<_> = SCENARIOS
+            .iter()
+            .map(|s| {
+                let input = s.input(BASE);
+                let ctx = Ctx::new(&input, &registry, BASE, tz, crate::style::GlyphTier::Nerd)
+                    .with_git(GitSource::Fixed(s.git()))
+                    .with_state(s.state(BASE));
+                let shown: Vec<_> = metrics::catalog()
+                    .iter()
+                    .filter(|m| metrics::read(m, &ctx, &Options::new()).is_some())
+                    .map(|m| m.meta.id)
+                    .collect();
+                (s.name, shown)
+            })
+            .collect();
+        for m in metrics::catalog() {
+            let id = m.meta.id;
+            if id == "cmd" || id.starts_with("task.") {
+                continue;
+            }
+            let shown = |name: &str| {
+                readings
+                    .iter()
+                    .any(|(n, ids)| *n == name && ids.contains(&id))
+            };
+            if situational.contains(&id) {
+                assert!(!shown("normal"), "{id} is situational");
+                assert!(readings.iter().any(|(_, ids)| ids.contains(&id)), "{id}");
+            } else {
+                assert!(shown("normal"), "{id}");
             }
         }
     }
