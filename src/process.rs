@@ -26,6 +26,12 @@ pub fn run(mut cmd: Command, stdin: Option<&[u8]>, timeout: Duration) -> Outcome
     })
     .stdout(Stdio::piped())
     .stderr(Stdio::null());
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
     let Ok(mut child) = cmd.spawn() else {
         return Outcome::Failed;
     };
