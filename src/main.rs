@@ -1,77 +1,305 @@
-use ccometixline::cli::Cli;
-use ccometixline::config::{Config, InputData};
-use ccometixline::core::{collect_all_segments, StatusLineGenerator};
-use ccometixline::ui::{MainMenu, MenuResult};
-use std::io::{self, IsTerminal};
+use ccometixline::cli::{Cli, Command, ModAction, PreviewArgs};
+use ccometixline::config::{Config, DepthSetting, LoadNote};
+use ccometixline::env::{AutoCompact, ClaudeSettings};
+use ccometixline::input::{Input, MAX_INPUT_BYTES, SubagentInput};
+use ccometixline::metrics::{Commands, GitSource};
+use ccometixline::models::Registry;
+use ccometixline::render::ansi::{self, EmitOptions};
+use ccometixline::render::span::{Span, Style};
+use ccometixline::scenarios;
+use ccometixline::state::{self, StateView};
+use ccometixline::statusline::{self, Frame};
+use ccometixline::style::palette::Token;
+use chrono::{Local, Utc};
+use std::io::{self, IsTerminal, Read};
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() {
     let cli = Cli::parse_args();
 
-    if cli.config {
-        ccometixline::ui::run_configurator()?;
-        return Ok(());
+    match cli.command {
+        Some(Command::Preview(args)) => return preview(args),
+        Some(Command::Update) => return update(),
+        Some(Command::Mod { action }) => return companion(action.unwrap_or(ModAction::Status)),
+        Some(Command::RefreshGit { dir }) => return state::git_cache::refresh(&dir),
+        Some(Command::UpdateCheck) => {
+            state::update::check(Utc::now().timestamp());
+            return;
+        }
+        Some(Command::RefreshCmd {
+            cwd,
+            timeout_ms,
+            run,
+        }) => {
+            let timeout = std::time::Duration::from_millis(timeout_ms);
+            return state::cmd_cache::refresh(&run, cwd.as_deref(), timeout);
+        }
+        None => {}
     }
 
-    // Handle Claude Code patcher
-    if let Some(claude_path) = cli.patch {
-        use ccometixline::utils::ClaudeCodePatcher;
-
-        println!("🔧 Claude Code Context Warning Disabler");
-        println!("Target file: {}", claude_path);
-
-        // Create backup in same directory
-        let backup_path = format!("{}.backup", claude_path);
-        std::fs::copy(&claude_path, &backup_path)?;
-        println!("📦 Created backup: {}", backup_path);
-
-        // Load and patch
-        let mut patcher = ClaudeCodePatcher::new(&claude_path)?;
-
-        println!("\n🔄 Applying patches...");
-        let results = patcher.apply_all_patches();
-        patcher.save()?;
-
-        ClaudeCodePatcher::print_summary(&results);
-        println!("💡 To restore warnings, replace your cli.js with the backup file:");
-        println!("   cp {} {}", backup_path, claude_path);
-
-        return Ok(());
+    if cli.config || io::stdin().is_terminal() {
+        if !io::stdout().is_terminal() {
+            eprintln!("ccline: the configuration TUI needs a terminal.");
+            std::process::exit(1);
+        }
+        if let Err(e) = ccometixline::tui::run() {
+            eprintln!("ccline: {e}");
+            std::process::exit(1);
+        }
+        return;
     }
 
-    // Load configuration
-    let mut config = Config::load().unwrap_or_else(|_| Config::default());
+    run(cli.subagent);
+}
 
-    // Apply theme override if provided
-    if let Some(theme) = cli.theme {
-        config = ccometixline::ui::themes::ThemePresets::get_theme(&theme);
+fn run(subagent: bool) {
+    let mut text = String::new();
+    let _ = io::stdin()
+        .take(MAX_INPUT_BYTES as u64)
+        .read_to_string(&mut text);
+    let tasks = SubagentInput::detect(&text).or_else(|| {
+        // Asked for explicitly but not a task list: there is nothing to draw.
+        subagent.then(SubagentInput::default)
+    });
+    if let Some(payload) = tasks {
+        return run_subagent(&payload, &text);
     }
+    let input = match Input::parse(&text) {
+        Ok(input) => input,
+        Err(e) => {
+            println!("\x1b[0mccline: could not read the status line input ({e})\x1b[0m");
+            return;
+        }
+    };
+    let (config, note) = Config::load();
+    let registry = Registry::load();
+    let settings = ClaudeSettings::for_input(&input);
+    let (now, tz) = (Utc::now().timestamp(), *Local::now().offset());
+    let mut view = state::observe(&input, &text, &registry, now, tz);
+    view.latest_version = state::update::available(&config.update, now);
+    let frame = Frame {
+        now,
+        tz,
+        width: statusline::budget(&config, &settings),
+        git: GitSource::Cached(config.git.cache_ms),
+        state: view,
+        compact: settings.auto_compact(),
+        commands: Commands::Run {
+            stdin: text.clone(),
+        },
+    };
+    let mut lines = statusline::lines(&input, &config, &registry, frame);
+    if let LoadNote::Invalid(_) = note {
+        let warn = statusline::theme(&config).palette.color(Token::Warn);
+        let mark = Span::styled(
+            " ! ccline config",
+            Style {
+                fg: warn,
+                ..Style::default()
+            },
+        );
+        match lines.first_mut() {
+            Some(first) => first.push(mark),
+            None => lines.push(vec![mark]),
+        }
+    }
+    let opts = EmitOptions {
+        depth: config.color_depth.resolve(),
+        guards: true,
+    };
+    println!("{}", ansi::emit(&lines, opts));
+}
 
-    // Check if stdin has data
-    if io::stdin().is_terminal() {
-        if let Some(result) = MainMenu::run()? {
+/// `subagentStatusLine`: one JSON object per task, `{"id", "content"}`.
+/// Tasks whose line comes out empty are left out, so Claude Code keeps its
+/// own text for them (an empty `content` would hide the task).
+fn run_subagent(payload: &SubagentInput, raw: &str) {
+    let (config, _) = Config::load();
+    let registry = Registry::load();
+    let frame = Frame {
+        now: Utc::now().timestamp(),
+        tz: *Local::now().offset(),
+        width: None,
+        git: GitSource::Cached(config.git.cache_ms),
+        state: StateView::default(),
+        compact: AutoCompact::default(),
+        commands: Commands::Run {
+            stdin: raw.to_string(),
+        },
+    };
+    let opts = EmitOptions {
+        depth: config.color_depth.resolve(),
+        guards: false,
+    };
+    for (id, line) in statusline::subagent_lines(payload, &config, &registry, frame) {
+        let content = ansi::emit(&[line], opts);
+        if !content.is_empty() {
+            println!("{}", serde_json::json!({ "id": id, "content": content }));
+        }
+    }
+}
+
+/// `ccline mod`: the companion mod's state, or installing and removing it
+/// through Claude Code's own plugin commands.
+fn companion(action: ModAction) {
+    use ccometixline::companion::{self, Status};
+    let status = companion::status();
+    match action {
+        ModAction::Status => {
+            match &status {
+                Status::NotInstalled => println!("The companion mod is not installed."),
+                Status::Outdated(i) => println!(
+                    "The companion mod {} is installed; this ccline has {}. Run `ccline mod install` to update it.",
+                    i.version.as_deref().unwrap_or("(unknown version)"),
+                    companion::version()
+                ),
+                Status::Current(i) => println!(
+                    "The companion mod {} is installed ({} scope).",
+                    companion::version(),
+                    i.scope
+                ),
+            }
+            println!(
+                "It needs Claude Code 2.1.287 or newer, and writes to {}.",
+                ccometixline::state::bridge::dir().display()
+            );
+        }
+        ModAction::Install | ModAction::Uninstall => {
+            let install = matches!(action, ModAction::Install);
+            let steps = if install {
+                companion::install_plan()
+            } else {
+                companion::uninstall_steps()
+            };
+            for s in &steps {
+                println!("$ {}", companion::shown(s));
+            }
+            let result = if install {
+                companion::install()
+            } else {
+                companion::uninstall()
+            };
             match result {
-                MenuResult::LaunchConfigurator => {
-                    ccometixline::ui::run_configurator()?;
+                Ok(()) if install => println!(
+                    "Installed. Restart Claude Code; set statusLine.refreshInterval (ccline's TUI can) so live data shows between turns."
+                ),
+                Ok(()) => println!("Removed."),
+                Err(e) => {
+                    eprintln!("ccline: {e}");
+                    std::process::exit(1);
                 }
-                MenuResult::InitConfig | MenuResult::CheckConfig => {}
-                MenuResult::Exit => {}
             }
         }
-        return Ok(());
     }
+}
 
-    // Read Claude Code data from stdin
-    let stdin = io::stdin();
-    let input: InputData = serde_json::from_reader(stdin.lock())?;
+fn update() {
+    use state::update::{CURRENT, RELEASES, is_newer};
+    match state::update::check(Utc::now().timestamp()) {
+        Some(latest) if is_newer(&latest, CURRENT) => {
+            println!("ccline {latest} is available (running {CURRENT}).");
+            println!("Upgrade:       npm update -g @cometix/ccline");
+            println!("Release notes: {RELEASES}/tag/v{latest}");
+        }
+        Some(latest) => println!("ccline {CURRENT} is up to date (latest published: {latest})."),
+        None => {
+            eprintln!("ccline: could not reach the npm registry or GitHub; try again later.");
+            std::process::exit(1);
+        }
+    }
+}
 
-    // Collect segment data
-    let segments_data = collect_all_segments(&config, &input);
+fn preview(args: PreviewArgs) {
+    if args.list {
+        println!("Scenarios:");
+        for s in scenarios::SCENARIOS {
+            println!("  {:<12} {}", s.name, s.summary);
+        }
+        return;
+    }
+    let (config, _) = Config::load();
+    let depth = match args.color.as_str() {
+        "truecolor" => DepthSetting::TrueColor,
+        "256" => DepthSetting::Ansi256,
+        "16" => DepthSetting::Ansi16,
+        "none" => DepthSetting::None,
+        _ => config.color_depth,
+    }
+    .resolve();
+    let width = args
+        .width
+        .or_else(ccometixline::env::columns)
+        .unwrap_or(100);
+    let registry = Registry::load();
+    let now = Utc::now().timestamp();
+    let tz = *Local::now().offset();
+    let opts = EmitOptions {
+        depth,
+        guards: true,
+    };
 
-    // Render statusline
-    let generator = StatusLineGenerator::new(config);
-    let statusline = generator.generate(segments_data);
+    let render = |input: &Input, git: GitSource, state: StateView, compact: AutoCompact| {
+        let frame = Frame {
+            now,
+            tz,
+            width: Some(width),
+            git,
+            state,
+            compact,
+            commands: Commands::Show,
+        };
+        ansi::emit(&statusline::lines(input, &config, &registry, frame), opts)
+    };
+    let scenario = |s: &scenarios::Scenario| {
+        render(
+            &s.input(now),
+            GitSource::Fixed(s.git()),
+            s.state(now),
+            AutoCompact::default(),
+        )
+    };
 
-    println!("{}", statusline);
-
-    Ok(())
+    if args.subagent {
+        let frame = Frame {
+            now,
+            tz,
+            width: Some(width),
+            git: GitSource::Fixed(None),
+            state: StateView::default(),
+            compact: AutoCompact::default(),
+            commands: Commands::Show,
+        };
+        let mut payload = scenarios::subagent(now);
+        payload.columns = Some(width);
+        for (id, line) in statusline::subagent_lines(&payload, &config, &registry, frame) {
+            println!("\x1b[2m{id:>3} │\x1b[0m {}", ansi::emit(&[line], opts));
+        }
+        return;
+    }
+    if args.all {
+        for s in scenarios::SCENARIOS {
+            println!("\x1b[2m── {} · {}\x1b[0m", s.name, s.summary);
+            println!("{}\n", scenario(s));
+        }
+        return;
+    }
+    if let Some(s) = scenarios::find(&args.scenario) {
+        println!("{}", scenario(s));
+        return;
+    }
+    match std::fs::read_to_string(&args.scenario).map(|t| Input::parse(&t)) {
+        Ok(Ok(input)) => {
+            // A real payload renders against the live environment, but
+            // previewing must not record anything.
+            let compact = ClaudeSettings::for_input(&input).auto_compact();
+            println!(
+                "{}",
+                render(&input, GitSource::Live, StateView::default(), compact)
+            )
+        }
+        Ok(Err(e)) => eprintln!("ccline: {} is not status line JSON: {e}", args.scenario),
+        Err(_) => eprintln!(
+            "ccline: no scenario or file named {:?}; see `ccline preview --list`",
+            args.scenario
+        ),
+    }
 }

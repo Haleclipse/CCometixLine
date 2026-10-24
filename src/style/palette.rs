@@ -1,0 +1,586 @@
+use super::color::Color;
+use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
+
+/// Metric categories; each has its own color in a palette.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Category {
+    Identity,
+    Workspace,
+    Vcs,
+    Context,
+    Quota,
+    Cost,
+    Cache,
+    Session,
+    Timing,
+    Activity,
+    System,
+    /// User commands; drawn in the accent color.
+    Custom,
+}
+
+impl Category {
+    pub const ALL: [Category; 12] = [
+        Category::Identity,
+        Category::Workspace,
+        Category::Vcs,
+        Category::Context,
+        Category::Quota,
+        Category::Cost,
+        Category::Cache,
+        Category::Session,
+        Category::Timing,
+        Category::Activity,
+        Category::System,
+        Category::Custom,
+    ];
+
+    /// The names of its segment tokens: `<name>.bg` and `<name>.fg`.
+    fn segment_names(self) -> (&'static str, &'static str) {
+        match self {
+            Category::Identity => ("identity.bg", "identity.fg"),
+            Category::Workspace => ("workspace.bg", "workspace.fg"),
+            Category::Vcs => ("vcs.bg", "vcs.fg"),
+            Category::Context => ("context.bg", "context.fg"),
+            Category::Quota => ("quota.bg", "quota.fg"),
+            Category::Cost => ("cost.bg", "cost.fg"),
+            Category::Cache => ("cache.bg", "cache.fg"),
+            Category::Session => ("session.bg", "session.fg"),
+            Category::Timing => ("timing.bg", "timing.fg"),
+            Category::Activity => ("activity.bg", "activity.fg"),
+            Category::System => ("system.bg", "system.fg"),
+            Category::Custom => ("custom.bg", "custom.fg"),
+        }
+    }
+}
+
+/// A named color slot in a palette.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum Token {
+    Ok,
+    Warn,
+    Crit,
+    Accent,
+    Muted,
+    /// Separators: between items in the plain skin, the bracket skin's
+    /// brackets, and the ` · ` within items. Unset, ANSI white as in v1, or
+    /// `muted` on a light palette where white wouldn't show.
+    Separator,
+    /// Default text; `None` means the terminal's foreground.
+    Text,
+    /// Background of the status line; `None` means the terminal's.
+    Bg,
+    /// Text drawn on a filled (colored) background.
+    OnFill,
+    Identity,
+    Workspace,
+    Vcs,
+    Context,
+    Quota,
+    Cost,
+    Cache,
+    Session,
+    Timing,
+    Activity,
+    System,
+    /// A category's segment background in filled skins (`context.bg`).
+    SegBg(Category),
+    /// A category's text on its segment in filled skins (`context.fg`).
+    SegFg(Category),
+}
+
+/// The plain tokens: semantic colors, then a color per category. Each
+/// category also has segment tokens; see `segment_tokens`.
+pub const TOKENS: [Token; 20] = [
+    Token::Ok,
+    Token::Warn,
+    Token::Crit,
+    Token::Accent,
+    Token::Muted,
+    Token::Separator,
+    Token::Text,
+    Token::Bg,
+    Token::OnFill,
+    Token::Identity,
+    Token::Workspace,
+    Token::Vcs,
+    Token::Context,
+    Token::Quota,
+    Token::Cost,
+    Token::Cache,
+    Token::Session,
+    Token::Timing,
+    Token::Activity,
+    Token::System,
+];
+
+/// Each category's segment background and text tokens.
+pub fn segment_tokens() -> impl Iterator<Item = (Category, Token, Token)> {
+    Category::ALL
+        .into_iter()
+        .map(|c| (c, Token::SegBg(c), Token::SegFg(c)))
+}
+
+impl Token {
+    pub fn parse(name: &str) -> Option<Token> {
+        TOKENS.into_iter().find(|t| t.name() == name).or_else(|| {
+            Category::ALL.into_iter().find_map(|c| {
+                let (bg, fg) = c.segment_names();
+                (name == bg)
+                    .then_some(Token::SegBg(c))
+                    .or((name == fg).then_some(Token::SegFg(c)))
+            })
+        })
+    }
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Token::SegBg(c) => c.segment_names().0,
+            Token::SegFg(c) => c.segment_names().1,
+            Token::Ok => "ok",
+            Token::Warn => "warn",
+            Token::Crit => "crit",
+            Token::Accent => "accent",
+            Token::Muted => "muted",
+            Token::Separator => "separator",
+            Token::Text => "text",
+            Token::Bg => "bg",
+            Token::OnFill => "on_fill",
+            Token::Identity => "identity",
+            Token::Workspace => "workspace",
+            Token::Vcs => "vcs",
+            Token::Context => "context",
+            Token::Quota => "quota",
+            Token::Cost => "cost",
+            Token::Cache => "cache",
+            Token::Session => "session",
+            Token::Timing => "timing",
+            Token::Activity => "activity",
+            Token::System => "system",
+        }
+    }
+}
+
+impl From<Category> for Token {
+    fn from(c: Category) -> Token {
+        match c {
+            Category::Identity => Token::Identity,
+            Category::Workspace => Token::Workspace,
+            Category::Vcs => Token::Vcs,
+            Category::Context => Token::Context,
+            Category::Quota => Token::Quota,
+            Category::Cost => Token::Cost,
+            Category::Cache => Token::Cache,
+            Category::Session => Token::Session,
+            Category::Timing => Token::Timing,
+            Category::Activity => Token::Activity,
+            Category::System => Token::System,
+            Category::Custom => Token::Accent,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct Palette {
+    pub name: String,
+    pub light: bool,
+    colors: BTreeMap<Token, Color>,
+}
+
+impl Palette {
+    pub fn get(&self, token: Token) -> Option<Color> {
+        self.colors.get(&token).copied()
+    }
+
+    /// Color for `token`, falling back to the terminal palette's; see
+    /// `Token::Separator` for an unset separator.
+    pub fn color(&self, token: Token) -> Option<Color> {
+        match (self.get(token), token) {
+            (Some(c), _) => Some(c),
+            (None, Token::Separator) if self.light => self.color(Token::Muted),
+            (None, Token::Separator) => Some(Color::Ansi16(7)),
+            (None, _) => terminal().get(token),
+        }
+    }
+
+    pub fn set(&mut self, token: Token, color: Color) {
+        self.colors.insert(token, color);
+    }
+
+    /// Load a palette by name: a user file in `palettes/` wins over a built-in.
+    pub fn load(name: &str) -> Option<Palette> {
+        let path = crate::paths::home()
+            .join("palettes")
+            .join(format!("{name}.toml"));
+        if let Ok(text) = std::fs::read_to_string(path)
+            && let Ok(file) = toml::from_str::<PaletteFile>(&text)
+        {
+            return Some(file.into_palette(name));
+        }
+        builtin(name)
+    }
+}
+
+/// A user palette file: `light = false` and a `[colors]` table of token = color.
+#[derive(Debug, Default, Deserialize)]
+#[serde(default)]
+struct PaletteFile {
+    light: bool,
+    colors: BTreeMap<String, String>,
+}
+
+impl PaletteFile {
+    fn into_palette(self, name: &str) -> Palette {
+        let colors = self
+            .colors
+            .iter()
+            .filter_map(|(k, v)| Some((Token::parse(k)?, Color::parse(v)?)))
+            .collect();
+        Palette {
+            name: name.to_string(),
+            light: self.light,
+            colors,
+        }
+    }
+}
+
+/// Palettes to offer: the built-ins, then the user's own files in
+/// `palettes/` (a file named like a built-in replaces it, so it isn't
+/// listed twice).
+pub fn available() -> Vec<String> {
+    let mut names: Vec<String> = BUILTIN_NAMES.iter().map(|s| s.to_string()).collect();
+    let dir = crate::paths::home().join("palettes");
+    if let Ok(entries) = std::fs::read_dir(dir) {
+        let mut own: Vec<String> = entries
+            .flatten()
+            .filter_map(|e| {
+                let path = e.path();
+                (path.extension()? == "toml")
+                    .then(|| path.file_stem()?.to_str().map(str::to_string))?
+            })
+            .filter(|n| !names.contains(n))
+            .collect();
+        own.sort();
+        names.extend(own);
+    }
+    names
+}
+
+pub const BUILTIN_NAMES: [&str; 13] = [
+    "terminal",
+    "catppuccin-mocha",
+    "catppuccin-latte",
+    "dracula",
+    "nord",
+    "tokyo-night",
+    "rose-pine",
+    "gruvbox",
+    "anthropic-clay",
+    "powerline-dark",
+    "powerline-light",
+    "powerline-rose-pine",
+    "powerline-tokyo-night",
+];
+
+/// Token order used by the hex tables below.
+const TABLE_ORDER: [Token; 18] = [
+    Token::Ok,
+    Token::Warn,
+    Token::Crit,
+    Token::Accent,
+    Token::Muted,
+    Token::Text,
+    Token::Bg,
+    Token::OnFill,
+    Token::Identity,
+    Token::Workspace,
+    Token::Vcs,
+    Token::Context,
+    Token::Quota,
+    Token::Cost,
+    Token::Cache,
+    Token::Session,
+    Token::Timing,
+    Token::Activity,
+];
+
+fn from_table(name: &str, light: bool, hex: [&str; 18], system: &str) -> Palette {
+    let mut colors: BTreeMap<Token, Color> = TABLE_ORDER
+        .into_iter()
+        .zip(hex)
+        .filter_map(|(t, h)| Some((t, Color::parse(h)?)))
+        .collect();
+    if let Some(c) = Color::parse(system) {
+        colors.insert(Token::System, c);
+    }
+    Palette {
+        name: name.to_string(),
+        light,
+        colors,
+    }
+}
+
+/// Set segment colors: `(category, bg, fg)`, any of them empty to skip.
+fn with_segments(mut p: Palette, segments: &[(Category, &str, &str)]) -> Palette {
+    for (c, bg, fg) in segments {
+        if let Some(bg) = Color::parse(bg) {
+            p.colors.insert(Token::SegBg(*c), bg);
+        }
+        if let Some(fg) = Color::parse(fg) {
+            p.colors.insert(Token::SegFg(*c), fg);
+        }
+    }
+    p
+}
+
+/// ANSI 16 colors, so the line follows the terminal's own theme. Text and
+/// background stay at the terminal defaults. Category colors match v1's
+/// cometix theme.
+pub fn terminal() -> Palette {
+    use Color::Ansi16 as A;
+    let colors = [
+        (Token::Ok, A(2)),
+        (Token::Warn, A(3)),
+        (Token::Crit, A(1)),
+        (Token::Accent, A(14)),
+        (Token::Muted, A(8)),
+        (Token::OnFill, A(0)),
+        (Token::Identity, A(14)),
+        (Token::Workspace, A(10)),
+        (Token::Vcs, A(12)),
+        (Token::Context, A(13)),
+        (Token::Quota, A(6)),
+        (Token::Cost, A(3)),
+        (Token::Cache, A(4)),
+        (Token::Session, A(2)),
+        (Token::Timing, A(5)),
+        (Token::Activity, A(11)),
+        (Token::System, A(8)),
+    ];
+    Palette {
+        name: "terminal".into(),
+        light: false,
+        colors: colors.into_iter().collect(),
+    }
+}
+
+#[rustfmt::skip]
+pub fn builtin(name: &str) -> Option<Palette> {
+    //            ok         warn       crit       accent     muted      text       bg         on_fill    identity   workspace  vcs        context    quota      cost       cache      session    timing     activity
+    Some(match name {
+        "terminal" => terminal(),
+        "catppuccin-mocha" => from_table(
+            name,
+            false,
+            ["#a6e3a1", "#f9e2af", "#f38ba8", "#89b4fa", "#6c7086", "#cdd6f4", "#1e1e2e", "#11111b", "#b4befe", "#94e2d5", "#74c7ec", "#cba6f7", "#fab387", "#f9e2af", "#89dceb", "#f5c2e7", "#f2cdcd", "#eba0ac"],
+            "#7f849c",
+        ),
+        "catppuccin-latte" => from_table(
+            name,
+            true,
+            ["#40a02b", "#df8e1d", "#d20f39", "#1e66f5", "#9ca0b0", "#4c4f69", "#eff1f5", "#eff1f5", "#7287fd", "#179299", "#209fb5", "#8839ef", "#fe640b", "#df8e1d", "#04a5e5", "#ea76cb", "#dd7878", "#e64553"],
+            "#8c8fa1",
+        ),
+        "dracula" => from_table(
+            name,
+            false,
+            ["#50fa7b", "#ffb86c", "#ff5555", "#bd93f9", "#6272a4", "#f8f8f2", "#282a36", "#282a36", "#bd93f9", "#50fa7b", "#8be9fd", "#ff79c6", "#ffb86c", "#f1fa8c", "#8be9fd", "#ff79c6", "#bd93f9", "#ffb86c"],
+            "#6272a4",
+        ),
+        "nord" => from_table(
+            name,
+            false,
+            ["#a3be8c", "#ebcb8b", "#bf616a", "#88c0d0", "#4c566a", "#d8dee9", "#2e3440", "#2e3440", "#88c0d0", "#a3be8c", "#81a1c1", "#b48ead", "#d08770", "#ebcb8b", "#8fbcbb", "#5e81ac", "#b48ead", "#d08770"],
+            "#616e88",
+        ),
+        "tokyo-night" => from_table(
+            name,
+            false,
+            ["#9ece6a", "#e0af68", "#f7768e", "#7aa2f7", "#565f89", "#c0caf5", "#1a1b26", "#1a1b26", "#7aa2f7", "#9ece6a", "#7dcfff", "#bb9af7", "#ff9e64", "#e0af68", "#73daca", "#bb9af7", "#2ac3de", "#ff9e64"],
+            "#565f89",
+        ),
+        "rose-pine" => from_table(
+            name,
+            false,
+            ["#9ccfd8", "#f6c177", "#eb6f92", "#c4a7e7", "#6e6a86", "#e0def4", "#191724", "#191724", "#c4a7e7", "#9ccfd8", "#31748f", "#ebbcba", "#f6c177", "#f6c177", "#9ccfd8", "#ebbcba", "#c4a7e7", "#eb6f92"],
+            "#908caa",
+        ),
+        "gruvbox" => from_table(
+            name,
+            false,
+            ["#b8bb26", "#fabd2f", "#fb4934", "#83a598", "#928374", "#ebdbb2", "#282828", "#282828", "#83a598", "#b8bb26", "#8ec07c", "#d3869b", "#fe8019", "#fabd2f", "#8ec07c", "#d3869b", "#83a598", "#fe8019"],
+            "#928374",
+        ),
+        "anthropic-clay" => from_table(
+            name,
+            false,
+            ["#788c5d", "#d4a27f", "#bf4d43", "#d97757", "#87867f", "#f0eee6", "#1f1e1d", "#1f1e1d", "#d97757", "#788c5d", "#6a9bcc", "#cc785c", "#d4a27f", "#d4a27f", "#6a9bcc", "#c46686", "#87867f", "#cc785c"],
+            "#87867f",
+        ),
+        // v1's powerline themes, segment by segment: each category keeps its
+        // own background and text color.
+        "powerline-dark" => with_segments(
+            from_table(
+                name,
+                false,
+                ["#a3be8c", "#e5c07b", "#e06c75", "#61afef", "#5c6370", "#d1d5db", "#1e1e1e", "#ffffff", "#ffffff", "#ffffff", "#ffffff", "#d1d5db", "#d1d5db", "#e5c07b", "#81a1c1", "#a3be8c", "#81a1c1", "#e5c07b"],
+                "#9ca3af",
+            ),
+            &[
+                (Category::Identity, "#2d2d2d", "#ffffff"),
+                (Category::Workspace, "#8b4513", "#ffffff"),
+                (Category::Vcs, "#404040", "#ffffff"),
+                (Category::Context, "#374151", "#d1d5db"),
+                (Category::Quota, "#2d323b", "#d1d5db"),
+                (Category::Cost, "#282c34", "#e5c07b"),
+                (Category::Cache, "#323842", "#81a1c1"),
+                (Category::Session, "#2d323b", "#a3be8c"),
+                (Category::Timing, "#323842", "#81a1c1"),
+                (Category::Activity, "#282c34", "#e5c07b"),
+                (Category::System, "#2d2d2d", "#9ca3af"),
+                (Category::Custom, "#323842", "#61afef"),
+            ],
+        ),
+        "powerline-light" => with_segments(
+            from_table(
+                name,
+                true,
+                ["#28a745", "#ffc107", "#dc3545", "#4fb3d9", "#6b7280", "#1f2937", "#ffffff", "#ffffff", "#0284c7", "#ff6b47", "#4fb3d9", "#6b7280", "#28a745", "#b8860b", "#20c997", "#28a745", "#20c997", "#ff6b47"],
+                "#6b7280",
+            ),
+            &[
+                (Category::Identity, "#87ceeb", "#000000"),
+                (Category::Workspace, "#ff6b47", "#ffffff"),
+                (Category::Vcs, "#4fb3d9", "#ffffff"),
+                (Category::Context, "#6b7280", "#ffffff"),
+                (Category::Quota, "#28a745", "#ffffff"),
+                (Category::Cost, "#ffc107", "#ffffff"),
+                (Category::Cache, "#20c997", "#ffffff"),
+                (Category::Session, "#28a745", "#ffffff"),
+                (Category::Timing, "#20c997", "#ffffff"),
+                (Category::Activity, "#ff6b47", "#ffffff"),
+                (Category::System, "#6b7280", "#ffffff"),
+                (Category::Custom, "#4fb3d9", "#ffffff"),
+            ],
+        ),
+        "powerline-rose-pine" => with_segments(
+            from_table(
+                name,
+                false,
+                ["#9ccfd8", "#f6c177", "#eb6f92", "#c4a7e7", "#6e6a86", "#e0def4", "#191724", "#191724", "#ebbcba", "#c4a7e7", "#9ccfd8", "#e0def4", "#f6c177", "#f6c177", "#9ccfd8", "#9ccfd8", "#c4a7e7", "#eb6f92"],
+                "#908caa",
+            ),
+            &[
+                (Category::Identity, "#191724", "#ebbcba"),
+                (Category::Workspace, "#26233a", "#c4a7e7"),
+                (Category::Vcs, "#1f1d2e", "#9ccfd8"),
+                (Category::Context, "#524f67", "#e0def4"),
+                (Category::Quota, "#232136", "#f6c177"),
+                (Category::Cost, "#232136", "#f6c177"),
+                (Category::Cache, "#2a273f", "#9ccfd8"),
+                (Category::Session, "#2a273f", "#9ccfd8"),
+                (Category::Timing, "#26233a", "#c4a7e7"),
+                (Category::Activity, "#1f1d2e", "#eb6f92"),
+                (Category::System, "#191724", "#908caa"),
+                (Category::Custom, "#26233a", "#31748f"),
+            ],
+        ),
+        "powerline-tokyo-night" => with_segments(
+            from_table(
+                name,
+                false,
+                ["#9ece6a", "#e0af68", "#f7768e", "#7aa2f7", "#565f89", "#c0caf5", "#1a1b26", "#1a1b26", "#fca7ea", "#82aaff", "#c3e88d", "#c0caf5", "#e0af68", "#e0af68", "#7dcfff", "#9ece6a", "#bb9af7", "#ff9e64"],
+                "#565f89",
+            ),
+            &[
+                (Category::Identity, "#191b29", "#fca7ea"),
+                (Category::Workspace, "#2f334d", "#82aaff"),
+                (Category::Vcs, "#1e2030", "#c3e88d"),
+                (Category::Context, "#3d59a1", "#c0caf5"),
+                (Category::Quota, "#24283b", "#e0af68"),
+                (Category::Cost, "#24283b", "#e0af68"),
+                (Category::Cache, "#202334", "#7dcfff"),
+                (Category::Session, "#292e42", "#9ece6a"),
+                (Category::Timing, "#202334", "#bb9af7"),
+                (Category::Activity, "#1e2030", "#ff9e64"),
+                (Category::System, "#191b29", "#565f89"),
+                (Category::Custom, "#2f334d", "#7aa2f7"),
+            ],
+        ),
+        _ => return None,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn every_builtin_defines_every_token_except_terminal_defaults() {
+        for name in BUILTIN_NAMES {
+            let p = builtin(name).unwrap();
+            for t in TOKENS {
+                let optional = t == Token::Separator
+                    || name == "terminal" && matches!(t, Token::Text | Token::Bg);
+                assert!(optional || p.get(t).is_some(), "{name} lacks {t:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn separators_are_white_unless_set_or_on_a_light_palette() {
+        let white = Some(Color::Ansi16(7));
+        assert_eq!(terminal().color(Token::Separator), white);
+        let mut p = builtin("nord").unwrap();
+        assert_eq!(p.color(Token::Separator), white);
+        let latte = builtin("catppuccin-latte").unwrap();
+        assert_eq!(latte.color(Token::Separator), latte.color(Token::Muted));
+        let red = Color::parse("#ff0000").unwrap();
+        p.set(Token::Separator, red);
+        assert_eq!(p.color(Token::Separator), Some(red));
+        assert_ne!(p.color(Token::Muted), Some(red));
+    }
+
+    #[test]
+    fn token_names_round_trip() {
+        for t in TOKENS {
+            assert_eq!(Token::parse(t.name()), Some(t));
+        }
+        for (_, bg, fg) in segment_tokens() {
+            assert_eq!(Token::parse(bg.name()), Some(bg));
+            assert_eq!(Token::parse(fg.name()), Some(fg));
+        }
+        assert_eq!(
+            Token::parse("context.fg"),
+            Some(Token::SegFg(Category::Context))
+        );
+    }
+
+    #[test]
+    fn powerline_palettes_set_every_segment() {
+        for name in BUILTIN_NAMES.iter().filter(|n| n.starts_with("powerline-")) {
+            let p = builtin(name).unwrap();
+            for (c, bg, fg) in segment_tokens() {
+                assert!(p.get(bg).is_some() && p.get(fg).is_some(), "{name} {c:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn user_palette_falls_back_per_token() {
+        let p = PaletteFile {
+            light: true,
+            colors: [
+                ("warn".into(), "#ff0000".into()),
+                ("bogus".into(), "#000".into()),
+            ]
+            .into(),
+        }
+        .into_palette("mine");
+        assert_eq!(p.color(Token::Warn), Some(Color::Rgb(255, 0, 0)));
+        assert_eq!(p.color(Token::Crit), Some(Color::Ansi16(1)));
+        assert!(p.light);
+    }
+}

@@ -1,0 +1,4 @@
+{
+  "description": "Writes session data for the ccline status line",
+  "modules": ["./ccline.ts"]
+}

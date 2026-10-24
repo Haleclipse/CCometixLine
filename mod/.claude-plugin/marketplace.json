@@ -1,0 +1,12 @@
+{
+  "name": "ccline",
+  "description": "The CCometixLine companion mod, installed by ccline itself",
+  "owner": { "name": "Haleclipse", "url": "https://github.com/Haleclipse/CCometixLine" },
+  "plugins": [
+    {
+      "name": "cometix",
+      "source": "./cometix",
+      "description": "Feeds the ccline status line what its JSON lacks: context by category, the exact auto-compact point, each model request's timing, and the tools and agents running."
+    }
+  ]
+}
