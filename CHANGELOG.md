@@ -5,6 +5,42 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2026-10-24
+
+A rewrite. Data, form and look are separate layers: any metric can take any fitting form, on as many lines as you like, in any skin and palette. The config format is new and v1's is not read.
+
+### Added
+- **Metrics**: 30+ in all, read from Claude Code's own status line data
+  - Quota: `quota.5h` and `quota.7d` with a pace bar (`⇡` ahead of the clock, `⇣` behind, `±0%` on pace), `quota.spend` for gateway spend limits, `quota.eta` for the first limit to run out
+  - Cache: `cache` with the time until it goes cold, hit ratio and misses; `cache.cold_cost`
+  - Context: `context` corrected for models Claude Code can't size, `context.trend` per turn, `context.to_compact` with turns left before auto-compact
+  - Cost: `cost`, `cost.rate` per hour, `cost.today` across sessions
+  - Code and session: `repo`, `pr`, `worktree`, `lines`, `session_name`, `output_style`, `vim`, `agent`, `cc_version`
+  - Custom: `cmd` shows the first line of any shell command, cached and run in the background
+- **Forms**: `text`, `bar`, `gauge`, `sparkline` and `pace`, with full, compact and minimal text templates; `[ … ]` drops a group whose field is empty
+- **Looks**: `plain`, `bracket`, `pill` and `powerline` skins (with arrow, round, slant, flame and pixel joins), 13 palettes plus your own in `palettes/`, Nerd Font, Unicode or ASCII glyphs, color depth from truecolor to none, and per-item `color`, `fg` and `icon_color`
+- **Presets**: `cometix` (the default, in v1's classic look), `minimal`, `dashboard`, `budget`, `cache-aware`, `focus`, `zen` and `powerline`; save your own in `presets/`
+- **Layout**: multiple lines with left and right groups; lines wrap between items to fit the terminal, leaving room for Claude Code's footer padding and `statusLine.padding`
+- **Background tasks**: `subagentStatusLine` support, with `task.label`, `task.name`, `task.status`, `task.elapsed` and `task.trend`
+- **Configurator**: a new full-screen TUI with six pages (Home, Presets, Layout, Style, Models, Claude Code), a live preview over sample sessions, undo and redo, a command palette, first-run setup and a font check
+  - Icon picker with all 10,617 Nerd Fonts 3.5.1 icons, searchable by name, class, codepoint or pasted glyph
+  - Edits Claude Code's `settings.json` with a diff first and a backup
+- **Model registry**: rules match by `contains`, `prefix`, `exact` or `regex`; the Models page lists unrecognized ids, hit counts and shadowed rules, with a tester
+- **Companion mod** for Claude Code 2.1.287+ (`ccline mod install | status | uninstall`): time to first token, output speed, running tools and agents, context breakdown and the exact auto-compact point
+- **Commands**: `ccline preview` renders your config with built-in sample sessions; `ccline update` checks for a newer version
+
+### Changed
+- **Performance**: 7–12× faster than 1.1.2; git status is cached and refreshed in the background, off the render path
+- **Usage Data**: limits come from Claude Code's `rate_limits` instead of requests to the OAuth usage API
+- **Update Check**: runs in the background once a day and only shows a notice; it never downloads
+- **Requirements**: Claude Code 2.1.153 or newer; metrics that need a newer version are marked in the configurator and hidden at run time
+- **models.toml**: v1's format is still read; `context_limit` is now optional
+
+### Removed
+- **v1 Config and Themes**: not read or migrated; `--theme` is gone
+- **Claude Code Patcher**: `--patch` and the tree-sitter dependency
+- **OAuth Usage Requests**: no more credential reading, API base URL or proxy settings
+
 ## [1.1.2] - 2026-03-15
 
 ### Changed
