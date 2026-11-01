@@ -75,6 +75,7 @@ fn cmd(ctx: &Ctx, opts: &Options) -> Option<Reading> {
         Commands::Run { stdin } => cmd_cache::output(&Job {
             run,
             cwd: ctx.input.current_dir().map(Path::new),
+            session: ctx.input.session_id.as_deref(),
             stdin,
             timeout: Duration::from_millis(
                 number(opts, "timeout_ms").unwrap_or(DEFAULT_TIMEOUT_MS),

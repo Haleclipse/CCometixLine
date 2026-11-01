@@ -27,6 +27,9 @@ pub struct Job<'a> {
     /// Shell command line.
     pub run: &'a str,
     pub cwd: Option<&'a Path>,
+    /// The session the payload comes from: each session keeps its own
+    /// output, as the command may read session details from stdin.
+    pub session: Option<&'a str>,
     /// The status line payload, passed on stdin.
     pub stdin: &'a str,
     /// Limit for a background run.
@@ -42,9 +45,10 @@ struct Paths {
     stdin: PathBuf,
 }
 
-fn paths(run: &str, cwd: Option<&Path>) -> Paths {
+fn paths(run: &str, cwd: Option<&Path>, session: Option<&str>) -> Paths {
     let cwd = cwd.map(|c| c.to_string_lossy()).unwrap_or_default();
-    let key = file_key(&format!("{run}\0{cwd}"));
+    let session = session.unwrap_or_default();
+    let key = file_key(&format!("{run}\0{cwd}\0{session}"));
     let dir = dir().join("cmd");
     Paths {
         output: dir.join(format!("{key}.json")),
@@ -129,6 +133,9 @@ fn refresh_in_background(job: &Job, p: &Paths) {
     if let Some(cwd) = job.cwd {
         args.extend(["--cwd".as_ref(), cwd.as_os_str()]);
     }
+    if let Some(session) = job.session {
+        args.extend(["--session".as_ref(), OsStr::new(session)]);
+    }
     args.extend(["--".as_ref(), OsStr::new(job.run)]);
     swr::spawn(&p.lock, &args);
 }
@@ -136,7 +143,7 @@ fn refresh_in_background(job: &Job, p: &Paths) {
 /// The command's output for this render, from the store when there is a
 /// usable one; a stale one triggers a background run.
 pub fn output(job: &Job) -> Option<String> {
-    let p = paths(job.run, job.cwd);
+    let p = paths(job.run, job.cwd, job.session);
     match swr::lookup::<Option<String>>(&p.output, job.ttl_ms, MAX_STALE_MS) {
         Lookup::Fresh(out) => out,
         Lookup::Stale(out) => {
@@ -165,8 +172,8 @@ pub fn output(job: &Job) -> Option<String> {
 
 /// `ccline refresh-cmd`: run the command without a render's deadline, store
 /// its output and release the lock.
-pub fn refresh(run: &str, cwd: Option<&Path>, timeout: Duration) {
-    let p = paths(run, cwd);
+pub fn refresh(run: &str, cwd: Option<&Path>, session: Option<&str>, timeout: Duration) {
+    let p = paths(run, cwd, session);
     let stdin = std::fs::read_to_string(&p.stdin).unwrap_or_default();
     // A command that is still too slow shows nothing rather than retrying
     // on every render.
@@ -195,6 +202,15 @@ mod tests {
         );
         assert_eq!(first_line(" \n\n"), None);
         assert_eq!(first_line(&"x".repeat(500)).unwrap().len(), MAX_CHARS);
+    }
+
+    #[test]
+    fn sessions_keep_their_own_output() {
+        let cwd = Some(Path::new("/w/app"));
+        let a = paths("date", cwd, Some("s1")).output;
+        assert_eq!(a, paths("date", cwd, Some("s1")).output);
+        assert_ne!(a, paths("date", cwd, Some("s2")).output);
+        assert_ne!(a, paths("date", cwd, None).output);
     }
 
     #[cfg(unix)]

@@ -44,6 +44,8 @@ pub enum Command {
         #[arg(long)]
         cwd: Option<std::path::PathBuf>,
         #[arg(long)]
+        session: Option<String>,
+        #[arg(long)]
         timeout_ms: u64,
         #[arg(last = true)]
         run: String,

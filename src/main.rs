@@ -27,11 +27,12 @@ fn main() {
         }
         Some(Command::RefreshCmd {
             cwd,
+            session,
             timeout_ms,
             run,
         }) => {
             let timeout = std::time::Duration::from_millis(timeout_ms);
-            return state::cmd_cache::refresh(&run, cwd.as_deref(), timeout);
+            return state::cmd_cache::refresh(&run, cwd.as_deref(), session.as_deref(), timeout);
         }
         None => {}
     }
