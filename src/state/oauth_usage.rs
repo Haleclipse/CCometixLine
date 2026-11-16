@@ -1,12 +1,15 @@
 //! Per-model weekly limits that Claude Code's status line input leaves out.
 //! The usage endpoint Claude Code itself reads (`/api/oauth/usage`) lists
-//! them in `limits[]`; renders only read `oauth_usage.json`, and when it is
-//! due they start a detached `ccline usage-check`, which asks the endpoint
-//! with Claude Code's own sign-in (through curl, so the binary carries no
-//! HTTP stack) and records the answer. Nothing is fetched unless a layout
-//! shows one of these limits.
+//! them in `limits[]`; renders only read the recorded answer, and when it
+//! is due they start a detached `ccline usage-check`, which asks the
+//! endpoint with Claude Code's own sign-in (through curl, so the binary
+//! carries no HTTP stack) and records the answer. Nothing is fetched unless
+//! a layout shows one of these limits.
+//!
+//! The answer belongs to an account, so it is recorded per Claude config
+//! directory: two profiles sharing one ccline home don't read each other's.
 
-use super::{dir, read_json, swr, write_json};
+use super::{dir, file_key, read_json, swr, write_json};
 use crate::input::Window;
 use crate::process::{self, Outcome};
 use serde::{Deserialize, Serialize};
@@ -29,9 +32,24 @@ pub struct UsageState {
     /// Whether the last check got an answer.
     #[serde(default)]
     pub ok: bool,
+    /// Why the last check got no answer, to tell a broken setup from an
+    /// account without the limit.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<Failure>,
     /// The Fable weekly window from the last answer that had one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fable_weekly: Option<StoredWindow>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Failure {
+    /// No sign-in found, or its token has expired.
+    NoToken,
+    /// curl is missing, timed out or the endpoint refused the request.
+    Request,
+    /// The endpoint answered with something that isn't JSON.
+    Response,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
@@ -51,9 +69,11 @@ impl From<StoredWindow> for Window {
 }
 
 fn paths() -> (PathBuf, PathBuf) {
+    let key = file_key(&crate::paths::claude_dir().to_string_lossy());
+    let usage = dir().join("oauth_usage");
     (
-        dir().join("oauth_usage.json"),
-        dir().join("oauth_usage.lock"),
+        usage.join(format!("{key}.json")),
+        usage.join(format!("{key}.lock")),
     )
 }
 
@@ -72,30 +92,50 @@ pub fn fable_weekly(now: i64) -> Option<Window> {
         .map(Window::from)
 }
 
-/// Check now, record the result and release the background lock.
+/// Check now, record the result and release the background lock. `now` is
+/// when the check started.
 pub fn check(now: i64) {
     let (path, lock) = paths();
-    let answer = access_token().and_then(|token| fetch(&token));
+    let answer = access_token()
+        .ok_or(Failure::NoToken)
+        .and_then(|token| fetch(&token));
     let previous: UsageState = read_json(&path).unwrap_or_default();
-    let state = match answer {
-        Some(body) => UsageState {
+    if let Some(state) = next_state(previous, now, answer) {
+        let _ = write_json(&path, &state);
+    }
+    swr::release(&lock);
+}
+
+/// What to record after a check started at `now`; nothing when a check
+/// started later has already recorded its answer.
+fn next_state(
+    previous: UsageState,
+    now: i64,
+    answer: Result<Value, Failure>,
+) -> Option<UsageState> {
+    if previous.checked_at > now {
+        return None;
+    }
+    Some(match answer {
+        Ok(body) => UsageState {
             checked_at: now,
             ok: true,
+            error: None,
             fable_weekly: fable_window(&body),
         },
-        None => UsageState {
+        // Keep the last window: it stays right until it resets.
+        Err(failure) => UsageState {
             checked_at: now,
             ok: false,
+            error: Some(failure),
             ..previous
         },
-    };
-    let _ = write_json(&path, &state);
-    swr::release(&lock);
+    })
 }
 
 /// GET the endpoint. The token goes to curl on stdin (`-H @-`), never on
 /// its command line, where other users' `ps` could read it.
-fn fetch(token: &str) -> Option<Value> {
+fn fetch(token: &str) -> Result<Value, Failure> {
     let mut cmd = Command::new("curl");
     cmd.args(["-fsS", "--max-time", "8", "-H", "@-", ENDPOINT]);
     let headers = format!("Authorization: Bearer {token}\nanthropic-beta: oauth-2025-04-20\n");
@@ -103,19 +143,30 @@ fn fetch(token: &str) -> Option<Value> {
         Outcome::Exited {
             success: true,
             stdout,
-        } => serde_json::from_str(&stdout).ok(),
-        _ => None,
+        } => serde_json::from_str(&stdout).map_err(|_| Failure::Response),
+        _ => Err(Failure::Request),
     }
 }
 
 /// Claude Code's OAuth access token: the macOS keychain item it writes,
-/// else its `.credentials.json`. An expired token is left alone; Claude
-/// Code refreshes it on its next request.
+/// else its `.credentials.json`, whichever first holds a usable one. An
+/// expired token is left alone; Claude Code refreshes it on its next
+/// request.
 fn access_token() -> Option<String> {
-    let raw = keychain_credentials().or_else(|| {
-        std::fs::read_to_string(crate::paths::claude_dir().join(".credentials.json")).ok()
-    })?;
-    token_from_credentials(&raw, chrono::Utc::now().timestamp_millis())
+    let file =
+        || std::fs::read_to_string(crate::paths::claude_dir().join(".credentials.json")).ok();
+    first_token(
+        [keychain_credentials(), file()],
+        chrono::Utc::now().timestamp_millis(),
+    )
+}
+
+/// The token of the first credentials that hold a usable one.
+fn first_token(sources: impl IntoIterator<Item = Option<String>>, now_ms: i64) -> Option<String> {
+    sources
+        .into_iter()
+        .flatten()
+        .find_map(|raw| token_from_credentials(&raw, now_ms))
 }
 
 #[cfg(target_os = "macos")]
@@ -263,11 +314,77 @@ mod tests {
         assert_eq!(fable_window(&b).map(|w| w.resets_at), Some(1_795_168_800));
     }
 
+    fn creds(expires: i64, token: &str) -> String {
+        format!(r#"{{"claudeAiOauth": {{"accessToken": "{token}", "expiresAt": {expires}}}}}"#)
+    }
+
+    #[test]
+    fn falls_back_to_the_next_credentials_when_the_first_are_unusable() {
+        let expired = Some(creds(1_000, "keychain"));
+        let valid = Some(creds(2_000, "file"));
+        assert_eq!(
+            first_token([expired.clone(), valid.clone()], 1_000).as_deref(),
+            Some("file")
+        );
+        assert_eq!(
+            first_token([valid, expired.clone()], 1_000).as_deref(),
+            Some("file")
+        );
+        assert_eq!(first_token([None, expired], 1_000), None);
+    }
+
+    #[test]
+    fn a_failed_check_keeps_the_window_and_says_why() {
+        let window = StoredWindow {
+            used_percentage: 27.0,
+            resets_at: 9_000,
+        };
+        let previous = UsageState {
+            checked_at: 100,
+            ok: true,
+            error: None,
+            fable_weekly: Some(window),
+        };
+        let failed = next_state(previous.clone(), 200, Err(Failure::Request)).unwrap();
+        assert_eq!(
+            failed,
+            UsageState {
+                checked_at: 200,
+                ok: false,
+                error: Some(Failure::Request),
+                fable_weekly: Some(window),
+            }
+        );
+        // An answer without the row clears both the error and the window.
+        let answered = next_state(failed, 300, Ok(serde_json::json!({}))).unwrap();
+        assert_eq!(
+            answered,
+            UsageState {
+                checked_at: 300,
+                ok: true,
+                error: None,
+                fable_weekly: None,
+            }
+        );
+        assert_eq!(
+            serde_json::to_value(Failure::NoToken).unwrap(),
+            serde_json::json!("no_token")
+        );
+    }
+
+    #[test]
+    fn a_check_that_started_earlier_does_not_overwrite_a_later_one() {
+        let later = UsageState {
+            checked_at: 500,
+            ok: true,
+            ..UsageState::default()
+        };
+        assert_eq!(next_state(later.clone(), 400, Err(Failure::Request)), None);
+        assert!(next_state(later, 500, Ok(serde_json::json!({}))).is_some());
+    }
+
     #[test]
     fn skips_an_expired_or_empty_token() {
-        let creds = |expires: i64, token: &str| {
-            format!(r#"{{"claudeAiOauth": {{"accessToken": "{token}", "expiresAt": {expires}}}}}"#)
-        };
         assert_eq!(
             token_from_credentials(&creds(2_000, "tok"), 1_000).as_deref(),
             Some("tok")
