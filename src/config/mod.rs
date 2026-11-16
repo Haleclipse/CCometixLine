@@ -243,10 +243,11 @@ pub enum LoadNote {
 }
 
 impl Config {
-    /// Whether any status line shows `metric`.
+    /// Whether any status line or the background task line shows `metric`.
     pub fn shows(&self, metric: &str) -> bool {
         self.lines
             .iter()
+            .chain(&self.subagent)
             .flat_map(|l| l.left.iter().chain(&l.right))
             .any(|item| item.config().metric == metric)
     }
@@ -318,6 +319,8 @@ mod tests {
         .unwrap();
         assert!(c.shows("model") && c.shows("quota.fable"));
         assert!(!c.shows("quota.7d"));
+        let sub: Config = toml::from_str("[subagent]\nleft = [\"quota.fable\"]\n").unwrap();
+        assert!(sub.shows("quota.fable"));
     }
 
     #[test]
