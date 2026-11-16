@@ -143,7 +143,7 @@ cp target/release/ccometixline ~/.claude/ccline/ccline
 | 身份 | `model`（含推理强度）、`output_style`、`vim`、`agent` |
 | 会话 | `session_name`、`duration` |
 | 上下文 | `context`、`context.trend`、`context.to_compact`、`context.breakdown`¹ |
-| 额度 | `quota.5h`、`quota.7d`、`quota.spend`、`quota.eta` |
+| 额度 | `quota.5h`、`quota.7d`、`quota.fable`²、`quota.spend`、`quota.eta` |
 | 费用 | `cost`、`cost.rate`（每小时）、`cost.today`（所有会话） |
 | 缓存 | `cache`（距变冷的时间、命中率、未命中）、`cache.cold_cost` |
 | 代码 | `dir`、`git`、`repo`、`pr`、`worktree`、`lines` |
@@ -153,9 +153,13 @@ cp target/release/ccometixline ~/.claude/ccline/ccline
 
 ¹ 需要配套 mod 和 Claude Code 2.1.287+。`cache` 与 `quota.spend` 需要 Claude Code 2.1.251+。配置器会标出你当前的 Claude Code 显示不了的指标，并且不允许添加。
 
+² 数据来自用量接口，而不是 Claude Code 传给状态栏的输入，详见下文。
+
 条目只在有内容时才显示：Claude Code 报告了缓存才显示缓存，有新版本才显示 `update`，`output_style` 是默认风格时不显示。
 
 `quota.5h` 和 `quota.7d` 默认画成两行的配速条：上面一行是已用额度，下面一行是窗口时间过去了多少。`⇡8%` 表示用量比时间快 8 个百分点，`⇣` 表示比时间慢，`±0%` 表示持平。
+
+`quota.fable` 是订阅里 Fable 的每周额度（仅限有这项额度的订阅）。Claude Code 不会把它传给状态栏，所以 ccline 会去问 Claude Code 自己也在用的用量接口（`api.anthropic.com/api/oauth/usage`），用的是 Claude Code 自己的登录凭证：先读 macOS 钥匙串里的那一项，没有再读 Claude 配置目录里的 `.credentials.json`。只有某一行显示了 `quota.fable` 才会去取，最多每 5 分钟一次，在后台通过 curl 进行；状态栏渲染时只读上一次的结果。凭证过期时 ccline 不会自己刷新；这个接口也不是公开文档里的 API，返回格式一旦变了，这一项就不再显示。
 
 后台任务行有自己的指标：`task.label`、`task.name`、`task.status`、`task.elapsed`、`task.trend`，也可以使用 `model`、`context` 等会话指标。
 
