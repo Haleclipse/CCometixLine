@@ -22,6 +22,8 @@ pub struct Scenario {
     today: Option<f64>,
     /// A newer ccline known to be published.
     latest: Option<&'static str>,
+    /// The Fable weekly limit: percent used and seconds until it resets.
+    fable: Option<(f64, i64)>,
     /// What the companion mod would report; times are milliseconds before
     /// the current render.
     bridge: Option<&'static str>,
@@ -191,6 +193,7 @@ pub const SCENARIOS: &[Scenario] = &[
         ],
         today: Some(4.85),
         latest: None,
+        fable: Some((31.0, 4 * 86_400 + 7_200)),
         bridge: Some(NORMAL_BRIDGE),
         json: r#"{
   "session_id": "s-normal", "prompt_id": "p-9", "session_name": "Fix the login redirect", "transcript_path": "/home/u/.claude/projects/app/s.jsonl", "cwd": "/home/u/app",
@@ -228,6 +231,7 @@ pub const SCENARIOS: &[Scenario] = &[
         history: &[],
         today: None,
         latest: Some("2.1.0"),
+        fable: None,
         bridge: Some(FRESH_BRIDGE),
         json: r#"{
   "session_id": "s-fresh", "cwd": "/home/u/app",
@@ -267,6 +271,7 @@ pub const SCENARIOS: &[Scenario] = &[
         ],
         today: Some(31.6),
         latest: None,
+        fable: Some((91.0, 20 * 3_600)),
         bridge: Some(NEAR_FULL_BRIDGE),
         json: r#"{
   "session_id": "s-full", "prompt_id": "q-6", "cwd": "/home/u/app",
@@ -308,6 +313,7 @@ pub const SCENARIOS: &[Scenario] = &[
         ],
         today: Some(12.4),
         latest: None,
+        fable: None,
         bridge: Some(BIG_BRIDGE),
         json: r#"{
   "session_id": "s-big", "prompt_id": "b-4", "cwd": "/home/u/monorepo",
@@ -347,6 +353,7 @@ pub const SCENARIOS: &[Scenario] = &[
         ],
         today: Some(0.84),
         latest: None,
+        fable: None,
         bridge: Some(THIRD_PARTY_BRIDGE),
         json: r#"{
   "session_id": "s-kimi", "prompt_id": "k-4", "cwd": "/home/u/app",
@@ -380,6 +387,7 @@ pub const SCENARIOS: &[Scenario] = &[
         ],
         today: Some(2.15),
         latest: None,
+        fable: None,
         bridge: Some(WORKTREE_BRIDGE),
         json: r#"{
   "session_id": "s-wt", "prompt_id": "w-3", "session_name": "Refactor the auth middleware", "cwd": "/home/u/app/.claude/worktrees/feature-x",
@@ -411,6 +419,7 @@ pub const SCENARIOS: &[Scenario] = &[
         history: &[],
         today: None,
         latest: None,
+        fable: None,
         bridge: Some(NON_GIT_BRIDGE),
         json: r#"{
   "session_id": "s-tmp", "cwd": "/tmp/scratch",
@@ -443,6 +452,7 @@ pub const SCENARIOS: &[Scenario] = &[
         history: &[],
         today: None,
         latest: None,
+        fable: None,
         bridge: Some(GATEWAY_BRIDGE),
         json: r#"{
   "session_id": "s-gw", "cwd": "/home/u/app",
@@ -467,6 +477,7 @@ pub const SCENARIOS: &[Scenario] = &[
         history: &[],
         today: None,
         latest: None,
+        fable: None,
         bridge: None,
         json: r#"{
   "session_id": "s-old", "cwd": "/home/u/app", "version": "2.1.140",
@@ -559,6 +570,10 @@ impl Scenario {
             today_cost: self.today,
             latest_version: self.latest.map(str::to_string),
             bridge: self.bridge(now).map(std::rc::Rc::new),
+            fable_weekly: self.fable.map(|(pct, left)| crate::input::Window {
+                used_percentage: Some(pct),
+                resets_at: Some((now + left) as f64),
+            }),
         }
     }
 }

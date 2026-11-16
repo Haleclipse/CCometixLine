@@ -37,6 +37,10 @@ pub enum Command {
     /// background by renders)
     #[command(hide = true)]
     UpdateCheck,
+    /// Ask the usage endpoint for per-model limits and record the answer
+    /// (started in the background by renders)
+    #[command(hide = true)]
+    UsageCheck,
     /// Run a `cmd` item's command and cache its output (started in the
     /// background by renders)
     #[command(hide = true)]

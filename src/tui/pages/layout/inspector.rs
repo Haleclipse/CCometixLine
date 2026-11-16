@@ -569,6 +569,7 @@ mod tests {
             "context",
             "quota.5h",
             "quota.7d",
+            "quota.fable",
             "quota.spend",
             "context.breakdown",
         ] {

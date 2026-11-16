@@ -143,7 +143,7 @@ Keys everywhere: `^S` save, `^Z` / `^Y` undo and redo, `^P` command palette, `[`
 | Identity | `model` (with reasoning effort), `output_style`, `vim`, `agent` |
 | Session | `session_name`, `duration` |
 | Context | `context`, `context.trend`, `context.to_compact`, `context.breakdown`¹ |
-| Quota | `quota.5h`, `quota.7d`, `quota.spend`, `quota.eta` |
+| Quota | `quota.5h`, `quota.7d`, `quota.fable`², `quota.spend`, `quota.eta` |
 | Cost | `cost`, `cost.rate` (per hour), `cost.today` (all sessions) |
 | Cache | `cache` (time until cold, hit ratio, misses), `cache.cold_cost` |
 | Code | `dir`, `git`, `repo`, `pr`, `worktree`, `lines` |
@@ -153,9 +153,13 @@ Keys everywhere: `^S` save, `^Z` / `^Y` undo and redo, `^P` command palette, `[`
 
 ¹ Needs the companion mod and Claude Code 2.1.287+. `cache` and `quota.spend` need Claude Code 2.1.251+. The configurator marks what your Claude Code can't show and won't let you add it.
 
+² Read from the usage endpoint, not from Claude Code's status line input; see below.
+
 Items show only when they have something to say: the cache when Claude Code reports one, the update when a newer ccline is out, `output_style` unless it is the default.
 
 `quota.5h` and `quota.7d` draw a two-row pace bar by default: the upper row is what you have used, the lower row how much of the window has passed. `⇡8%` means you are 8 points ahead of the clock, `⇣` behind, `±0%` on pace.
+
+`quota.fable` is the weekly Fable limit on subscriptions that have one. Claude Code doesn't pass it to status lines, so ccline asks the usage endpoint Claude Code itself reads (`api.anthropic.com/api/oauth/usage`), signed in with Claude Code's own token: the macOS keychain item, else `.credentials.json` in the Claude config directory. ccline only fetches when a line shows `quota.fable`, at most every 5 minutes, in the background through curl; renders read the last answer. It never refreshes an expired token, and the endpoint is not a documented API, so the item disappears if the answer changes shape.
 
 Background task lines have their own metrics: `task.label`, `task.name`, `task.status`, `task.elapsed` and `task.trend`, next to session metrics such as `model` and `context`.
 

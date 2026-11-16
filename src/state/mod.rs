@@ -9,6 +9,7 @@ pub mod cmd_cache;
 pub mod git_cache;
 pub mod ledger;
 pub mod models_seen;
+pub mod oauth_usage;
 pub mod session;
 pub mod swr;
 pub mod update;
@@ -169,6 +170,8 @@ pub struct StateView {
     pub latest_version: Option<String>,
     /// What the companion mod reports for this session.
     pub bridge: Option<std::rc::Rc<bridge::Bridge>>,
+    /// The Fable weekly limit, from the usage endpoint.
+    pub fable_weekly: Option<crate::input::Window>,
 }
 
 /// Record this render: add a session sample, fold the session's cost into
@@ -232,6 +235,7 @@ pub fn observe(
         today_cost,
         latest_version: None,
         bridge: bridge::read(id, now * 1000).map(std::rc::Rc::new),
+        fable_weekly: None,
     }
 }
 

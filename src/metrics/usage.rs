@@ -93,6 +93,23 @@ pub(super) fn metrics() -> Vec<Metric> {
         },
         Metric {
             meta: MetricMeta {
+                widget: WidgetKind::Pace,
+                templates: ["Fable {pct}%[ · {reset}]", "Fable {pct}%", "{pct}%"],
+                fields: WINDOW_FIELDS,
+                levels: LEVELS,
+                priority: 3,
+                ..meta(
+                    "quota.fable",
+                    Category::Quota,
+                    "Fable weekly limit",
+                    "Subscription weekly window for Fable, read from the usage endpoint",
+                    IconKey::Quota,
+                )
+            },
+            compute: fable_weekly,
+        },
+        Metric {
+            meta: MetricMeta {
                 widget: WidgetKind::Bar,
                 templates: ["{pct}%[ · {used}/{limit}]", "{pct}%", "{pct}%"],
                 fields: &[
@@ -278,6 +295,15 @@ fn seven_day(ctx: &Ctx, _: &Options) -> Option<Reading> {
     )
 }
 
+fn fable_weekly(ctx: &Ctx, _: &Options) -> Option<Reading> {
+    window(
+        ctx.state.fable_weekly.as_ref()?,
+        SEVEN_DAYS,
+        Limit::FableWeekly,
+        ctx,
+    )
+}
+
 /// A spend limit as a window, and the window's length.
 fn spend_window(s: &SpendLimit) -> (Window, i64) {
     let length = match s.period.as_deref() {
@@ -412,6 +438,30 @@ fn duration(ctx: &Ctx, _: &Options) -> Option<Reading> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn fable_weekly_reads_the_state_and_drops_a_reset_window() {
+        let now = 1_000_000;
+        let input = crate::input::Input::parse("{}").unwrap();
+        let registry = crate::models::Registry::default();
+        let tz = chrono::FixedOffset::east_opt(0).unwrap();
+        let mut ctx = Ctx::new(&input, &registry, now, tz, GlyphTier::Nerd);
+        assert!(fable_weekly(&ctx, &Options::new()).is_none());
+
+        ctx.state.fable_weekly = Some(Window {
+            used_percentage: Some(31.0),
+            resets_at: Some((now + SEVEN_DAYS / 2) as f64),
+        });
+        let reading = fable_weekly(&ctx, &Options::new()).unwrap();
+        assert_eq!(reading.get("pct").unwrap().text, "31");
+        assert_eq!(reading.ratio, Some(0.31));
+
+        ctx.state.fable_weekly = Some(Window {
+            used_percentage: Some(31.0),
+            resets_at: Some((now - 1) as f64),
+        });
+        assert!(fable_weekly(&ctx, &Options::new()).is_none());
+    }
 
     #[test]
     fn on_pace_is_neither_ahead_nor_behind() {

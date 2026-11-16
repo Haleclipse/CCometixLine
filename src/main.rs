@@ -25,6 +25,10 @@ fn main() {
             state::update::check(Utc::now().timestamp());
             return;
         }
+        Some(Command::UsageCheck) => {
+            state::oauth_usage::check(Utc::now().timestamp());
+            return;
+        }
         Some(Command::RefreshCmd {
             cwd,
             session,
@@ -77,6 +81,7 @@ fn run(subagent: bool) {
     let (now, tz) = (Utc::now().timestamp(), *Local::now().offset());
     let mut view = state::observe(&input, &text, &registry, now, tz);
     view.latest_version = state::update::available(&config.update, now);
+    view.fable_weekly = fable_weekly(&config, now);
     let frame = Frame {
         now,
         tz,
@@ -110,18 +115,30 @@ fn run(subagent: bool) {
     println!("{}", ansi::emit(&lines, opts));
 }
 
+/// The Fable weekly limit, looked up only for a config that shows it.
+fn fable_weekly(config: &Config, now: i64) -> Option<ccometixline::input::Window> {
+    config
+        .shows("quota.fable")
+        .then(|| state::oauth_usage::fable_weekly(now))
+        .flatten()
+}
+
 /// `subagentStatusLine`: one JSON object per task, `{"id", "content"}`.
 /// Tasks whose line comes out empty are left out, so Claude Code keeps its
 /// own text for them (an empty `content` would hide the task).
 fn run_subagent(payload: &SubagentInput, raw: &str) {
     let (config, _) = Config::load();
     let registry = Registry::load();
+    let now = Utc::now().timestamp();
     let frame = Frame {
-        now: Utc::now().timestamp(),
+        now,
         tz: *Local::now().offset(),
         width: None,
         git: GitSource::Cached(config.git.cache_ms),
-        state: StateView::default(),
+        state: StateView {
+            fable_weekly: fable_weekly(&config, now),
+            ..StateView::default()
+        },
         compact: AutoCompact::default(),
         commands: Commands::Run {
             stdin: raw.to_string(),
