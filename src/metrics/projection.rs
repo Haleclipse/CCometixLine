@@ -291,6 +291,8 @@ pub(super) enum Limit {
     SevenDay,
     /// Not sampled; projected from the window average alone.
     Spend,
+    /// Not sampled either: it comes from the usage endpoint, not the input.
+    FableWeekly,
 }
 
 impl Limit {
@@ -299,7 +301,7 @@ impl Limit {
         match self {
             Limit::FiveHour => Some((s.h5?, s.h5_reset?)),
             Limit::SevenDay => Some((s.d7?, s.d7_reset?)),
-            Limit::Spend => None,
+            Limit::Spend | Limit::FableWeekly => None,
         }
     }
 }

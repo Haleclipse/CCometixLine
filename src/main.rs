@@ -25,6 +25,10 @@ fn main() {
             state::update::check(Utc::now().timestamp());
             return;
         }
+        Some(Command::UsageCheck) => {
+            state::oauth_usage::check(Utc::now().timestamp());
+            return;
+        }
         Some(Command::RefreshCmd {
             cwd,
             session,
@@ -77,6 +81,9 @@ fn run(subagent: bool) {
     let (now, tz) = (Utc::now().timestamp(), *Local::now().offset());
     let mut view = state::observe(&input, &text, &registry, now, tz);
     view.latest_version = state::update::available(&config.update, now);
+    if config.shows("quota.fable") {
+        view.fable_weekly = state::oauth_usage::fable_weekly(now);
+    }
     let frame = Frame {
         now,
         tz,

@@ -243,6 +243,14 @@ pub enum LoadNote {
 }
 
 impl Config {
+    /// Whether any status line shows `metric`.
+    pub fn shows(&self, metric: &str) -> bool {
+        self.lines
+            .iter()
+            .flat_map(|l| l.left.iter().chain(&l.right))
+            .any(|item| item.config().metric == metric)
+    }
+
     pub fn to_toml(&self) -> String {
         toml::to_string_pretty(self).unwrap_or_default()
     }
@@ -300,6 +308,16 @@ mod tests {
         let c: Config =
             toml::from_str("version = 2\n[layout]\noverflow = \"shrink\"\nreserve = 2\n").unwrap();
         assert_eq!(c.layout.reserve, 2);
+    }
+
+    #[test]
+    fn shows_finds_metrics_on_either_side_of_any_line() {
+        let c: Config = toml::from_str(
+            "[[line]]\nleft = [\"model\"]\n[[line]]\nright = [{ metric = \"quota.fable\" }]\n",
+        )
+        .unwrap();
+        assert!(c.shows("model") && c.shows("quota.fable"));
+        assert!(!c.shows("quota.7d"));
     }
 
     #[test]
