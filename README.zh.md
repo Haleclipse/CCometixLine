@@ -157,7 +157,7 @@ cp target/release/ccometixline ~/.claude/ccline/ccline
 
 `quota.5h` 和 `quota.7d` 默认画成两行的配速条：上面一行是已用额度，下面一行是窗口时间过去了多少。`⇡8%` 表示用量比时间快 8 个百分点，`⇣` 表示比时间慢，`±0%` 表示持平。
 
-它们的文本模板还可以用一个小进度条显示窗口时间已过去多少：`{left_bar}`（5 格）或 `{left_bar:N}`（1 到 64 格）。它使用该项的 `bar` 字形；没有重置时间时，可选的 `[ … ]` 组会把它去掉，例如 `format = "7d {pct}%[ · {left_bar:6} resets in {left}]"`。
+它们的文本模板还可以用一个小进度条显示窗口时间已过去多少：`{elapsed_bar}`（5 格）或 `{elapsed_bar:N}`（1 到 64 格）。它使用该项的 `bar` 字形；没有重置时间时，可选的 `[ … ]` 组会把它去掉，例如 `format = "7d {pct}%[ · {elapsed_bar:6} resets in {left}]"`。
 
 后台任务行有自己的指标：`task.label`、`task.name`、`task.status`、`task.elapsed`、`task.trend`，也可以使用 `model`、`context` 等会话指标。
 

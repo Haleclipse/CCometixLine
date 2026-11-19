@@ -157,7 +157,7 @@ Items show only when they have something to say: the cache when Claude Code repo
 
 `quota.5h` and `quota.7d` draw a two-row pace bar by default: the upper row is what you have used, the lower row how much of the window has passed. `⇡8%` means you are 8 points ahead of the clock, `⇣` behind, `±0%` on pace.
 
-Their text templates can also draw the time passed in the window as a small bar: `{left_bar}` (5 cells) or `{left_bar:N}` (1 to 64 cells). It uses the item's `bar` glyphs, and an optional `[ … ]` group drops it when no reset time is known, for example `format = "7d {pct}%[ · {left_bar:6} resets in {left}]"`.
+Their text templates can also draw the time passed in the window as a small bar: `{elapsed_bar}` (5 cells) or `{elapsed_bar:N}` (1 to 64 cells). It uses the item's `bar` glyphs, and an optional `[ … ]` group drops it when no reset time is known, for example `format = "7d {pct}%[ · {elapsed_bar:6} resets in {left}]"`.
 
 Background task lines have their own metrics: `task.label`, `task.name`, `task.status`, `task.elapsed` and `task.trend`, next to session metrics such as `model` and `context`.
 

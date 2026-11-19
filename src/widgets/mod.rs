@@ -74,7 +74,7 @@ pub fn severity(reading: &Reading, levels: &[(f64, Severity)]) -> Severity {
         .unwrap_or(Severity::Normal)
 }
 
-const DEFAULT_LEFT_BAR_CELLS: usize = 5;
+const DEFAULT_ELAPSED_BAR_CELLS: usize = 5;
 
 /// Render `reading` at `level`; `None` when nothing would be visible.
 pub fn render(
@@ -161,10 +161,10 @@ fn inline_field(
     props: &Props,
     tier: GlyphTier,
 ) -> Option<Vec<Piece>> {
-    let cells = if name == "left_bar" {
-        DEFAULT_LEFT_BAR_CELLS
+    let cells = if name == "elapsed_bar" {
+        DEFAULT_ELAPSED_BAR_CELLS
     } else {
-        let raw = name.strip_prefix("left_bar:")?;
+        let raw = name.strip_prefix("elapsed_bar:")?;
         let n = raw.parse::<usize>().ok()?;
         if !(1..=64).contains(&n) {
             return None;
@@ -457,12 +457,12 @@ mod tests {
     }
 
     #[test]
-    fn left_bar_renders_elapsed_progress_and_roles() {
+    fn elapsed_bar_renders_elapsed_progress_and_roles() {
         let p = Props {
             templates: [
-                "{left_bar}".into(),
-                "{left_bar}".into(),
-                "{left_bar}".into(),
+                "{elapsed_bar}".into(),
+                "{elapsed_bar}".into(),
+                "{elapsed_bar}".into(),
             ],
             icon: String::new(),
             ..props(WidgetKind::Text)
@@ -503,12 +503,12 @@ mod tests {
     }
 
     #[test]
-    fn left_bar_drops_when_elapsed_missing() {
+    fn elapsed_bar_drops_when_elapsed_missing() {
         let p = Props {
             templates: [
-                "{pct}%[ · {left_bar} {left}]".into(),
-                "{left_bar}".into(),
-                "{left_bar}".into(),
+                "{pct}%[ · {elapsed_bar} {left}]".into(),
+                "{elapsed_bar}".into(),
+                "{elapsed_bar}".into(),
             ],
             icon: String::new(),
             ..props(WidgetKind::Text)
@@ -522,14 +522,14 @@ mod tests {
     }
 
     #[test]
-    fn left_bar_custom_counts_and_invalid_specs() {
+    fn elapsed_bar_custom_counts_and_invalid_specs() {
         let mut r = Reading::default().set("pct", "40");
         r.elapsed = Some(0.5);
 
         let p4 = Props {
             templates: [
-                "{left_bar:4}".into(),
-                "{left_bar:8}".into(),
+                "{elapsed_bar:4}".into(),
+                "{elapsed_bar:8}".into(),
                 "{pct}%".into(),
             ],
             icon: String::new(),
@@ -545,10 +545,10 @@ mod tests {
         );
 
         for invalid in [
-            "{pct}%[ · {left_bar:0}]",
-            "{pct}%[ · {left_bar:65}]",
-            "{pct}%[ · {left_bar:abc}]",
-            "{pct}%[ · {left_bar:}]",
+            "{pct}%[ · {elapsed_bar:0}]",
+            "{pct}%[ · {elapsed_bar:65}]",
+            "{pct}%[ · {elapsed_bar:abc}]",
+            "{pct}%[ · {elapsed_bar:}]",
         ] {
             let p_inv = Props {
                 templates: [invalid.into(), invalid.into(), invalid.into()],
@@ -563,7 +563,7 @@ mod tests {
     }
 
     #[test]
-    fn left_bar_respects_bar_glyphs_and_ascii_tier() {
+    fn elapsed_bar_respects_bar_glyphs_and_ascii_tier() {
         let r = Reading {
             elapsed: Some(0.4),
             ..Default::default()
@@ -571,9 +571,9 @@ mod tests {
 
         let ascii = Props {
             templates: [
-                "{left_bar}".into(),
-                "{left_bar}".into(),
-                "{left_bar}".into(),
+                "{elapsed_bar}".into(),
+                "{elapsed_bar}".into(),
+                "{elapsed_bar}".into(),
             ],
             icon: String::new(),
             ..props(WidgetKind::Text)
@@ -585,9 +585,9 @@ mod tests {
 
         let eighths = Props {
             templates: [
-                "{left_bar}".into(),
-                "{left_bar}".into(),
-                "{left_bar}".into(),
+                "{elapsed_bar}".into(),
+                "{elapsed_bar}".into(),
+                "{elapsed_bar}".into(),
             ],
             icon: String::new(),
             bar: BarGlyphs::Eighths,

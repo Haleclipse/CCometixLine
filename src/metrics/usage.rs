@@ -35,7 +35,15 @@ fn meta(
     }
 }
 
-const WINDOW_FIELDS: &[&str] = &["pct", "reset", "left", "left_bar", "pace", "arrow", "eta"];
+const WINDOW_FIELDS: &[&str] = &[
+    "pct",
+    "reset",
+    "left",
+    "elapsed_bar",
+    "pace",
+    "arrow",
+    "eta",
+];
 const WINDOW_TEMPLATES: [&str; 3] = ["{pct}%[ · {reset}]", "{pct}%", "{pct}%"];
 
 pub(super) fn metrics() -> Vec<Metric> {
@@ -96,7 +104,15 @@ pub(super) fn metrics() -> Vec<Metric> {
                 widget: WidgetKind::Bar,
                 templates: ["{pct}%[ · {used}/{limit}]", "{pct}%", "{pct}%"],
                 fields: &[
-                    "pct", "used", "limit", "period", "reset", "left", "left_bar", "pace", "arrow",
+                    "pct",
+                    "used",
+                    "limit",
+                    "period",
+                    "reset",
+                    "left",
+                    "elapsed_bar",
+                    "pace",
+                    "arrow",
                     "eta",
                 ],
                 min_cc: Some(gate::SPEND_LIMIT),
@@ -434,7 +450,7 @@ mod tests {
     }
 
     #[test]
-    fn quota_windows_render_left_bar_and_keep_default_templates() {
+    fn quota_windows_render_elapsed_bar_and_keep_default_templates() {
         let now = 1_000_000;
         let resets_5h = now + FIVE_HOURS * 2 / 5; // 60% elapsed
         let resets_7d = now + SEVEN_DAYS / 2; // 50% elapsed
@@ -449,8 +465,11 @@ mod tests {
         let all = metrics();
         let m5h = all.iter().find(|m| m.meta.id == "quota.5h").unwrap();
         let m7d = all.iter().find(|m| m.meta.id == "quota.7d").unwrap();
-        assert_eq!(m5h.meta.templates, WINDOW_TEMPLATES);
-        assert!(m5h.meta.fields.contains(&"left_bar"));
+        // A literal, not WINDOW_TEMPLATES: a change to the built-in output must fail here.
+        let defaults = ["{pct}%[ · {reset}]", "{pct}%", "{pct}%"];
+        assert_eq!(m5h.meta.templates, defaults);
+        assert_eq!(m7d.meta.templates, defaults);
+        assert!(m5h.meta.fields.contains(&"elapsed_bar"));
 
         let r5h = (m5h.compute)(&ctx, &Options::new()).unwrap();
         let r7d = (m7d.compute)(&ctx, &Options::new()).unwrap();
@@ -460,7 +479,7 @@ mod tests {
             bar: crate::style::glyphs::BarGlyphs::Shapes,
             cells: 10,
             templates: [
-                "{pct}%[ · {left_bar} {left}]".into(),
+                "{pct}%[ · {elapsed_bar} {left}]".into(),
                 "{pct}%".into(),
                 "{pct}%".into(),
             ],
