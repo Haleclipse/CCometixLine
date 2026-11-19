@@ -47,10 +47,13 @@ fn parse(template: &str) -> Vec<Node> {
     parse_until(&mut template.chars().peekable(), false)
 }
 
-fn complete(nodes: &[Node], reading: &Reading) -> bool {
+fn complete<F>(nodes: &[Node], reading: &Reading, extra: &F) -> bool
+where
+    F: Fn(&str) -> Option<Vec<Piece>>,
+{
     nodes.iter().all(|n| match n {
         Node::Lit(_) => true,
-        Node::Field(name) => reading.get(name).is_some(),
+        Node::Field(name) => reading.get(name).is_some() || extra(name).is_some(),
         Node::Group(_) => true,
     })
 }
@@ -74,18 +77,23 @@ fn literal(text: &str, out: &mut Vec<Piece>) {
     }
 }
 
-fn emit(nodes: &[Node], reading: &Reading, out: &mut Vec<Piece>) {
+fn emit<F>(nodes: &[Node], reading: &Reading, extra: &F, out: &mut Vec<Piece>)
+where
+    F: Fn(&str) -> Option<Vec<Piece>>,
+{
     for node in nodes {
         match node {
             Node::Lit(text) => literal(text, out),
             Node::Field(name) => {
                 if let Some(f) = reading.get(name) {
                     out.push(Piece::new(f.text.clone(), f.role.unwrap_or(Role::Text)));
+                } else if let Some(pieces) = extra(name) {
+                    out.extend(pieces);
                 }
             }
             Node::Group(inner) => {
-                if complete(inner, reading) {
-                    emit(inner, reading, out);
+                if complete(inner, reading, extra) {
+                    emit(inner, reading, extra, out);
                 }
             }
         }
@@ -94,14 +102,22 @@ fn emit(nodes: &[Node], reading: &Reading, out: &mut Vec<Piece>) {
 
 /// Render `template` for `reading`; empty when nothing visible remains.
 pub fn render(template: &str, reading: &Reading) -> Vec<Piece> {
+    render_with(template, reading, |_| None)
+}
+
+/// Render `template` for `reading`, resolving unknown fields via `extra`.
+pub fn render_with<F>(template: &str, reading: &Reading, extra: F) -> Vec<Piece>
+where
+    F: Fn(&str) -> Option<Vec<Piece>>,
+{
     // The top level behaves like a group: a missing top-level field means the
     // metric lacks its main value, so nothing is shown.
     let nodes = parse(template);
-    if !complete(&nodes, reading) {
+    if !complete(&nodes, reading, &extra) {
         return Vec::new();
     }
     let mut out = Vec::new();
-    emit(&nodes, reading, &mut out);
+    emit(&nodes, reading, &extra, &mut out);
     if out.iter().all(|p| p.text.trim().is_empty()) {
         out.clear();
     }
@@ -181,5 +197,24 @@ mod tests {
         let r = Reading::default().set("n", "3");
         assert_eq!(text(&render("\\[{n}\\]", &r)), "[3]");
         assert_eq!(text(&render("thinking", &r)), "thinking");
+    }
+
+    #[test]
+    fn render_with_resolves_extra_fields_and_drops_missing_groups() {
+        let r = Reading::default().set("pct", "40");
+        let pieces = render_with("{pct}%[ · {bar}]", &r, |name| {
+            (name == "bar").then(|| {
+                vec![Piece::new(
+                    "===",
+                    Role::Fill(crate::style::Severity::Normal),
+                )]
+            })
+        });
+        assert_eq!(text(&pieces), "40% · ===");
+
+        let dropped = render_with("{pct}%[ · {bar}]", &r, |_| None);
+        assert_eq!(text(&dropped), "40%");
+
+        assert!(render_with("{bar}", &r, |_| None).is_empty());
     }
 }
