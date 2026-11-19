@@ -35,7 +35,7 @@ fn meta(
     }
 }
 
-const WINDOW_FIELDS: &[&str] = &["pct", "reset", "left", "pace", "arrow", "eta"];
+const WINDOW_FIELDS: &[&str] = &["pct", "reset", "left", "left_bar", "pace", "arrow", "eta"];
 const WINDOW_TEMPLATES: [&str; 3] = ["{pct}%[ · {reset}]", "{pct}%", "{pct}%"];
 
 pub(super) fn metrics() -> Vec<Metric> {
@@ -96,7 +96,8 @@ pub(super) fn metrics() -> Vec<Metric> {
                 widget: WidgetKind::Bar,
                 templates: ["{pct}%[ · {used}/{limit}]", "{pct}%", "{pct}%"],
                 fields: &[
-                    "pct", "used", "limit", "period", "reset", "left", "pace", "arrow", "eta",
+                    "pct", "used", "limit", "period", "reset", "left", "left_bar", "pace", "arrow",
+                    "eta",
                 ],
                 min_cc: Some(gate::SPEND_LIMIT),
                 levels: LEVELS,
@@ -430,5 +431,59 @@ mod tests {
             let arrow = reading.get("arrow").unwrap();
             assert_eq!((arrow.text.as_str(), arrow.role), (text, Some(Role::Muted)));
         }
+    }
+
+    #[test]
+    fn quota_windows_render_left_bar_and_keep_default_templates() {
+        let now = 1_000_000;
+        let resets_5h = now + FIVE_HOURS * 2 / 5; // 60% elapsed
+        let resets_7d = now + SEVEN_DAYS / 2; // 50% elapsed
+        let json = format!(
+            r#"{{"rate_limits": {{"five_hour": {{"used_percentage": 25, "resets_at": {resets_5h}}}, "seven_day": {{"used_percentage": 50, "resets_at": {resets_7d}}}}}}}"#
+        );
+        let input = crate::input::Input::parse(&json).unwrap();
+        let registry = crate::models::Registry::default();
+        let tz = chrono::FixedOffset::east_opt(0).unwrap();
+        let ctx = Ctx::new(&input, &registry, now, tz, GlyphTier::Unicode);
+
+        let all = metrics();
+        let m5h = all.iter().find(|m| m.meta.id == "quota.5h").unwrap();
+        let m7d = all.iter().find(|m| m.meta.id == "quota.7d").unwrap();
+        assert_eq!(m5h.meta.templates, WINDOW_TEMPLATES);
+        assert!(m5h.meta.fields.contains(&"left_bar"));
+
+        let r5h = (m5h.compute)(&ctx, &Options::new()).unwrap();
+        let r7d = (m7d.compute)(&ctx, &Options::new()).unwrap();
+
+        let props = crate::widgets::Props {
+            kind: WidgetKind::Text,
+            bar: crate::style::glyphs::BarGlyphs::Shapes,
+            cells: 10,
+            templates: [
+                "{pct}%[ · {left_bar} {left}]".into(),
+                "{pct}%".into(),
+                "{pct}%".into(),
+            ],
+            icon: String::new(),
+            levels: LEVELS.to_vec(),
+            coloring: crate::widgets::Coloring::Steps,
+        };
+        let text = |pieces: Vec<crate::style::Piece>| -> String {
+            pieces.into_iter().map(|p| p.text).collect()
+        };
+
+        let out_5h = crate::widgets::render(
+            &r5h,
+            &props,
+            crate::widgets::Level::Full,
+            GlyphTier::Unicode,
+        )
+        .unwrap();
+        assert_eq!(text(out_5h), "25% · ▰▰▰▱▱ 2h00m");
+
+        let out_7d =
+            crate::widgets::render(&r7d, &props, crate::widgets::Level::Full, GlyphTier::Ascii)
+                .unwrap();
+        assert_eq!(text(out_7d), "50% · [==---] 3d12h");
     }
 }

@@ -74,6 +74,8 @@ pub fn severity(reading: &Reading, levels: &[(f64, Severity)]) -> Severity {
         .unwrap_or(Severity::Normal)
 }
 
+const DEFAULT_LEFT_BAR_CELLS: usize = 5;
+
 /// Render `reading` at `level`; `None` when nothing would be visible.
 pub fn render(
     reading: &Reading,
@@ -81,7 +83,9 @@ pub fn render(
     level: Level,
     tier: GlyphTier,
 ) -> Option<Vec<Piece>> {
-    let text = template::render(&props.templates[level.index()], reading);
+    let text = template::render_with(&props.templates[level.index()], reading, |name| {
+        inline_field(name, reading, props, tier)
+    });
     let sev = severity(reading, &props.levels);
     let icon = (!props.icon.is_empty()).then(|| Piece::new(props.icon.clone(), Role::Icon));
 
@@ -151,9 +155,47 @@ pub fn render(
     Some(template::merge(out))
 }
 
+fn inline_field(
+    name: &str,
+    reading: &Reading,
+    props: &Props,
+    tier: GlyphTier,
+) -> Option<Vec<Piece>> {
+    let cells = if name == "left_bar" {
+        DEFAULT_LEFT_BAR_CELLS
+    } else {
+        let raw = name.strip_prefix("left_bar:")?;
+        let n = raw.parse::<usize>().ok()?;
+        if !(1..=64).contains(&n) {
+            return None;
+        }
+        n
+    };
+    let elapsed = reading.elapsed?;
+    Some(bar_cells(
+        elapsed,
+        props.bar,
+        cells,
+        Coloring::Steps,
+        Severity::Normal,
+        tier,
+    ))
+}
+
 fn bar(ratio: f64, props: &Props, sev: Severity, tier: GlyphTier) -> Vec<Piece> {
-    let set = props.bar.for_tier(tier);
-    let cells = props.cells.max(1);
+    bar_cells(ratio, props.bar, props.cells, props.coloring, sev, tier)
+}
+
+fn bar_cells(
+    ratio: f64,
+    bar: BarGlyphs,
+    cells: usize,
+    coloring: Coloring,
+    sev: Severity,
+    tier: GlyphTier,
+) -> Vec<Piece> {
+    let set = bar.for_tier(tier);
+    let cells = cells.max(1);
     let filled = ratio.clamp(0.0, 1.0) * cells as f64;
     let (open, close) = set.frame();
     // Solid bars get a track behind them in filled skins.
@@ -163,7 +205,7 @@ fn bar(ratio: f64, props: &Props, sev: Severity, tier: GlyphTier) -> Vec<Piece> 
         out.push(mark(Piece::new(open, Role::Muted)));
     }
     for i in 0..cells {
-        let fill_role = match props.coloring {
+        let fill_role = match coloring {
             Coloring::Steps => Role::Fill(sev),
             Coloring::Gradient => Role::Gradient((i as f32 + 0.5) / cells as f32),
         };
@@ -412,5 +454,154 @@ mod tests {
         assert_eq!(pieces[1], Piece::new(" ", Role::Text));
         assert_eq!(pieces[2].text, "#1");
         assert_eq!(pieces[2].link.as_deref(), Some("https://x/1"));
+    }
+
+    #[test]
+    fn left_bar_renders_elapsed_progress_and_roles() {
+        let p = Props {
+            templates: [
+                "{left_bar}".into(),
+                "{left_bar}".into(),
+                "{left_bar}".into(),
+            ],
+            icon: String::new(),
+            ..props(WidgetKind::Text)
+        };
+
+        let r0 = Reading {
+            elapsed: Some(0.0),
+            ..Default::default()
+        };
+        let p0 = render(&r0, &p, Level::Full, GlyphTier::Unicode).unwrap();
+        assert_eq!(text(&p0), "▱▱▱▱▱");
+        assert_eq!(p0, vec![Piece::new("▱▱▱▱▱", Role::Empty)]);
+
+        let r60 = Reading {
+            elapsed: Some(0.6),
+            ..Default::default()
+        };
+        let p60 = render(&r60, &p, Level::Full, GlyphTier::Unicode).unwrap();
+        assert_eq!(text(&p60), "▰▰▰▱▱");
+        assert_eq!(
+            p60,
+            vec![
+                Piece::new("▰▰▰", Role::Fill(Severity::Normal)),
+                Piece::new("▱▱", Role::Empty),
+            ]
+        );
+
+        let r100 = Reading {
+            elapsed: Some(1.0),
+            ..Default::default()
+        };
+        let p100 = render(&r100, &p, Level::Full, GlyphTier::Unicode).unwrap();
+        assert_eq!(text(&p100), "▰▰▰▰▰");
+        assert_eq!(
+            p100,
+            vec![Piece::new("▰▰▰▰▰", Role::Fill(Severity::Normal))]
+        );
+    }
+
+    #[test]
+    fn left_bar_drops_when_elapsed_missing() {
+        let p = Props {
+            templates: [
+                "{pct}%[ · {left_bar} {left}]".into(),
+                "{left_bar}".into(),
+                "{left_bar}".into(),
+            ],
+            icon: String::new(),
+            ..props(WidgetKind::Text)
+        };
+        let r = Reading::default().set("pct", "40").set("left", "2h");
+        assert_eq!(
+            text(&render(&r, &p, Level::Full, GlyphTier::Unicode).unwrap()),
+            "40%"
+        );
+        assert!(render(&r, &p, Level::Compact, GlyphTier::Unicode).is_none());
+    }
+
+    #[test]
+    fn left_bar_custom_counts_and_invalid_specs() {
+        let mut r = Reading::default().set("pct", "40");
+        r.elapsed = Some(0.5);
+
+        let p4 = Props {
+            templates: [
+                "{left_bar:4}".into(),
+                "{left_bar:8}".into(),
+                "{pct}%".into(),
+            ],
+            icon: String::new(),
+            ..props(WidgetKind::Text)
+        };
+        assert_eq!(
+            text(&render(&r, &p4, Level::Full, GlyphTier::Unicode).unwrap()),
+            "▰▰▱▱"
+        );
+        assert_eq!(
+            text(&render(&r, &p4, Level::Compact, GlyphTier::Unicode).unwrap()),
+            "▰▰▰▰▱▱▱▱"
+        );
+
+        for invalid in [
+            "{pct}%[ · {left_bar:0}]",
+            "{pct}%[ · {left_bar:65}]",
+            "{pct}%[ · {left_bar:abc}]",
+            "{pct}%[ · {left_bar:}]",
+        ] {
+            let p_inv = Props {
+                templates: [invalid.into(), invalid.into(), invalid.into()],
+                icon: String::new(),
+                ..props(WidgetKind::Text)
+            };
+            assert_eq!(
+                text(&render(&r, &p_inv, Level::Full, GlyphTier::Unicode).unwrap()),
+                "40%"
+            );
+        }
+    }
+
+    #[test]
+    fn left_bar_respects_bar_glyphs_and_ascii_tier() {
+        let r = Reading {
+            elapsed: Some(0.4),
+            ..Default::default()
+        };
+
+        let ascii = Props {
+            templates: [
+                "{left_bar}".into(),
+                "{left_bar}".into(),
+                "{left_bar}".into(),
+            ],
+            icon: String::new(),
+            ..props(WidgetKind::Text)
+        };
+        assert_eq!(
+            text(&render(&r, &ascii, Level::Full, GlyphTier::Ascii).unwrap()),
+            "[==---]"
+        );
+
+        let eighths = Props {
+            templates: [
+                "{left_bar}".into(),
+                "{left_bar}".into(),
+                "{left_bar}".into(),
+            ],
+            icon: String::new(),
+            bar: BarGlyphs::Eighths,
+            ..props(WidgetKind::Text)
+        };
+        let pieces = render(&r, &eighths, Level::Full, GlyphTier::Unicode).unwrap();
+        assert_eq!(text(&pieces), "▕██   ▏");
+        assert!(pieces.iter().all(|p| p.inset));
+        assert_eq!(pieces[0], Piece::new("▕", Role::Muted).inset());
+        assert_eq!(
+            pieces[1],
+            Piece::new("██", Role::Fill(Severity::Normal)).inset()
+        );
+        assert_eq!(pieces[2], Piece::new("   ", Role::Empty).inset());
+        assert_eq!(pieces[3], Piece::new("▏", Role::Muted).inset());
     }
 }
