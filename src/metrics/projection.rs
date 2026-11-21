@@ -264,12 +264,12 @@ fn cost_today(ctx: &Ctx, _: &Options) -> Option<Reading> {
 pub(super) fn rewarm_cost(ctx: &Ctx) -> Option<(f64, u64)> {
     let pc = ctx.input.prompt_cache.as_ref()?;
     let tokens = pc.recache_tokens_if_cold.filter(|t| *t > 0)?;
-    let price = builtin::input_price(ctx.input.model_id()?)?;
-    let write = match pc.ttl.as_deref() {
-        Some("1h") => 2.0,
-        _ => 1.25,
+    let ttl = match pc.ttl.as_deref() {
+        Some("1h") => "1h",
+        _ => "5m",
     };
-    Some((tokens as f64 * price * write / 1_000_000.0, tokens))
+    let usd = builtin::cache_write_cost(ctx.input.model_id()?, ttl, tokens)?;
+    Some((usd, tokens))
 }
 
 fn cold_cost(ctx: &Ctx, _: &Options) -> Option<Reading> {
@@ -463,9 +463,9 @@ mod tests {
         // 182k tokens of Opus 4.8 at $5/M, written with the 5-minute TTL.
         let r = reading("cache.cold_cost", "near-full").unwrap();
         assert_eq!(field(&r, "usd"), "$1.14");
-        // 270k tokens of Opus 5.5 written with the 1-hour TTL.
+        // 270k tokens of Opus 5.5 written with the 1-hour TTL, at $8/M.
         let big = reading("cache.cold_cost", "big-context").unwrap();
-        assert_eq!(field(&big, "usd"), "$2.70");
+        assert_eq!(field(&big, "usd"), "$2.16");
         assert!(reading("cache.cold_cost", "third-party").is_none());
     }
 

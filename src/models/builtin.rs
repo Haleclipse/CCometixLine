@@ -87,9 +87,46 @@ pub fn claude_name(id: &str) -> Option<String> {
     })
 }
 
+/// The model's row in `llm_prices` (Anthropic's list prices, each row dated and
+/// linked to the pricing page). Claude Code's context-window suffix (`[1m]`) is
+/// not part of the API id, so it is dropped before the lookup.
+fn list_price(id: &str) -> Option<&'static llm_prices::Price> {
+    let id = id.split('[').next().unwrap_or(id).trim();
+    llm_prices::lookup(id)
+}
+
+/// Cost in USD of writing `tokens` to the prompt cache with the given TTL
+/// (`"5m"` or `"1h"`). Uses the model's own cache-write price, including its
+/// long-context rate when the write crosses the threshold; for models
+/// `llm_prices` does not know, 1.25× (5 minutes) or 2× (1 hour) the input price.
+pub fn cache_write_cost(id: &str, ttl: &str, tokens: u64) -> Option<f64> {
+    if let Some(p) = list_price(id) {
+        let usage = if ttl == "1h" {
+            llm_prices::Usage {
+                cache_write_1h: tokens,
+                ..Default::default()
+            }
+        } else {
+            llm_prices::Usage {
+                cache_write_5m: tokens,
+                ..Default::default()
+            }
+        };
+        if let Some(c) = p.cost_usage(&usage) {
+            return Some(c.total);
+        }
+    }
+    let write = if ttl == "1h" { 2.0 } else { 1.25 };
+    Some(tokens as f64 * input_price(id)? * write / 1_000_000.0)
+}
+
 /// List price of uncached input tokens in USD per million, for estimates.
-/// Cache writes cost 1.25× this with the 5-minute TTL and 2× with 1 hour.
+/// Comes from `llm_prices` when it knows the model, else from the family and
+/// version below.
 pub fn input_price(id: &str) -> Option<f64> {
+    if let Some(price) = list_price(id).and_then(|p| p.input) {
+        return Some(price);
+    }
     let m = claude_model(id)?;
     let version = (m.major, m.minor.unwrap_or(0));
     match m.family.as_str() {
@@ -133,10 +170,14 @@ mod tests {
     fn prices_by_family_and_version() {
         let cases = [
             ("claude-opus-4-8", Some(5.0)),
+            ("claude-opus-5-5[1m]", Some(4.0)),
             ("claude-opus-4-1-20250805", Some(15.0)),
             ("claude-3-opus-20240229", Some(15.0)),
-            ("claude-sonnet-5", Some(3.0)),
+            ("claude-sonnet-5", Some(2.0)),
+            ("claude-sonnet-4-5-20250929", Some(3.0)),
             ("claude-haiku-4-5", Some(1.0)),
+            ("claude-haiku-5-5", Some(0.1)),
+            ("claude-fable-5-2", Some(8.0)),
             ("claude-3-5-haiku-20241022", Some(0.8)),
             ("claude-3-haiku-20240307", Some(0.25)),
             ("kimi-k2-turbo-preview", None),
@@ -144,6 +185,19 @@ mod tests {
         for (id, want) in cases {
             assert_eq!(input_price(id), want, "{id}");
         }
+    }
+
+    #[test]
+    fn prices_cache_writes_at_the_model_rate() {
+        // Opus 4.8: $6.25/M for 5-minute writes, $10/M for 1-hour writes.
+        let five = cache_write_cost("claude-opus-4-8", "5m", 1_000_000).unwrap();
+        assert!((five - 6.25).abs() < 1e-9, "{five}");
+        let hour = cache_write_cost("claude-opus-4-8", "1h", 1_000_000).unwrap();
+        assert!((hour - 10.0).abs() < 1e-9, "{hour}");
+        // Not in the list-price table: falls back to the family input price.
+        let old = cache_write_cost("claude-3-haiku-20240307", "5m", 1_000_000).unwrap();
+        assert!((old - 0.3125).abs() < 1e-9, "{old}");
+        assert!(cache_write_cost("kimi-k2-turbo-preview", "5m", 1_000).is_none());
     }
 
     #[test]
